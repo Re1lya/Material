@@ -97,39 +97,39 @@ Artifact Keeper 提供内部 Hugging Face Endpoint；Ray Worker 通过 HF_ENDPOI
 
 ## 4. 低资源部署预算
 
-当前 Kind 集群有充足 CPU、内存和约 963Gi 可用磁盘，但 POC 仍按单副本、低 request 部署。
+当前 Kind 集群有充足 CPU、内存和约 963Gi 可用磁盘。POC 保持单副本，但按稳定演示而非最低资源配置部署。
 
 ### 4.1 稳态 requests 预算
 
 | 组件 | 副本 | CPU request | 内存 request | 说明 |
 |---|---:|---:|---:|---|
-| Artifact Keeper backend | 1 | 250m | 512Mi | 内部制品 API |
-| Artifact Keeper web | 1 | 50m | 64Mi | 可选管理 UI |
+| Artifact Keeper backend | 1 | 500m | 1Gi | 内部制品 API |
+| Artifact Keeper web | 1 | 100m | 128Mi | 管理 UI |
 | PostgreSQL | 1 | 250m | 512Mi | Artifact Keeper 元数据 |
 | OpenSearch | 1 | 500m | 1Gi | 保留单节点搜索依赖 |
 | KubeRay Operator | 1 | 100m | 128Mi | 控制器 |
-| Ray Head | 1 | 250m | 512Mi | 不承载模型 |
-| Ray Worker | 1 | 1 CPU | 3Gi | Qwen 0.5B 低并发推理 |
-| 合计 | - | 约 2.4 CPU | 约 5.7Gi | 不含短时 Job |
+| Ray Head | 1 | 500m | 1Gi | 不承载模型 |
+| Ray Worker | 1 | 2 CPU | 4Gi | Qwen 0.5B 低并发推理 |
+| 合计 | - | 约 4 CPU | 约 7.8Gi | 不含短时 Job |
 
-Ray Worker limits 设为 2 CPU / 5Gi。CPU 推理可能较慢，但足以完成一次真实对话展示；发生 OOM 时先将内存 request 和 limit 分别提高到 4Gi / 6Gi。
+建议 limits：Artifact Keeper backend 1 CPU / 2Gi，PostgreSQL 500m / 1Gi，OpenSearch 1 CPU / 2Gi，Ray Head 1 CPU / 2Gi，Ray Worker 4 CPU / 8Gi。CPU 推理仍不追求吞吐，但模型加载和一次真实对话有足够余量。
 
 ### 4.2 短时资源
 
 | 组件 | CPU request | 内存 request | 说明 |
 |---|---:|---:|---|
-| model-fetcher initContainer | 100m | 256Mi | 下载内部模型快照 |
-| 自动对话验证 Job | 50m | 128Mi | 一次性 API 检查 |
+| model-fetcher initContainer | 250m | 512Mi | 下载内部模型快照 |
+| 自动对话验证 Job | 100m | 256Mi | 一次性 API 检查 |
 | Tekton 模型交付任务 | 500m | 1Gi | 仅训练产物发布时运行 |
 
 ### 4.3 存储预算
 
 | PVC | 初始大小 | 用途 |
 |---|---:|---|
-| Artifact Keeper artifact data | 20Gi | 一个或少量小模型快照 |
-| PostgreSQL | 5Gi | 元数据 |
-| OpenSearch | 5Gi | 搜索索引 |
-| 合计 | 30Gi | 使用现有 standard StorageClass |
+| Artifact Keeper artifact data | 50Gi | 多个小模型快照与版本 |
+| PostgreSQL | 10Gi | 元数据 |
+| OpenSearch | 10Gi | 搜索索引 |
+| 合计 | 70Gi | 使用现有 standard StorageClass |
 
 Artifact Keeper 使用单副本开发配置。关闭 Trivy、DependencyTrack、监控、HPA、PDB、Ingress；OpenSearch 先保留单节点，只有在渲染 Chart 并确认后端不依赖它时才考虑关闭。官方 Chart 默认包含多个依赖，需要先渲染镜像和 Values 再安装。[Artifact Keeper Helm 文档](https://artifactkeeper.com/docs/deployment/helm/)
 
