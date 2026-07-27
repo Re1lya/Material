@@ -1,5 +1,8 @@
 # 全自动多模型服务 POC 方案与执行路线
 
+> 实际实施进度、验证结果和问题处理记录见
+> `model-serving-poc-implementation-log.md`。
+
 ## 1. 目标
 
 在现有 Gitea、Tekton、Argo CD、Crossplane、Envoy Gateway 和 Backstage POC 上，增加一条可现场演示的多模型服务链路：

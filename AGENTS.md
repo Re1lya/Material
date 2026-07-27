@@ -80,6 +80,7 @@ git remote -v
 - 路径：`/home/ilya/Desktop/Material`
 - 远端：`https://github.com/Re1lya/Material.git`
 - 详细方案：`model-serving-poc-design.md`
+- 实施记录：`model-serving-poc-implementation-log.md`
 - 本文件只负责上下文恢复，具体架构以详细方案为准。
 
 ## 4. 集群基础状态
