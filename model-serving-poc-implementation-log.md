@@ -45,7 +45,7 @@ NPU/GPU 资源，也未修改服务器上的 NPU 配置。
 | 外部路由 | 已完成（临时入口） | Envoy Gateway 和 HTTPRoute 可访问 |
 | ModelService CRD | 已完成 | Crossplane `Synced=True`、`Ready=True` |
 | 部署后对话验证 | 已完成 | Helm Hook Job 验证成功 |
-| Argo CD GitOps 接管 | 未完成 | 当前 ModelService 由手工 apply 创建 |
+| Argo CD GitOps 接管 | 已完成 | Gitea 提交可自动更新 ModelService 并切换模型 |
 | 模型专用 Tekton CI | 未完成 | 尚未校验 Git 中的模型发布声明 |
 | Backstage 自服务入口 | 未完成 | Catalog、PR Action 和模型选择页待接入 |
 | 持久外部入口 | 未完成 | 当前 `30081` 依赖 port-forward |
@@ -54,7 +54,7 @@ NPU/GPU 资源，也未修改服务器上的 NPU 配置。
 
 ```text
 ModelService: models/chat-demo
-Model:        qwen2.5-0.5b-instruct
+Model:        smollm2-360m-instruct
 Chart:        modelservice-0.2.0
 Runtime:      poc-cpu-v1
 ```
@@ -269,6 +269,43 @@ GPU:    0
 Helm 升级到 0.2.0 后验证成功。Crossplane 首次观察处于升级中的 Release 时
 短暂显示 `Ready=False`，再次观察后恢复 `Ready=True`。
 
+### 4.9 接入 Argo CD GitOps
+
+新增 `chat-demo-modelservice` Application，由现有
+`platform-appservices` 父 Application 创建和管理。子 Application 监听：
+
+```text
+crossplane-backstage-poc/gitops/modelservices/chat-demo
+```
+
+向 Gitea 提交 Qwen 到 SmolLM2 的变更后，链路自动执行：
+
+```text
+Argo CD
+-> ModelService
+-> Crossplane Release
+-> Helm
+-> RayService
+-> 新 RayCluster
+-> 自动对话验证
+-> 流量切换
+```
+
+首次提交误将 SmolLM2 制品名写为
+`smollm2-360m-instruct-7ae55760.tar.gz`。Artifact Keeper 返回 404，新
+RayCluster 初始化失败，但旧 Qwen 集群持续提供服务。修正为
+`smollm2-360m-instruct-a10cc151.tar.gz` 后，SmolLM2 下载、SHA256 校验、
+加载、真实对话和流量切换全部成功，旧 Qwen 集群随后自动回收。
+
+最终状态：
+
+```text
+Argo CD:     Synced, Healthy
+ModelService: Synced=True, Ready=True
+RayService:  Running, pending cluster empty
+Active model: smollm2-360m-instruct
+```
+
 ## 5. 已处理问题
 
 | 问题 | 原因 | 处理 |
@@ -281,6 +318,8 @@ Helm 升级到 0.2.0 后验证成功。Crossplane 首次观察处于升级中的
 | `30080` 返回 Dagster | 宿主机该端口属于 Dagster | 模型入口改用 `30081` |
 | Helm 接管后资源被删除 | Helm 4 SSA 冲突且自动回滚卸载 | 资源清理后由 Helm 从零创建 |
 | Crossplane 暂时 Ready=False | 升级后尚未再次观察 | 触发安全重观察，状态恢复 |
+| SmolLM2 下载返回 404 | GitOps 声明中的制品版本标识错误 | 修正文件名并重新同步 |
+| 修正后 Helm 未立即更新 | 失败部署的 Hook Job 仍在等待 | 终止失败验证 Job 并触发 Release 重观察 |
 
 ## 6. 当前资源边界
 
@@ -297,11 +336,12 @@ Keeper、KubeRay 和模型服务均运行在现有 Kind 集群，不使用 NPU/G
 
 ## 7. 后续阶段
 
-### 阶段 1：Argo CD GitOps 接管
+### 阶段 1：Argo CD GitOps 接管（已完成）
 
-- 创建 Argo CD Application。
-- 监听 `gitops/modelservices/chat-demo/modelservice.yaml`。
-- 验证 Gitea 提交后自动切换模型。
+- 父 Application 已创建并管理模型服务子 Application。
+- 子 Application 已监听 `gitops/modelservices/chat-demo/modelservice.yaml`。
+- 已验证 Gitea 提交后自动切换至 SmolLM2。
+- 已验证新模型失败时旧模型继续提供服务。
 
 ### 阶段 2：模型专用 Tekton CI
 
