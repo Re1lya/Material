@@ -46,7 +46,7 @@ NPU/GPU 资源，也未修改服务器上的 NPU 配置。
 | ModelService CRD | 已完成 | Crossplane `Synced=True`、`Ready=True` |
 | 部署后对话验证 | 已完成 | Helm Hook Job 验证成功 |
 | Argo CD GitOps 接管 | 已完成 | Gitea 提交可自动更新 ModelService 并切换模型 |
-| 模型专用 Tekton CI | 未完成 | 尚未校验 Git 中的模型发布声明 |
+| 模型专用 Tekton CI | 已完成 | 发布请求、制品下载及 SHA256 校验通过 |
 | Backstage 自服务入口 | 未完成 | Catalog、PR Action 和模型选择页待接入 |
 | 持久外部入口 | 未完成 | 当前 `30081` 依赖 port-forward |
 
@@ -54,7 +54,7 @@ NPU/GPU 资源，也未修改服务器上的 NPU 配置。
 
 ```text
 ModelService: models/chat-demo
-Model:        smollm2-360m-instruct
+Model:        qwen2.5-0.5b-instruct
 Chart:        modelservice-0.2.0
 Runtime:      poc-cpu-v1
 ```
@@ -306,6 +306,50 @@ RayService:  Running, pending cluster empty
 Active model: smollm2-360m-instruct
 ```
 
+### 4.10 增加模型发布 CI 门禁
+
+Argo CD 不再直接接收人工修改的模型参数。新增独立发布请求：
+
+```text
+crossplane-backstage-poc/model-releases/chat-demo.json
+```
+
+模型发布提交使用 `[model release] [skip ci]`。独立 EventListener 只接收
+带 `[model release]` 的 main 分支 push；`[skip ci]` 防止原有 FastAPI
+Pipeline 被同时触发。
+
+`model-release-ci` Pipeline 顺序执行：
+
+```text
+clone
+-> validate-artifact
+-> update-gitops
+```
+
+校验 Task 使用标准 JSON 解析器检查必填字段、名称、revision 和 checksum
+格式，通过 Artifact Keeper 只读 Token 流式读取完整制品并实际计算 SHA256。
+校验过程不保存或加载模型。通过后生成 ModelService，更新 GitOps 文件并以
+`[skip ci]` 提交，避免递归触发。
+
+首次端到端运行 `model-release-ci-qzbw6` 的三个 Task 均成功，随后链路自动将
+SmolLM2 切换回 Qwen。最终验证：
+
+```text
+Argo CD:      Synced, Healthy
+ModelService: Synced=True, Ready=True
+RayService:   Running, pending cluster empty
+Active model: qwen2.5-0.5b-instruct
+```
+
+校验 Task 最大资源：
+
+```text
+CPU:    500m
+Memory: 256Mi
+NPU:    0
+GPU:    0
+```
+
 ## 5. 已处理问题
 
 | 问题 | 原因 | 处理 |
@@ -343,12 +387,13 @@ Keeper、KubeRay 和模型服务均运行在现有 Kind 集群，不使用 NPU/G
 - 已验证 Gitea 提交后自动切换至 SmolLM2。
 - 已验证新模型失败时旧模型继续提供服务。
 
-### 阶段 2：模型专用 Tekton CI
+### 阶段 2：模型专用 Tekton CI（已完成）
 
-- 校验 ModelService schema。
-- 校验 Artifact Keeper 文件存在。
-- 校验 revision 和 SHA256。
-- 通过后更新 GitOps 声明。
+- 已增加独立模型发布请求和 EventListener。
+- 已校验请求字段以及 revision、checksum 格式。
+- 已从 Artifact Keeper 流式读取制品并计算 SHA256。
+- 已在校验通过后自动更新 GitOps 声明。
+- 已验证 Tekton 驱动 SmolLM2 自动切换回 Qwen。
 
 ### 阶段 3：Backstage 自服务
 
