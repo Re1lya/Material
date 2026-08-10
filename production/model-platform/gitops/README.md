@@ -41,3 +41,15 @@ password or token in Git.
 
 The first synchronization must be initiated manually after inspecting the
 Application diff. Do not add `spec.syncPolicy.automated` until a later review.
+
+Before committing a change to the bootstrap path, run the repository validator:
+
+```bash
+KUBECTL_CMD='sudo k3s kubectl' \
+  bash repository/ci/validate-bootstrap.sh
+```
+
+It requires the render to contain exactly one ConfigMap with the accepted name
+and namespace, then performs a client-side Kubernetes dry-run. The script is
+CI-compatible, but Gitea Actions remains disabled; enforcement by a CI engine
+is a later gate.
