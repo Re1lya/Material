@@ -1,0 +1,103 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: qwen3-6-27b-w8a8-cache-a3-server-00
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/name: model-cache
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/managed-by: kubectl
+    owner: platform-team
+    project: model-serving
+    modelVersion: qwen3.6-27b-w8a8-20260806
+    deploymentId: prefetch-qwen36-a3-server-00
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-cache
+        app.kubernetes.io/part-of: model-platform
+        owner: platform-team
+        project: model-serving
+        modelVersion: qwen3.6-27b-w8a8-20260806
+        deploymentId: prefetch-qwen36-a3-server-00
+        managed-by: kubectl
+    spec:
+      serviceAccountName: model-cache
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/arch: arm64
+        kubernetes.io/hostname: a3-server-00
+      containers:
+        - name: fetch
+          image: 110.120.0.3:8889/library/python@sha256:adbc7c33e0abc183557d1d14ce5eb5d261aaadff5451c81a8db636b3ebefcdf6
+          imagePullPolicy: IfNotPresent
+          command:
+            - python3
+            - /opt/model-cache/model-cache-fetch.py
+          env:
+            - name: AK_BASE_URL
+              value: http://110.120.0.3:30670
+            - name: AK_REPOSITORY
+              value: model-artifacts
+            - name: AK_ARTIFACT_PREFIX
+              value: Qwen3.6-27B-w8a8
+            - name: MODEL_ID
+              value: qwen3.6-27b-w8a8
+            - name: MANIFEST_DIGEST
+              value: sha256:9ecf94c8084062b613ca8eb4e76074c29fabc51644682e3d8708edc9737ea610
+            - name: CACHE_ROOT
+              value: /cache
+            - name: MANIFEST_FILE
+              value: /opt/model-cache/manifest.json
+            - name: TOKEN_FILE
+              value: /var/run/secrets/artifact-keeper/token
+          resources:
+            requests:
+              cpu: "2"
+              memory: 2Gi
+              ephemeral-storage: 256Mi
+            limits:
+              cpu: "8"
+              memory: 8Gi
+              ephemeral-storage: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: false
+            runAsUser: 0
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+            - name: config
+              mountPath: /opt/model-cache
+              readOnly: true
+            - name: runtime-token
+              mountPath: /var/run/secrets/artifact-keeper
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: cache
+          hostPath:
+            path: /home/admin/model-cache/artifact-keeper
+            type: DirectoryOrCreate
+        - name: config
+          configMap:
+            name: qwen3-6-27b-w8a8-model-cache
+            defaultMode: 0555
+        - name: runtime-token
+          secret:
+            secretName: artifact-keeper-model-runtime
+            items:
+              - key: token
+                path: token
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

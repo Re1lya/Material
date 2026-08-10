@@ -1,0 +1,24 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelVersion
+metadata:
+  name: qwen3.6-27b-w8a8-20260806
+  labels:
+    owner: platform-team
+    project: model-serving
+spec:
+  modelId: platform-team/qwen3.6-27b-w8a8
+  revision: "20260806.1"
+  artifact:
+    repository: model-artifacts
+    path: Qwen3.6-27B-w8a8
+    fileCount: 24
+    sizeBytes: 36446991473
+    manifestDigest: sha256:9ecf94c8084062b613ca8eb4e76074c29fabc51644682e3d8708edc9737ea610
+  format:
+    family: huggingface
+    weights: safetensors
+    architecture: qwen
+    quantization: w8a8
+  compatibility:
+    runtimeProfiles:
+      - qwen36-w8a8-ascend-a3-v1

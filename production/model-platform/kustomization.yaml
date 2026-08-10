@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - base.yaml
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/name: model-cache
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/managed-by: kubectl
+    owner: platform-team
+    project: model-serving
+    modelVersion: qwen3.6-27b-w8a8-20260806
+configMapGenerator:
+  - name: qwen3-6-27b-w8a8-model-cache
+    namespace: model-serving
+    files:
+      - manifest.json=catalog/qwen3.6-27b-w8a8-20260806.manifest.json
+      - model-cache-fetch.py=cache/model-cache-fetch.py

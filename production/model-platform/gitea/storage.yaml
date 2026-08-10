@@ -1,0 +1,103 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gitea-data-local
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gitea-postgresql-local
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gitea-data-server-00
+spec:
+  capacity:
+    storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: gitea-data-local
+  claimRef:
+    namespace: gitea
+    name: gitea-shared-storage
+  local:
+    path: /mnt/data/model-platform/gitea/data
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - server-00
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: gitea-postgresql-server-00
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: gitea-postgresql-local
+  claimRef:
+    namespace: gitea
+    name: gitea-postgresql-data
+  local:
+    path: /mnt/data/model-platform/gitea/postgresql
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - server-00
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-shared-storage
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: gitea
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: gitea-data-local
+  volumeName: gitea-data-server-00
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-postgresql-data
+  namespace: gitea
+  labels:
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/part-of: gitea
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: gitea-postgresql-local
+  volumeName: gitea-postgresql-server-00
