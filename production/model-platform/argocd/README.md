@@ -15,8 +15,13 @@ cluster on `server-00`.
   is only a disposable cache
 - Disabled: Dex, notifications, commit server, Redis HA, Redis exporter
 - ApplicationSet Deployment: rendered by the chart but held at zero replicas
-- Git repositories and Git credentials: not configured by this release
-- Applications and projects: not created by this release
+- Git repositories and Git credentials: not configured by this Helm release
+- Applications and projects: not created by this Helm release
+
+The subsequent minimal production connection is declared in `../gitops/`.
+It adds one project-scoped read-only Gitea credential, one least-privilege
+AppProject and one manually synchronized ConfigMap Application. It does not
+change this Helm release or broaden the locked `default` project.
 
 Argo CD creates a permissive `default` AppProject automatically on first
 startup. Apply `default-project-lockdown.yaml` immediately after the Helm

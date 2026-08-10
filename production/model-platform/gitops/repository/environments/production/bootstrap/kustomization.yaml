@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: model-platform-system
+resources:
+  - status-configmap.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: model-platform
+      app.kubernetes.io/managed-by: argocd
+      model-platform.openai.internal/gitops-scope: bootstrap
