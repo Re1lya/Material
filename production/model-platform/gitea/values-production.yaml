@@ -1,0 +1,131 @@
+replicaCount: 1
+
+strategy:
+  type: Recreate
+  rollingUpdate: null
+
+image:
+  registry: 110.120.0.3:8889
+  repository: platform/gitea
+  tag: 1.26.1
+  digest: sha256:d671880e8fd3e337ea7ce3870bfe8fd37709060cd48224e4df2501c141b85443
+  pullPolicy: IfNotPresent
+  rootless: true
+
+nodeSelector:
+  kubernetes.io/hostname: server-00
+  kubernetes.io/arch: amd64
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+service:
+  http:
+    type: NodePort
+    port: 3000
+    clusterIP: ""
+    nodePort: 30081
+    externalTrafficPolicy: Local
+  ssh:
+    type: ClusterIP
+    port: 22
+    clusterIP: ""
+
+ingress:
+  enabled: false
+
+persistence:
+  enabled: true
+  create: false
+  mount: true
+  claimName: gitea-shared-storage
+
+gitea:
+  admin:
+    existingSecret: gitea-admin-credentials
+    email: gitea-admin@local.invalid
+    passwordMode: initialOnlyNoReset
+  additionalConfigFromEnvs:
+    - name: GITEA__database__PASSWD
+      valueFrom:
+        secretKeyRef:
+          name: gitea-postgresql-auth
+          key: password
+  config:
+    server:
+      DOMAIN: 110.120.0.3
+      ROOT_URL: http://110.120.0.3:30081/
+      DISABLE_SSH: true
+      START_SSH_SERVER: false
+    service:
+      DISABLE_REGISTRATION: true
+      REQUIRE_SIGNIN_VIEW: true
+    session:
+      PROVIDER: db
+    webhook:
+      ALLOWED_HOST_LIST: private
+    actions:
+      ENABLED: false
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        otelcol: prometheus-otelcol
+      interval: 30s
+      scrapeTimeout: 10s
+
+valkey-cluster:
+  enabled: false
+
+valkey:
+  enabled: false
+
+postgresql-ha:
+  enabled: false
+
+postgresql:
+  enabled: true
+  global:
+    security:
+      allowInsecureImages: true
+    postgresql:
+      auth:
+        username: gitea
+        database: gitea
+        password: ""
+        existingSecret: gitea-postgresql-auth
+        secretKeys:
+          adminPasswordKey: postgres-password
+          userPasswordKey: password
+          replicationPasswordKey: replication-password
+  image:
+    registry: 110.120.0.3:8889
+    repository: platform/postgresql
+    tag: 17.6.0-debian-12-r4
+    digest: sha256:42ce087c029b3b61cfb10230c571172f41a5bf2d463871a61bde314b59fa197f
+    pullPolicy: IfNotPresent
+  primary:
+    nodeSelector:
+      kubernetes.io/hostname: server-00
+      kubernetes.io/arch: amd64
+    persistence:
+      enabled: true
+      existingClaim: gitea-postgresql-data
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+  metrics:
+    enabled: false
+
+test:
+  enabled: false

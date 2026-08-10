@@ -1,0 +1,48 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelRuntimeProfile
+metadata:
+  name: qwen36-w8a8-ascend-a3-v1
+  labels:
+    owner: platform-team
+    project: model-serving
+spec:
+  supportedModel:
+    architecture: qwen
+    quantization: w8a8
+    weights: safetensors
+  workload:
+    kind: Deployment
+    strategy: Recreate
+    replicas: 1
+  runtime:
+    image: 110.120.0.3:8889/infra/qwen36-pd-worker:v0.22.1rc1-a3-ray248-servingrom-snapshot-v7
+    command:
+      - /bin/bash
+      - -lc
+      - --
+    args:
+      - exec /opt/servingrom/scripts/pd-worker-entrypoint-instrumented.sh
+    modelPath: /models/Qwen3.6-27B-w8a8
+    modelName: qwen36-27b-w8a8
+    rayAddress: ray-vllm-lab-head.infra-learning.svc.cluster.local:6379
+    servingRomConfigId: qwen36-1p2d-d2-full-decode-only-async-control-v1
+  resources:
+    requests:
+      cpu: "64"
+      memory: 256Gi
+      huawei.com/Ascend910: "6"
+    limits:
+      cpu: "64"
+      memory: 256Gi
+      huawei.com/Ascend910: "6"
+    sharedMemory: 64Gi
+  placement:
+    nodeSelector:
+      kubernetes.io/arch: arm64
+      kubernetes.io/hostname: a3-server-00
+      node.kubernetes.io/npu.chip.name: Ascend910
+    adminManagedPhysicalIds: true
+    certifiedPhysicalIds: "10,11,12,13,14,15"
+  probes:
+    healthPath: /healthcheck
+    inferencePath: /v1/chat/completions
