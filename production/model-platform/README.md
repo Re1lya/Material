@@ -11,6 +11,9 @@ platform:
   the first A3 prefetch Job.
 - `gitea/` contains the independent production Gitea storage and Helm values;
   credentials are deliberately provisioned outside Git.
+- `argocd/` contains the production Argo CD Helm values, the locked-down
+  default project, and the deployment acceptance record. Argo CD currently has
+  no repository credentials or Applications.
 
 The ModelVersion documents are Git catalog objects. They are not applied to
 Kubernetes until the corresponding platform CRDs exist.
