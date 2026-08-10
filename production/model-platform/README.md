@@ -12,8 +12,10 @@ platform:
 - `gitea/` contains the independent production Gitea storage and Helm values;
   credentials are deliberately provisioned outside Git.
 - `argocd/` contains the production Argo CD Helm values, the locked-down
-  default project, and the deployment acceptance record. Argo CD currently has
-  no repository credentials or Applications.
+  default project, and the deployment acceptance record.
+- `gitops/` contains the isolated namespace, least-privilege AppProject,
+  manually synchronized Application, initial Gitea repository tree and the
+  first end-to-end acceptance record.
 
 The ModelVersion documents are Git catalog objects. They are not applied to
 Kubernetes until the corresponding platform CRDs exist.

@@ -132,3 +132,11 @@ sudo k3s kubectl -n argocd port-forward service/argocd-server 8443:443
 3. 创建独立的最小权限 AppProject。
 4. 创建第一个仅管理无 NPU、低风险对象的 Application。
 5. 人工执行首次 sync，验证 diff、健康、回滚和监控后，再考虑自动同步。
+
+## 8. 后续最小闭环状态
+
+上述门禁中的最小连接已于同日完成。生产增加了专用只读机器人、仓库 Secret、
+`model-platform` AppProject 和 `model-platform-bootstrap` Application，并只人工同步
+了一个隔离 ConfigMap。`default` AppProject 仍保持锁定，自动同步、prune 和
+self-heal 仍未启用。详细证据见
+`../gitops/deployment-record-20260810.md`。

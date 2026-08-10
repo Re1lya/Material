@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: model-platform
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  description: Minimal production GitOps bootstrap project
+  sourceRepos:
+    - http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: model-platform-system
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+  orphanedResources:
+    warn: true
