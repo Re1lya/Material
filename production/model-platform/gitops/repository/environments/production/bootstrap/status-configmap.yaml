@@ -3,8 +3,9 @@ kind: ConfigMap
 metadata:
   name: gitops-bootstrap-status
 data:
-  generation: "1"
+  generation: "2"
   environment: production
   sourceRepository: gitadmin/model-platform-config
   sourcePath: environments/production/bootstrap
   purpose: Validate the first manual Gitea to Argo CD synchronization
+  validationPolicy: manual-sync-no-prune
