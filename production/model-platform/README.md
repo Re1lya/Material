@@ -16,6 +16,8 @@ platform:
 - `gitops/` contains the isolated namespace, least-privilege AppProject,
   manually synchronized Application, initial Gitea repository tree and the
   first end-to-end acceptance record.
+- `tekton/` contains the pinned, internal-registry-only Tekton Operator,
+  Pipelines, Triggers, and the first NPU-free Gitea-to-validation CI loop.
 
 The ModelVersion documents are Git catalog objects. They are not applied to
 Kubernetes until the corresponding platform CRDs exist.

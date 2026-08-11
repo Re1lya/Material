@@ -1,0 +1,6 @@
+FROM 110.120.0.3:8889/alpine/git:2.47.2@sha256:0d9a3a551058dba37ea77757955d3e834442ccf8540783671cc25c0d97957894 AS git
+FROM 110.120.0.3:8889/kubectl:v1.35.0@sha256:3aa73a9c4cf5a830a02ee108238011b7f8d9084b9b88432b7851e489420bacc6 AS kubectl
+
+FROM git
+COPY --from=kubectl /bin/kubectl /usr/local/bin/kubectl
+USER 65532:65532

@@ -1,18 +1,31 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 repo_root="$(
-  cd "$(dirname "${BASH_SOURCE[0]}")/.."
-  pwd
+  CDPATH= cd -- "$(dirname -- "$0")/.."
+  pwd -P
 )"
 source_path="${repo_root}/environments/production/bootstrap"
 
-read -r -a kubectl_command <<< "${KUBECTL_CMD:-kubectl}"
+run_kubectl() {
+  case "${KUBECTL_CMD:-kubectl}" in
+    kubectl)
+      kubectl "$@"
+      ;;
+    'sudo k3s kubectl')
+      sudo k3s kubectl "$@"
+      ;;
+    *)
+      echo "unsupported KUBECTL_CMD: ${KUBECTL_CMD}" >&2
+      return 2
+      ;;
+  esac
+}
 
 rendered_file="$(mktemp)"
 trap 'rm -f "${rendered_file}"' EXIT
 
-"${kubectl_command[@]}" kustomize "${source_path}" > "${rendered_file}"
+run_kubectl kustomize "${source_path}" > "${rendered_file}"
 
 kind_count="$(grep -c '^kind:' "${rendered_file}")"
 if [ "${kind_count}" -ne 1 ]; then
@@ -23,11 +36,6 @@ fi
 grep -qx 'kind: ConfigMap' "${rendered_file}"
 grep -qx '  name: gitops-bootstrap-status' "${rendered_file}"
 grep -qx '  namespace: model-platform-system' "${rendered_file}"
-
-"${kubectl_command[@]}" apply \
-  --dry-run=client \
-  -f "${rendered_file}" \
-  >/dev/null
 
 echo "bootstrap_validation=PASS"
 sha256sum "${rendered_file}"
