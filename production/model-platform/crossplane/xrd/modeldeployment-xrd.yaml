@@ -1,0 +1,91 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: modeldeployments.platform.example.com
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: deployment-api
+spec:
+  scope: Namespaced
+  group: platform.example.com
+  names:
+    kind: ModelDeployment
+    plural: modeldeployments
+    singular: modeldeployment
+    shortNames:
+      - mdp
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              additionalProperties: false
+              required:
+                - projectRef
+                - modelVersionRef
+                - runtimeProfileRef
+                - desiredState
+                - placement
+                - access
+              properties:
+                projectRef:
+                  type: string
+                  minLength: 1
+                  maxLength: 63
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                modelVersionRef:
+                  type: string
+                  minLength: 1
+                  maxLength: 253
+                runtimeProfileRef:
+                  type: string
+                  minLength: 1
+                  maxLength: 253
+                desiredState:
+                  type: string
+                  enum:
+                    - Running
+                    - Stopped
+                placement:
+                  type: object
+                  required:
+                    - acceleratorPool
+                  properties:
+                    acceleratorPool:
+                      type: string
+                      minLength: 1
+                      maxLength: 63
+                access:
+                  type: object
+                  required:
+                    - visibility
+                  properties:
+                    visibility:
+                      type: string
+                      enum:
+                        - internal
+                        - private
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - AwaitingApproval
+                    - PreparingCache
+                    - Deploying
+                    - Running
+                    - Stopped
+                    - Failed
+                message:
+                  type: string
+                observedModelVersionRef:
+                  type: string
+                observedRuntimeProfileRef:
+                  type: string

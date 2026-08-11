@@ -18,6 +18,9 @@ platform:
   first end-to-end acceptance record.
 - `tekton/` contains the pinned, internal-registry-only Tekton Operator,
   Pipelines, Triggers, and the first NPU-free Gitea-to-validation CI loop.
+- `crossplane/` contains the pinned Crossplane Core release, the production
+  acceptance record, and the established namespaced `ModelDeployment` XRD.
+  It deliberately contains no composite resource instance or runtime workload.
 
 The ModelVersion documents are Git catalog objects. They are not applied to
 Kubernetes until the corresponding platform CRDs exist.

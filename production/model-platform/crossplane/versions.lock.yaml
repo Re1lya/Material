@@ -1,0 +1,14 @@
+apiVersion: model-platform.openai.internal/v1alpha1
+kind: ComponentVersionLock
+metadata:
+  name: crossplane-production
+spec:
+  crossplane:
+    version: v2.3.4
+    chartVersion: 2.3.4
+    chartRepository: https://charts.crossplane.io/stable
+    chartSHA256: 72c349c911a7ba521208538caf9ea48b31974403a64534bc00dae750e2f95b30
+    upstreamImage: xpkg.crossplane.io/crossplane/crossplane:v2.3.4
+    upstreamIndexDigest: sha256:cea30c75198e8cee8e9a4fcb003b158750d345ca91831876de38989c11cbf94c
+    linuxAMD64Digest: sha256:84d0751cfbdabe2a31a990a4824766ed552893a675c321b7067488d28dccfd26
+    internalImage: 110.120.0.3:8889/platform/crossplane:v2.3.4
