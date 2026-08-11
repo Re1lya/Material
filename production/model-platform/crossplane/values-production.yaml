@@ -1,0 +1,106 @@
+# Crossplane Core only. Providers, Functions, Configurations and composite
+# resource instances are deliberately installed in later reviewed phases.
+replicas: 1
+revisionHistoryLimit: 2
+deploymentStrategy: RollingUpdate
+
+image:
+  repository: 110.120.0.3:8889/platform/crossplane:v2.3.4@sha256:84d0751cfbdabe2a31a990a4824766ed552893a675c321b7067488d28dccfd26
+  ignoreTag: true
+  pullPolicy: IfNotPresent
+
+nodeSelector:
+  kubernetes.io/os: linux
+  kubernetes.io/arch: amd64
+  kubernetes.io/hostname: server-00
+
+leaderElection: true
+
+provider:
+  packages: []
+  defaultActivations: []
+
+configuration:
+  packages: []
+
+function:
+  packages: []
+
+webhooks:
+  enabled: true
+
+rbacManager:
+  deploy: true
+  skipAggregatedClusterRoles: false
+  replicas: 1
+  revisionHistoryLimit: 2
+  leaderElection: true
+  nodeSelector:
+    kubernetes.io/os: linux
+    kubernetes.io/arch: amd64
+    kubernetes.io/hostname: server-00
+
+resourcesCrossplane:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+resourcesRBACManager:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 100m
+    memory: 512Mi
+
+podSecurityContextCrossplane:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+podSecurityContextRBACManager:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContextCrossplane:
+  runAsUser: 65532
+  runAsGroup: 65532
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+securityContextRBACManager:
+  runAsUser: 65532
+  runAsGroup: 65532
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Both caches are disposable emptyDir volumes. No PV/PVC is created.
+packageCache:
+  medium: ""
+  sizeLimit: 20Mi
+  pvc: ""
+  configMap: ""
+
+functionCache:
+  medium: ""
+  sizeLimit: 512Mi
+  pvc: ""
+
+metrics:
+  enabled: true
