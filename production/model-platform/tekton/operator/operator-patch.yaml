@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tekton-operator
+  namespace: tekton-operator
+spec:
+  template:
+    metadata:
+      annotations:
+        model-platform.io/operator-config-revision: "2"
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/hostname: server-00
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tekton-operator-lifecycle
+          image: 110.120.0.3:8889/platform/tekton-operator:v0.81.0@sha256:834aada144c4bb3726900a3fe699dc73edea7e73152eeacf0c0c8eaf4beb588f
+          env:
+            - name: IMAGE_PIPELINES_PROXY
+              value: 110.120.0.3:8889/platform/tekton-operator-proxy-webhook:v0.81.0@sha256:47f1bab4fc3d89eaae56ec9e12bc680f024aae7aadbcf59b236c5c2166598228
+            - name: IMAGE_PIPELINES_TEKTON_PIPELINES_CONTROLLER
+              value: 110.120.0.3:8889/platform/tekton-pipelines-controller:v1.15.0@sha256:8e1a62043f23d33c026c3b7765585576da5a64bc4afa40829c41634af34dcb2c
+            - name: IMAGE_PIPELINES_TEKTON_EVENTS_CONTROLLER
+              value: 110.120.0.3:8889/platform/tekton-pipelines-events:v1.15.0@sha256:8daf54aec3a68bebacf77479e36f8b5d98c6b4b269b54a787c848e42ab8ff8f8
+            - name: IMAGE_PIPELINES_CONTROLLER
+              value: 110.120.0.3:8889/platform/tekton-pipelines-resolvers:v1.15.0@sha256:b7e491135a703fd1cb3caeb27cd0a5e0465119acc711976f8d739f3ed50460ae
+            - name: IMAGE_PIPELINES_WEBHOOK
+              value: 110.120.0.3:8889/platform/tekton-pipelines-webhook:v1.15.0@sha256:1aa07c0eb4ffc4d2f2790736d5940d9d4bcde52203a2f75954cf38aa986f61ef
+            - name: IMAGE_PIPELINES_ARG__ENTRYPOINT_IMAGE
+              value: 110.120.0.3:8889/platform/tekton-pipelines-entrypoint:v1.15.0@sha256:cd5fce2f62fa503f08cc0e2dff1a773c338a03a5d51eefaaf332d92432d9fde2
+            - name: IMAGE_PIPELINES_ARG__NOP_IMAGE
+              value: 110.120.0.3:8889/platform/tekton-pipelines-nop:v1.15.0@sha256:ecb5db3458a038e1876931de1f7ae87999fe1c05654718d777776316a6bb5b65
+            - name: IMAGE_PIPELINES_ARG__SIDECARLOGRESULTS_IMAGE
+              value: 110.120.0.3:8889/platform/tekton-pipelines-sidecarlogresults:v1.15.0@sha256:637f2cf848ba93d5755f26d7291303a45d5a32e8cd7d89fad7e2741de0fcb3ad
+            - name: IMAGE_PIPELINES_ARG__WORKINGDIRINIT_IMAGE
+              value: 110.120.0.3:8889/platform/tekton-pipelines-workingdirinit:v1.15.0@sha256:0a4aa4f8280201a3b75b880946a2cf420ecf91ced02ad10a430743d7e36fd22a
+            - name: IMAGE_PIPELINES_ARG__SHELL_IMAGE
+              value: 110.120.0.3:8889/platform/tekton-shell:20220414@sha256:c061eec716564cbbb6b13c16228bcac7c552879a02c35fa8e50aed0ccbe3aef1
+            - name: IMAGE_PIPELINES_ARG__SHELL_IMAGE_WIN
+              value: 110.120.0.3:8889/platform/tekton-shell:20220414@sha256:c061eec716564cbbb6b13c16228bcac7c552879a02c35fa8e50aed0ccbe3aef1
+            - name: IMAGE_TRIGGERS_TEKTON_TRIGGERS_CONTROLLER
+              value: 110.120.0.3:8889/platform/tekton-triggers-controller:v0.37.0@sha256:b8ca4c78fbd76b403ed59b97972919d202ceed95ffac53efeb9fb730c6647d84
+            - name: IMAGE_TRIGGERS_ARG__EL_IMAGE
+              value: 110.120.0.3:8889/platform/tekton-triggers-eventlistenersink:v0.37.0@sha256:2f63f8377b536d6e2f700e307bbb4b3cb3ec9d1ac317309ad4df134e7de82f3a
+            - name: IMAGE_TRIGGERS_WEBHOOK
+              value: 110.120.0.3:8889/platform/tekton-triggers-webhook:v0.37.0@sha256:e88b8d821f92aab41ed620f15bd4210cd9bc9b4b75e61172988e4af0d2d07cc0
+            - name: IMAGE_TRIGGERS_TEKTON_TRIGGERS_CORE_INTERCEPTORS
+              value: 110.120.0.3:8889/platform/tekton-triggers-interceptors:v0.37.0@sha256:0f8e6a33565abd79b7574f79dc0900b61e7752409888382111319f492617475f
+            - name: IMAGE_JOB_PRUNER_TKN
+              value: 110.120.0.3:8889/platform/tekton-tkn:20260810@sha256:923ee2d58f5af982c354e9afecbe4f6e5f58a7c6c4aff457b995c1d1cecba752
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+        - name: tekton-operator-cluster-operations
+          image: 110.120.0.3:8889/platform/tekton-operator:v0.81.0@sha256:834aada144c4bb3726900a3fe699dc73edea7e73152eeacf0c0c8eaf4beb588f
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

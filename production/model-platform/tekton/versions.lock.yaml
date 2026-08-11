@@ -1,0 +1,20 @@
+apiVersion: model-platform.openai.internal/v1alpha1
+kind: ComponentVersionLock
+metadata:
+  name: tekton-production
+spec:
+  operator:
+    version: v0.81.0
+    releaseURL: https://github.com/tektoncd/operator/releases/download/v0.81.0/release.yaml
+    releaseSHA256: c61be51e9b7a74e603f4ba335aff88189d3102f9f8b37d680f3762c92440a305
+  pipelines:
+    version: v1.15.0
+    releaseURL: https://github.com/tektoncd/pipeline/releases/download/v1.15.0/release.yaml
+    releaseSHA256: 9b1bfe474da43d4e7e9993e5c2b67ef0966b0a513de51f25087bc1118a5f49d3
+  triggers:
+    version: v0.37.0
+    releaseURL: https://github.com/tektoncd/triggers/releases/download/v0.37.0/release.yaml
+    releaseSHA256: 817f0ca8940c5d2e4c89fd9de7402140bca0dddfd17401a31d83fa9d96e0f6f2
+    interceptorsURL: https://github.com/tektoncd/triggers/releases/download/v0.37.0/interceptors.yaml
+    interceptorsSHA256: 20b698d79c79165c9343ec2a45a8a74ab37b27c1597ab52ecdbdd7c39a5c94b3
+

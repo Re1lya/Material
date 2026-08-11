@@ -1,0 +1,173 @@
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonPipeline
+metadata:
+  name: pipeline
+spec:
+  targetNamespace: tekton-pipelines
+  await-sidecar-readiness: true
+  coschedule: workspaces
+  disable-creds-init: false
+  disable-inline-spec: ""
+  enable-api-fields: stable
+  enable-bundles-resolver: false
+  enable-cel-in-whenexpression: false
+  enable-cluster-resolver: false
+  enable-custom-tasks: false
+  enable-git-resolver: false
+  enable-hub-resolver: false
+  enable-param-enum: false
+  enable-provenance-in-status: true
+  enable-step-actions: false
+  keep-pod-on-cancel: false
+  require-git-ssh-secret-known-hosts: true
+  results-from: termination-message
+  running-in-environment-with-injected-sidecars: false
+  set-security-context: true
+  trusted-resources-verification-no-match-policy: ignore
+  performance:
+    disable-ha: true
+    buckets: 1
+    replicas: 1
+    threads-per-controller: 2
+    kube-api-qps: 5
+    kube-api-burst: 10
+    statefulset-ordinals: false
+  networkPolicy:
+    disabled: false
+  options:
+    disabled: false
+    deployments:
+      tekton-operator-proxy-webhook:
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/arch: amd64
+                kubernetes.io/hostname: server-00
+              containers:
+                - name: proxy
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 64Mi
+                    limits:
+                      cpu: 250m
+                      memory: 256Mi
+      tekton-pipelines-controller:
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/arch: amd64
+                kubernetes.io/hostname: server-00
+              containers:
+                - name: tekton-pipelines-controller
+                  resources:
+                    requests:
+                      cpu: 250m
+                      memory: 256Mi
+                    limits:
+                      cpu: "1"
+                      memory: 1Gi
+      tekton-events-controller:
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/arch: amd64
+                kubernetes.io/hostname: server-00
+              containers:
+                - name: tekton-events-controller
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 64Mi
+                    limits:
+                      cpu: 250m
+                      memory: 256Mi
+      tekton-pipelines-webhook:
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/arch: amd64
+                kubernetes.io/hostname: server-00
+              containers:
+                - name: webhook
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 128Mi
+                    limits:
+                      cpu: 500m
+                      memory: 512Mi
+      tekton-pipelines-remote-resolvers:
+        spec:
+          replicas: 0
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/arch: amd64
+                kubernetes.io/hostname: server-00
+---
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonTrigger
+metadata:
+  name: trigger
+spec:
+  targetNamespace: tekton-pipelines
+  disabled: false
+  enable-api-fields: stable
+  networkPolicy:
+    disabled: false
+  options:
+    disabled: false
+    deployments:
+      tekton-triggers-controller:
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/arch: amd64
+                kubernetes.io/hostname: server-00
+              containers:
+                - name: tekton-triggers-controller
+                  resources:
+                    requests:
+                      cpu: 100m
+                      memory: 128Mi
+                    limits:
+                      cpu: 500m
+                      memory: 512Mi
+      tekton-triggers-webhook:
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/arch: amd64
+                kubernetes.io/hostname: server-00
+              containers:
+                - name: webhook
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 64Mi
+                    limits:
+                      cpu: 250m
+                      memory: 256Mi
+      tekton-triggers-core-interceptors:
+        spec:
+          template:
+            spec:
+              nodeSelector:
+                kubernetes.io/arch: amd64
+                kubernetes.io/hostname: server-00
+              containers:
+                - name: tekton-triggers-core-interceptors
+                  resources:
+                    requests:
+                      cpu: 50m
+                      memory: 64Mi
+                    limits:
+                      cpu: 250m
+                      memory: 256Mi

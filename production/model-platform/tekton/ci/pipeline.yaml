@@ -1,0 +1,145 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: validate-model-platform-config
+  namespace: model-platform-ci
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: ci
+spec:
+  description: Clone one reviewed commit and validate the constrained GitOps bootstrap path.
+  params:
+    - name: repository-url
+      type: string
+      default: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+    - name: revision
+      type: string
+  workspaces:
+    - name: source
+  tasks:
+    - name: clone-and-validate
+      params:
+        - name: repository-url
+          value: $(params.repository-url)
+        - name: revision
+          value: $(params.revision)
+      workspaces:
+        - name: source
+          workspace: source
+      taskSpec:
+        params:
+          - name: repository-url
+            type: string
+          - name: revision
+            type: string
+        workspaces:
+          - name: source
+        volumes:
+          - name: gitea-credentials
+            secret:
+              secretName: gitea-ci-reader
+        steps:
+          - name: validate
+            image: 110.120.0.3:8889/platform/model-platform-ci-tools:v0.1.0@sha256:3a00ce72a200713e82768821d2caffa6644f47725ba34793b2f4859d71565785
+            imagePullPolicy: IfNotPresent
+            workingDir: $(workspaces.source.path)
+            env:
+              - name: REPOSITORY_URL
+                value: $(params.repository-url)
+              - name: REVISION
+                value: $(params.revision)
+              - name: GITEA_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-ci-reader
+                    key: username
+              - name: GITEA_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-ci-reader
+                    key: token
+            computeResources:
+              requests:
+                cpu: 250m
+                memory: 256Mi
+              limits:
+                cpu: "1"
+                memory: 1Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+            script: |
+              #!/bin/sh
+              set -eu
+
+              expected_url='http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git'
+              if [ "${REPOSITORY_URL}" != "${expected_url}" ]; then
+                echo 'repository URL is outside the CI trust boundary' >&2
+                exit 1
+              fi
+
+              case "${REVISION}" in
+                *[!0-9a-f]*|'')
+                  echo 'revision must be a lowercase hexadecimal commit ID' >&2
+                  exit 1
+                  ;;
+              esac
+              if [ "${#REVISION}" -ne 40 ]; then
+                echo 'revision must be a complete 40-character Git commit ID' >&2
+                exit 1
+              fi
+
+              if [ "${#GITEA_TOKEN}" -lt 20 ]; then
+                echo 'Gitea token is missing or too short' >&2
+                exit 1
+              fi
+
+              askpass="$(workspaces.source.path)/git-askpass.sh"
+              checkout="$(workspaces.source.path)/repository"
+              rm -rf "${checkout}"
+              cat > "${askpass}" <<'EOF'
+              #!/bin/sh
+              case "$1" in
+                *Username*) printf '%s' "$GITEA_USERNAME" ;;
+                *Password*) printf '%s' "$GITEA_TOKEN" ;;
+                *) exit 1 ;;
+              esac
+              EOF
+              chmod 0700 "${askpass}"
+              export GIT_ASKPASS="${askpass}"
+              export GIT_TERMINAL_PROMPT=0
+
+              git clone --no-checkout "${REPOSITORY_URL}" "${checkout}"
+              git -C "${checkout}" checkout --detach "${REVISION}"
+              rm -f "${askpass}"
+
+              actual_revision="$(git -C "${checkout}" rev-parse HEAD)"
+              if [ "${actual_revision}" != "${REVISION}" ]; then
+                echo 'checked out revision does not match webhook revision' >&2
+                exit 1
+              fi
+
+              rendered_file="$(mktemp)"
+              trap 'rm -f "${rendered_file}"' EXIT
+              kubectl kustomize \
+                "${checkout}/environments/production/bootstrap" \
+                > "${rendered_file}"
+
+              kind_count="$(grep -c '^kind:' "${rendered_file}")"
+              if [ "${kind_count}" -ne 1 ]; then
+                echo "expected exactly one rendered object, found ${kind_count}" >&2
+                exit 1
+              fi
+
+              grep -qx 'kind: ConfigMap' "${rendered_file}"
+              grep -qx '  name: gitops-bootstrap-status' "${rendered_file}"
+              grep -qx '  namespace: model-platform-system' "${rendered_file}"
+              echo 'bootstrap_validation=PASS'
+              sha256sum "${rendered_file}"

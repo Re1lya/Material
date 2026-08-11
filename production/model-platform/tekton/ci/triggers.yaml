@@ -1,0 +1,94 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: model-platform-config-push
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: git-revision
+      value: $(body.after)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: model-platform-config-validation
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: git-revision
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: model-platform-config-validation-
+        namespace: model-platform-ci
+        labels:
+          app.kubernetes.io/part-of: model-platform
+          app.kubernetes.io/component: ci
+      spec:
+        pipelineRef:
+          name: validate-model-platform-config
+        params:
+          - name: revision
+            value: $(tt.params.git-revision)
+        taskRunTemplate:
+          serviceAccountName: model-platform-ci-runner
+          podTemplate:
+            nodeSelector:
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: server-00
+            securityContext:
+              fsGroup: 65532
+              fsGroupChangePolicy: OnRootMismatch
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+        timeouts:
+          pipeline: 10m
+        workspaces:
+          - name: source
+            emptyDir:
+              sizeLimit: 512Mi
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: model-platform-config
+  namespace: model-platform-ci
+spec:
+  serviceAccountName: model-platform-ci-listener
+  resources:
+    kubernetesResource:
+      spec:
+        template:
+          spec:
+            nodeSelector:
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: server-00
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+  triggers:
+    - name: validate-main-push
+      interceptors:
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >-
+                header.match('X-Gitea-Event', 'push') &&
+                body.ref == 'refs/heads/main' &&
+                body.repository.full_name == 'gitadmin/model-platform-config'
+      bindings:
+        - ref: model-platform-config-push
+      template:
+        ref: model-platform-config-validation

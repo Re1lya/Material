@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tekton-operator-webhook
+  namespace: tekton-operator
+spec:
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/hostname: server-00
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tekton-operator-webhook
+          image: 110.120.0.3:8889/platform/tekton-operator-webhook:v0.81.0@sha256:6bcb21d937bd95791f31a25ca527a2241b2a50d3b9ae4f5b68ca0491f21bbca3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
