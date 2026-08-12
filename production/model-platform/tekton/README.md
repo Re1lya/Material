@@ -3,7 +3,7 @@
 This directory prepares the first production CI control plane for the model
 platform. It is intentionally NPU-free and does not build images, download
 models, write Git, or ask Argo CD to synchronize. Its first job is narrower:
-receive a trusted Gitea `main` push, clone that exact commit, and run the
+receive a trusted Gitea or GitHub event, clone that exact commit, and run the
 repository's bootstrap validation.
 
 ## What "single replica" means
@@ -25,13 +25,17 @@ and is not performed here.
 - Tekton Operator `v0.81.0` owns installation and later component upgrades.
 - Tekton Pipelines `v1.15.0` reconciles PipelineRuns into TaskRun Pods.
 - Tekton Triggers `v0.37.0` turns an accepted Gitea webhook into a PipelineRun.
-- The CEL core interceptor accepts only a `push` to the expected repository's
-  `main` branch.
+- The existing Gitea EventListener and CEL interceptor accept only a `push` to
+  `gitadmin/model-platform-config` on `main`.
+- The separate GitHub EventListener verifies the GitHub webhook HMAC before CEL
+  accepts a `push` to `Re1lya/Material` on `main`, or an opened, reopened, or
+  synchronized same-repository pull request targeting `main`.
 - `model-platform-ci` isolates the listener, Pipeline, ServiceAccounts,
   ResourceQuota, LimitRange, and NetworkPolicies.
-- `model-platform-ci-tools` combines the pinned internal Alpine Git and
-  kubectl images. The Pipeline uses those tools to run an offline POSIX
-  Kustomize and structure validation without mounting a Kubernetes API token.
+- The deployed `model-platform-ci-tools:v0.1.0` combines pinned internal Git
+  and kubectl content. The prepared `v0.2.0` Dockerfile uses the pinned internal
+  Python and kubectl images and adds Git plus the locked schema validator. The
+  Pipeline uses those tools without mounting a Kubernetes API token.
 
 The Operator is used deliberately: component versions and optional additions
 remain declarative and upgradable. Its cost is a wider cluster-level surface:
@@ -41,10 +45,12 @@ Tekton component CRDs, admission webhooks, and controllers. Only
 
 ## Steady resource envelope
 
-The planned steady state is approximately 10 small Pods and 1.1 CPU / 1.3 GiB
-of requests, including the EventListener and Operator proxy webhook. Limits
-are higher but do not reserve CPU. A validation PipelineRun is on demand and
-requests 250m CPU / 256 MiB memory while it runs. No PVC is created.
+The original Gitea-only steady state was approximately 10 small Pods and 1.1
+CPU / 1.3 GiB of requests, including the EventListener and Operator proxy
+webhook. The second EventListener adds one Pod with 100m CPU / 128 MiB requests
+and 500m CPU / 512 MiB limits. Limits do not reserve CPU. A validation
+PipelineRun is on demand and requests 250m CPU / 256 MiB memory per running
+Step container. No PVC is created.
 
 Remote resolvers are disabled and their Deployment is scaled to zero. Results,
 Pruner, Chains, Dashboard, Pipelines-as-Code, model cache, image build, and NPU
@@ -68,9 +74,13 @@ tasks are outside this stage.
 - `ci/` defines the constrained validation loop.
 - `ci-tools/` builds the validation image.
 
-The CI image reference in `ci/pipeline.yaml` is fixed as
+Production still runs CI image
 `v0.1.0@sha256:3a00ce72a200713e82768821d2caffa6644f47725ba34793b2f4859d71565785`.
-A tag-only reference remains a release blocker for future updates.
+The locally prepared Pipeline references
+`110.120.0.3:8889/platform/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd`.
+Applying that Pipeline to production is a release blocker until the K3s pull
+path for v0.2.0 is accepted. A tag-only or placeholder reference must never be
+applied to production.
 
 ## Trust and access boundaries
 
@@ -78,15 +88,24 @@ A tag-only reference remains a release blocker for future updates.
   digest.
 - The Gitea reader token is created out of band as Secret
   `model-platform-ci/gitea-ci-reader`; no credential belongs in Git.
+- The GitHub webhook HMAC is created out of band as Secret
+  `model-platform-ci/github-webhook-secret`, key `secretToken`. It is not a
+  GitHub API token and is never passed to a PipelineRun.
+- GitHub clone support currently targets the public
+  `https://github.com/Re1lya/Material.git` repository and needs no clone token.
+  Fork pull requests are deliberately rejected; adding them requires a
+  separate untrusted-code policy.
 - The runner ServiceAccount does not mount a Kubernetes API token.
 - The listener can read only its Trigger objects, impersonate only the runner,
   create PipelineRuns, and read the cluster-wide CEL interceptor definition.
 - NetworkPolicy permits DNS, the Kubernetes API, Gitea HTTP, the Gitea-to-
   listener request, and listener-to-interceptor TLS. Other ingress and egress
   are denied.
-- Webhook source is restricted by NetworkPolicy in this first stage. A signed
-  webhook/interceptor should be added before exposing the listener beyond the
-  cluster-internal Gitea path.
+- The Gitea source remains restricted by NetworkPolicy. The GitHub listener
+  verifies every accepted event with Tekton's GitHub interceptor and a shared
+  HMAC before repository and branch filtering.
+- GitHub PipelineRun Pods alone receive external TCP/443 egress for cloning;
+  private, loopback, link-local and multicast address ranges remain excluded.
 - Windows Task execution is unsupported. The Operator's Windows shell image
   setting intentionally points at the pinned Linux shell because this cluster
   contains no Windows nodes.
@@ -118,3 +137,46 @@ CRs. Existing PipelineRuns and CI definitions do not require a cluster rebuild.
 When workload grows, first move Task Pods to labelled CPU workers, then raise
 controller replicas and budgets. Results and Pruner can be added as individual
 Operator CRs only when their persistence and retention policies are designed.
+
+## Temporary GitHub ingress with Cloudflare Quick Tunnel
+
+The GitHub EventListener is intentionally a ClusterIP service. For a bounded
+integration test, run a local port-forward and Cloudflare Quick Tunnel on
+`server-00` rather than adding an unauthenticated NodePort or placeholder
+Ingress. This path changes no existing Gitea Service or webhook:
+
+```text
+GitHub webhook
+  -> random HTTPS trycloudflare.com URL
+  -> cloudflared on server-00
+  -> localhost port-forward
+  -> Service/el-model-platform-github
+  -> GitHub HMAC interceptor
+  -> CEL repository/event filter
+  -> shared validation Pipeline
+```
+
+The user starts the two long-running processes in separate terminals:
+
+```bash
+sudo k3s kubectl --namespace model-platform-ci port-forward \
+  service/el-model-platform-github 18080:8080 \
+  --address 127.0.0.1
+
+cloudflared tunnel --url http://127.0.0.1:18080
+```
+
+Use the generated `https://<random>.trycloudflare.com/` URL as the GitHub
+webhook Payload URL, select `application/json`, enter the same value stored in
+`github-webhook-secret/secretToken`, and subscribe only to pushes and pull
+requests. Never print or commit that shared value. Both processes must remain
+running during the test. A new Quick Tunnel process gets a different URL, so
+the GitHub webhook must then be updated.
+
+Quick Tunnel is only an integration aid: it has no uptime guarantee and no
+stable hostname. The durable replacement is a named Cloudflare Tunnel with a
+reviewed hostname, token Secret, internal-only origin Service, pinned internal
+`cloudflared` image, health probes, resource limits, and a dedicated
+NetworkPolicy. GitHub status/check reporting is also a separate phase; this
+Listener addition starts PipelineRuns but does not yet write results back to
+GitHub.

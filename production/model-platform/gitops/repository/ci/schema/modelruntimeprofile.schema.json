@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform.example.com/schemas/modelruntimeprofile",
+  "title": "ModelRuntimeProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "platform.example.com/v1alpha1" },
+    "kind": { "const": "ModelRuntimeProfile" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "labels"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["owner", "project"],
+          "properties": {
+            "owner": { "type": "string", "minLength": 1 },
+            "project": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supportedModel", "workload", "runtime", "resources", "placement", "probes"],
+      "properties": {
+        "supportedModel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["architecture", "quantization", "weights"],
+          "properties": {
+            "architecture": { "type": "string", "minLength": 1 },
+            "quantization": { "type": "string", "minLength": 1 },
+            "weights": { "type": "string", "minLength": 1 }
+          }
+        },
+        "workload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "strategy", "replicas"],
+          "properties": {
+            "kind": { "const": "Deployment" },
+            "strategy": { "const": "Recreate" },
+            "replicas": { "const": 1 }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image", "modelPath", "modelName", "rayAddress", "servingRomConfigId"],
+          "properties": {
+            "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:8889/.+@sha256:[0-9a-f]{64}$" },
+            "command": { "type": "array", "items": { "type": "string" } },
+            "args": { "type": "array", "items": { "type": "string" } },
+            "modelPath": { "type": "string", "minLength": 1 },
+            "modelName": { "type": "string", "minLength": 1 },
+            "rayAddress": { "type": "string", "minLength": 1 },
+            "servingRomConfigId": { "type": "string", "minLength": 1 }
+          }
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requests", "limits", "sharedMemory"],
+          "properties": {
+            "requests": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["cpu", "memory", "huawei.com/Ascend910"],
+              "properties": {
+                "cpu": { "type": "string", "pattern": "^[0-9]+m?$" },
+                "memory": { "type": "string", "pattern": "^[0-9]+(Ki|Mi|Gi)$" },
+                "huawei.com/Ascend910": { "type": "string", "pattern": "^[0-9]+$" }
+              }
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["cpu", "memory", "huawei.com/Ascend910"],
+              "properties": {
+                "cpu": { "type": "string", "pattern": "^[0-9]+m?$" },
+                "memory": { "type": "string", "pattern": "^[0-9]+(Ki|Mi|Gi)$" },
+                "huawei.com/Ascend910": { "type": "string", "pattern": "^[0-9]+$" }
+              }
+            },
+            "sharedMemory": { "type": "string", "pattern": "^[0-9]+(Ki|Mi|Gi)$" }
+          }
+        },
+        "placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nodeSelector", "adminManagedPhysicalIds", "certifiedPhysicalIds"],
+          "properties": {
+            "nodeSelector": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": [
+                "kubernetes.io/arch",
+                "kubernetes.io/hostname",
+                "node.kubernetes.io/npu.chip.name"
+              ],
+              "properties": {
+                "kubernetes.io/arch": { "const": "arm64" },
+                "kubernetes.io/hostname": { "type": "string", "minLength": 1 },
+                "node.kubernetes.io/npu.chip.name": { "type": "string", "minLength": 1 }
+              }
+            },
+            "adminManagedPhysicalIds": { "const": true },
+            "certifiedPhysicalIds": { "type": "string", "pattern": "^[0-9,]+$" }
+          }
+        },
+        "probes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["healthPath", "inferencePath"],
+          "properties": {
+            "healthPath": { "type": "string", "pattern": "^/" },
+            "inferencePath": { "type": "string", "pattern": "^/" }
+          }
+        }
+      }
+    }
+  }
+}

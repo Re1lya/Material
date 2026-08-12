@@ -7,6 +7,56 @@ spec:
   params:
     - name: git-revision
       value: $(body.after)
+    - name: repository-url
+      value: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+    - name: source-provider
+      value: gitea
+    - name: source-root
+      value: .
+    - name: event-kind
+      value: push
+    - name: clone-credentials-secret
+      value: gitea-ci-reader
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: model-platform-config-github-push
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: git-revision
+      value: $(body.after)
+    - name: repository-url
+      value: https://github.com/Re1lya/Material.git
+    - name: source-provider
+      value: github
+    - name: source-root
+      value: production/model-platform/gitops/repository
+    - name: event-kind
+      value: push
+    - name: clone-credentials-secret
+      value: github-public-clone
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: model-platform-config-github-pull-request
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: git-revision
+      value: $(body.pull_request.head.sha)
+    - name: repository-url
+      value: https://github.com/Re1lya/Material.git
+    - name: source-provider
+      value: github
+    - name: source-root
+      value: production/model-platform/gitops/repository
+    - name: event-kind
+      value: pull-request
+    - name: clone-credentials-secret
+      value: github-public-clone
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
@@ -16,6 +66,11 @@ metadata:
 spec:
   params:
     - name: git-revision
+    - name: repository-url
+    - name: source-provider
+    - name: source-root
+    - name: event-kind
+    - name: clone-credentials-secret
   resourcetemplates:
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
@@ -25,12 +80,22 @@ spec:
         labels:
           app.kubernetes.io/part-of: model-platform
           app.kubernetes.io/component: ci
+          ci.model-platform.io/source: $(tt.params.source-provider)
+          ci.model-platform.io/event: $(tt.params.event-kind)
       spec:
         pipelineRef:
           name: validate-model-platform-config
         params:
+          - name: repository-url
+            value: $(tt.params.repository-url)
           - name: revision
             value: $(tt.params.git-revision)
+          - name: source-provider
+            value: $(tt.params.source-provider)
+          - name: source-root
+            value: $(tt.params.source-root)
+          - name: clone-credentials-secret
+            value: $(tt.params.clone-credentials-secret)
         taskRunTemplate:
           serviceAccountName: model-platform-ci-runner
           podTemplate:
@@ -90,5 +155,86 @@ spec:
                 body.repository.full_name == 'gitadmin/model-platform-config'
       bindings:
         - ref: model-platform-config-push
+      template:
+        ref: model-platform-config-validation
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: model-platform-github
+  namespace: model-platform-ci
+spec:
+  serviceAccountName: model-platform-ci-listener
+  resources:
+    kubernetesResource:
+      spec:
+        template:
+          spec:
+            nodeSelector:
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: server-00
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+  triggers:
+    - name: validate-github-main-push
+      interceptors:
+        - ref:
+            name: github
+            kind: ClusterInterceptor
+            apiVersion: triggers.tekton.dev
+          params:
+            - name: secretRef
+              value:
+                secretName: github-webhook-secret
+                secretKey: secretToken
+            - name: eventTypes
+              value:
+                - push
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >-
+                body.ref == 'refs/heads/main' &&
+                body.repository.full_name == 'Re1lya/Material'
+      bindings:
+        - ref: model-platform-config-github-push
+      template:
+        ref: model-platform-config-validation
+    - name: validate-github-main-pull-request
+      interceptors:
+        - ref:
+            name: github
+            kind: ClusterInterceptor
+            apiVersion: triggers.tekton.dev
+          params:
+            - name: secretRef
+              value:
+                secretName: github-webhook-secret
+                secretKey: secretToken
+            - name: eventTypes
+              value:
+                - pull_request
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >-
+                body.action in ['opened', 'reopened', 'synchronize'] &&
+                body.repository.full_name == 'Re1lya/Material' &&
+                body.pull_request.base.ref == 'main' &&
+                body.pull_request.head.repo.full_name == 'Re1lya/Material'
+      bindings:
+        - ref: model-platform-config-github-pull-request
       template:
         ref: model-platform-config-validation

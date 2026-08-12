@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform.example.com/schemas/modelversion",
+  "title": "ModelVersion",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "platform.example.com/v1alpha1" },
+    "kind": { "const": "ModelVersion" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "labels"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["owner", "project"],
+          "properties": {
+            "owner": { "type": "string", "minLength": 1 },
+            "project": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelId", "revision", "artifact", "format", "compatibility"],
+      "properties": {
+        "modelId": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+        "revision": { "type": "string", "pattern": "^[0-9]{8}(\\.[0-9]+)?$" },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "path", "fileCount", "sizeBytes", "manifestDigest"],
+          "properties": {
+            "repository": { "const": "model-artifacts" },
+            "path": { "type": "string", "minLength": 1 },
+            "fileCount": { "type": "integer", "minimum": 1 },
+            "sizeBytes": { "type": "integer", "minimum": 1 },
+            "manifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        },
+        "format": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["family", "weights", "architecture", "quantization"],
+          "properties": {
+            "family": { "const": "huggingface" },
+            "weights": { "const": "safetensors" },
+            "architecture": { "type": "string", "minLength": 1 },
+            "quantization": { "type": "string", "minLength": 1 }
+          }
+        },
+        "compatibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runtimeProfiles"],
+          "properties": {
+            "runtimeProfiles": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}
