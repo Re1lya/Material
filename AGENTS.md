@@ -1014,23 +1014,44 @@ last step. Do not reorder without explicit user approval.
 
 ```text
 Track A: Material validation CI (foundation, mostly done)
-  Gate 1-4 DONE. Remaining: Gate 5 (Cloudflare Quick Tunnel via internal
-  cloudflared image), then Gate 6/7 design with the ora-desktop reporter.
+  Gate 1-4 DONE. Gate 5 partially done: cloudflared image mirrored to 8889
+  (sha256:b392761b... amd64), port-forward + Quick Tunnel RUNNING
+  (https://complications-magnificent-segments-blvd.trycloudflare.com,
+  temporary URL, changes on restart), GitHub webhook configured (ping 202,
+  green), PR #6 triggered a GitHub-labelled PipelineRun
+  (model-platform-config-validation-rxd7x, revision = PR head SHA
+  ab84e54d..., Succeeded, bootstrap_validation=PASS).
+  Remaining: Gate 5 acceptance items 4-7 (negative tests), then Gate 6/7.
 
 Track B: ora-space/desktop GitHub PR CI (highest priority)
-  1. GitHub webhook entry (own EventListener, own TriggerBindings, HMAC)
-  2. PV/PVC cache (bounded, single-node RWO, pnpm store + Cargo caches +
-     sccache, 80-120 GiB initial envelope)
+  1. GitHub webhook entry (own EventListener, own TriggerBindings, HMAC) - NOT
+     STARTED; the Track A tunnel/listener pattern will be reused
+  2. PV/PVC cache - DONE 2026-08-12: StorageClass ora-desktop-cache-local,
+     PV ora-desktop-cache-server-00 (100Gi RWO Retain,
+     /mnt/data/model-platform/ci-cache), PVC
+     model-platform-ci/ora-desktop-cache, all Bound. Manifest:
+     tekton/ci/cache-storage.yaml
   3. CI image ora-desktop-ci (amd64, digest-pinned, Node/pnpm + Rust
-     toolchain + go-task + Tauri libs)
+     toolchain + go-task + Tauri libs) - IN PROGRESS: repository toolchain
+     audit blocked; git clone of ora-space/desktop via github.com is too slow
+     (TLS drop / <1 B/s), curl tarball via codeload was being tested when the
+     session was paused. Remaining: confirm Node/pnpm/Rust versions from
+     package.json / Taskfile.yml / rust-toolchain.toml, then build the image.
   4. Pipeline/Task clone/install/test single Pod, fresh emptyDir source,
-     bounded cache PVC
+     bounded cache PVC - NOT STARTED
   5. GitHub App + Check Run reporter (report-start/report-finish, checks
-     read/write only)
+     read/write only) - NOT STARTED
   6. Scoped proxy gateway LAST (ci-egress, Mihomo/Clash-core, ClusterIP
      Service, HTTP CONNECT, only Task/reporter Steps use proxy env)
   7. Acceptance: cold vs warm run, real PR Check, regression health
 ```
+
+Network reality on 2026-08-12: server-00 direct egress to github.com
+(git clone endpoint) is very slow (TLS drops, <1 B/s sustained), while
+codeload.github.com tarball download measured 147 KiB/s and api.github.com
+answered 200 in ~7s. registry.npmjs.org answered in ~1.1s and
+static.crates.io was reachable. A proxy may still be needed for reliable git
+clone and for pnpm/Cargo payload downloads; measure before deciding.
 
 The deferred proxy does not block the first shallow-clone measurement: the
 repository is only 3.7 MiB with no LFS and no submodules, so a direct
