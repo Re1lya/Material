@@ -7,6 +7,11 @@ metadata:
     app.kubernetes.io/component: deployment-api
 spec:
   scope: Namespaced
+  defaultCompositionRef:
+    name: modeldeployment-runtime-zero-v1alpha1
+  enforcedCompositionRef:
+    name: modeldeployment-runtime-zero-v1alpha1
+  defaultCompositionUpdatePolicy: Manual
   group: platform.example.com
   names:
     kind: ModelDeployment
@@ -35,21 +40,19 @@ spec:
               properties:
                 projectRef:
                   type: string
-                  minLength: 1
-                  maxLength: 63
-                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  enum:
+                    - model-serving
                 modelVersionRef:
                   type: string
-                  minLength: 1
-                  maxLength: 253
+                  enum:
+                    - qwen3.6-27b-w8a8-20260806
                 runtimeProfileRef:
                   type: string
-                  minLength: 1
-                  maxLength: 253
+                  enum:
+                    - qwen36-w8a8-ascend-a3-v1
                 desiredState:
                   type: string
                   enum:
-                    - Running
                     - Stopped
                 placement:
                   type: object
@@ -58,8 +61,9 @@ spec:
                   properties:
                     acceleratorPool:
                       type: string
-                      minLength: 1
-                      maxLength: 63
+                      enum:
+                        - control-plane-only
+                        - ascend-a3
                 access:
                   type: object
                   required:

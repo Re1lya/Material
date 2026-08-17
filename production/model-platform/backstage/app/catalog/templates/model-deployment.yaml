@@ -1,0 +1,112 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: request-model-deployment
+  title: Model deployment request (mock runtime)
+  description: Fill a deployment request and open a reviewed Gitea PR. Requested TP/replicas are recorded for the future Ray path; the current fixed backend remains stopped with zero NPU allocation.
+  tags:
+    - model-platform
+    - gitops
+    - control-plane-only
+spec:
+  owner: group:default/platform-team
+  type: service
+  parameters:
+    - title: Deployment identity
+      required:
+        - deploymentName
+        - projectRef
+      properties:
+        deploymentName:
+          title: Deployment name
+          type: string
+          description: New DNS-label name; an existing request cannot be overwritten.
+          pattern: '^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$'
+          maxLength: 63
+        projectRef:
+          title: Project
+          type: string
+          default: model-serving
+          enum:
+            - model-serving
+    - title: Approved model selection
+      required:
+        - modelVersionRef
+        - runtimeProfileRef
+        - visibility
+      properties:
+        modelVersionRef:
+          title: Model version
+          type: string
+          enum:
+            - qwen3.6-27b-w8a8-20260806
+        runtimeProfileRef:
+          title: Runtime profile
+          type: string
+          enum:
+            - qwen36-w8a8-ascend-a3-v1
+          description: Recorded for review only; runtime creation remains disabled.
+        visibility:
+          title: Visibility
+          type: string
+          default: internal
+          enum:
+            - internal
+            - private
+    - title: Mock scheduling request
+      required:
+        - requestedTensorParallelSize
+        - requestedPipelineParallelSize
+        - requestedReplicas
+        - priority
+      properties:
+        requestedTensorParallelSize:
+          title: Requested tensor parallel size (TP)
+          type: integer
+          default: 4
+          minimum: 1
+          maximum: 16
+          description: Recorded in the PR only. The current fixed backend uses TP=6 and does not start a replica.
+        requestedPipelineParallelSize:
+          title: Requested pipeline parallel size (PP)
+          type: integer
+          default: 1
+          minimum: 1
+          maximum: 4
+          description: Recorded in the PR only. Ray scheduling is not enabled yet.
+        requestedReplicas:
+          title: Requested replicas
+          type: integer
+          default: 1
+          minimum: 0
+          maximum: 4
+          description: Recorded in the PR only. The effective replica count is locked to 0.
+        priority:
+          title: Priority
+          type: string
+          default: normal
+          enum:
+            - low
+            - normal
+            - high
+  steps:
+    - id: createPullRequest
+      name: Create constrained Gitea pull request
+      action: model-platform:gitea-create-deployment-pr
+      input:
+        deploymentName: ${{ parameters.deploymentName }}
+        projectRef: ${{ parameters.projectRef }}
+        modelVersionRef: ${{ parameters.modelVersionRef }}
+        runtimeProfileRef: ${{ parameters.runtimeProfileRef }}
+        visibility: ${{ parameters.visibility }}
+        requestedTensorParallelSize: ${{ parameters.requestedTensorParallelSize }}
+        requestedPipelineParallelSize: ${{ parameters.requestedPipelineParallelSize }}
+        requestedReplicas: ${{ parameters.requestedReplicas }}
+        priority: ${{ parameters.priority }}
+  output:
+    links:
+      - title: Review deployment request PR
+        url: ${{ steps.createPullRequest.output.pullRequestUrl }}
+    text:
+      - title: Safety state
+        content: The request is mock-fixed-runtime. Requested values are recorded for review, while the effective backend remains Qwen TP=6, replicas=0, NPU=0. Tekton and a human must approve it before a manual Argo CD Sync.

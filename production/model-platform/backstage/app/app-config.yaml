@@ -1,0 +1,110 @@
+app:
+  title: Model Platform
+  baseUrl: ${BACKSTAGE_BASE_URL}
+  packages: all
+  extensions:
+    - page:catalog:
+        config:
+          path: /
+
+organization:
+  name: Model Platform
+
+backend:
+  baseUrl: ${BACKSTAGE_BASE_URL}
+  listen: ':7007'
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+    # The temporary internal NodePort is HTTP; re-enable this for HTTPS.
+    upgrade-insecure-requests: false
+  cors:
+    origin: ${BACKSTAGE_BASE_URL}
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  database:
+    client: pg
+    connection:
+      host: ${POSTGRES_HOST}
+      port: ${POSTGRES_PORT}
+      user: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+  actions:
+    pluginSources:
+      - auth
+      - catalog
+      - scaffolder
+
+auth:
+  environment: production
+  session:
+    secret: ${AUTH_SESSION_SECRET}
+  providers:
+    oidc:
+      production:
+        metadataUrl: http://110.120.0.3:30081/.well-known/openid-configuration
+        clientId: ${GITEA_OIDC_CLIENT_ID}
+        clientSecret: ${GITEA_OIDC_CLIENT_SECRET}
+        additionalScopes: [openid, profile, email]
+        signIn:
+          resolvers:
+            - resolver: emailMatchingUserEntityProfileEmail
+  clientIdMetadataDocuments:
+    enabled: false
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+  rules:
+    - allow: [Component, System, API, Resource, Location, User, Group, Template]
+  locations:
+    - type: file
+      target: ./catalog/entities.yaml
+    - type: file
+      target: ./catalog/templates/model-deployment.yaml
+
+kubernetes:
+  frontend:
+    podDelete:
+      enabled: false
+  serviceLocatorMethod:
+    type: singleTenant
+  objectTypes:
+    - configmaps
+    - deployments
+    - pods
+    - services
+    - statefulsets
+  clusterLocatorMethods:
+    - type: config
+      clusters:
+        - name: production-k3s
+          title: Production K3s
+          url: https://kubernetes.default.svc
+          authProvider: serviceAccount
+          skipTLSVerify: false
+          skipMetricsLookup: true
+          customResources:
+            - group: platform.example.com
+              apiVersion: v1alpha1
+              plural: modeldeployments
+
+permission:
+  enabled: true
+
+scaffolder: {}
+
+# This is intentionally not a general SCM integration. The custom action reads
+# these fixed values and can only open a constrained ModelDeployment PR.
+modelPlatform:
+  gitea:
+    apiBaseUrl: http://gitea-http.gitea.svc.cluster.local:3000
+    owner: gitadmin
+    repository: model-platform-config
+    baseBranch: main
+    token: ${GITEA_REQUEST_TOKEN}
+    allowedInitiators:
+      - user:default/gitadmin
+    allowedModelVersions:
+      - qwen3.6-27b-w8a8-20260806
+    allowedRuntimeProfiles:
+      - qwen36-w8a8-ascend-a3-v1

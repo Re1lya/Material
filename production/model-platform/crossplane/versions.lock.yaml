@@ -12,3 +12,9 @@ spec:
     upstreamIndexDigest: sha256:cea30c75198e8cee8e9a4fcb003b158750d345ca91831876de38989c11cbf94c
     linuxAMD64Digest: sha256:84d0751cfbdabe2a31a990a4824766ed552893a675c321b7067488d28dccfd26
     internalImage: 110.120.0.3:8889/platform/crossplane:v2.3.4
+  functionPatchAndTransform:
+    version: v0.8.2
+    upstreamImage: xpkg.crossplane.io/crossplane-contrib/function-patch-and-transform:v0.8.2
+    upstreamIndexDigest: sha256:c05a9add149bfa6fd0e6fc485e669d60a5d50c2f816b8303af4d5a89586795d0
+    linuxAMD64Digest: sha256:070fd3bdb56ec93f825e2f8fcda902bbdaef2e7831e164be5311144867f51dd8
+    internalImage: artifact-keeper-registry.artifact-keeper.svc.cluster.local/container-images/function-patch-and-transform@sha256:070fd3bdb56ec93f825e2f8fcda902bbdaef2e7831e164be5311144867f51dd8

@@ -21,6 +21,26 @@ spec:
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
 metadata:
+  name: model-platform-config-pull-request
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: git-revision
+      value: $(body.pull_request.head.sha)
+    - name: repository-url
+      value: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+    - name: source-provider
+      value: gitea
+    - name: source-root
+      value: .
+    - name: event-kind
+      value: pull-request
+    - name: clone-credentials-secret
+      value: gitea-ci-reader
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
   name: model-platform-config-github-push
   namespace: model-platform-ci
 spec:
@@ -99,6 +119,8 @@ spec:
         taskRunTemplate:
           serviceAccountName: model-platform-ci-runner
           podTemplate:
+            imagePullSecrets:
+              - name: artifact-keeper-image-pull
             nodeSelector:
               kubernetes.io/arch: amd64
               kubernetes.io/hostname: server-00
@@ -155,6 +177,23 @@ spec:
                 body.repository.full_name == 'gitadmin/model-platform-config'
       bindings:
         - ref: model-platform-config-push
+      template:
+        ref: model-platform-config-validation
+    - name: validate-pull-request
+      interceptors:
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >-
+                (header.match('X-Gitea-Event', 'pull_request') ||
+                 header.match('X-Gitea-Event', 'pull_request_sync')) &&
+                body.action in ['opened', 'reopened', 'synchronized'] &&
+                body.repository.full_name == 'gitadmin/model-platform-config' &&
+                body.pull_request.base.ref == 'main' &&
+                body.pull_request.head.repo.full_name == 'gitadmin/model-platform-config'
+      bindings:
+        - ref: model-platform-config-pull-request
       template:
         ref: model-platform-config-validation
 ---

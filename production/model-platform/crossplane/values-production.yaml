@@ -1,5 +1,5 @@
-# Crossplane Core only. Providers, Functions, Configurations and composite
-# resource instances are deliberately installed in later reviewed phases.
+# Crossplane Core Helm values. Providers and Configurations remain absent;
+# the reviewed Function and composite instance are released separately.
 replicas: 1
 revisionHistoryLimit: 2
 deploymentStrategy: RollingUpdate
@@ -25,6 +25,12 @@ configuration:
 
 function:
   packages: []
+
+# Crossplane fetches OCI packages itself rather than through containerd, so it
+# must trust the CA used by Artifact Keeper's internal HTTPS registry route.
+registryCaBundleConfig:
+  name: artifact-keeper-registry-ca
+  key: ca.crt
 
 webhooks:
   enabled: true

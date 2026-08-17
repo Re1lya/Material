@@ -1,0 +1,72 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: model-platform-function-runtime
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: composition-function
+spec:
+  deploymentTemplate:
+    spec:
+      replicas: 1
+      selector: {}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: model-platform
+            app.kubernetes.io/component: composition-function
+            backstage.io/kubernetes-id: crossplane-control-plane
+        spec:
+          nodeSelector:
+            kubernetes.io/os: linux
+            kubernetes.io/arch: amd64
+            kubernetes.io/hostname: server-00
+          imagePullSecrets:
+            - name: artifact-keeper-image-pull
+          containers:
+            - name: package-runtime
+              # Crossplane Core fetches the package through the internal HTTPS
+              # route below. Kubelet/containerd uses the already registered
+              # node endpoint for the runtime image itself.
+              image: 110.120.0.3:30670/container-images/function-patch-and-transform@sha256:070fd3bdb56ec93f825e2f8fcda902bbdaef2e7831e164be5311144867f51dd8
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                # The distroless image declares USER nonroot:nonroot. Kubelet
+                # cannot prove a named user is non-root, so pin the standard
+                # distroless nonroot numeric identity explicitly.
+                runAsUser: 65532
+                runAsGroup: 65532
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-patch-and-transform
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: composition-function
+spec:
+  package: artifact-keeper-registry.artifact-keeper.svc.cluster.local/container-images/function-patch-and-transform@sha256:070fd3bdb56ec93f825e2f8fcda902bbdaef2e7831e164be5311144867f51dd8
+  packagePullSecrets:
+    - name: artifact-keeper-crossplane-pull
+  packagePullPolicy: IfNotPresent
+  revisionActivationPolicy: Automatic
+  revisionHistoryLimit: 1
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: model-platform-function-runtime

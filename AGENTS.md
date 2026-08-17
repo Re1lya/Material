@@ -1,32 +1,35 @@
 # Model platform agent handoff
 
 This file is the mandatory starting point for any Agent continuing work in
-this repository. It describes actual production state as of 2026-08-11 and the
+this repository. It describes actual production state as of 2026-08-17 and the
 rules for safely continuing the deployment.
 
 ## Mandatory operating rules
 
-1. Do not connect to any host with SSH, SCP, SFTP or another remote-execution
-   mechanism. The user must run proposed commands and return sanitized output.
-2. Never request, store, echo, commit or reproduce SSH passwords, Kubernetes
+1. Never store, echo, commit or reproduce SSH passwords, Kubernetes
    tokens, Gitea credentials, Artifact Keeper tokens, private keys or other
-   secrets. Ask the user to enter secrets interactively when required.
-3. Separate read-only diagnosis from production writes. Present the exact
+   secrets in repository files, scripts, command output or documentation. Use
+   an approved interactive or ephemeral credential mechanism when required.
+2. Separate read-only diagnosis from production writes. Present the exact
    target, effect, rollback concern and validation before asking the user to run
    a write command.
-4. Never modify unrelated namespaces or workloads. Do not create an NPU
+3. Never modify unrelated namespaces or workloads. Do not create an NPU
    workload, RayService, model-cache Job, PVC, XR or `ModelDeployment` until the
    corresponding phase is explicitly approved.
-5. Do not use bare `kubectl` or bare `helm` on `server-00`. The admin user's
-   default context is the old Kind POC, not production. Production commands must
-   use `sudo k3s kubectl` and Helm must include
+4. Do not use bare `kubectl` or bare `helm` on `server-00`. The admin user's
+   context is not production and may point to a remaining non-production Kind
+   cluster; the old POC context was removed on 2026-08-14. Production commands
+   must use `sudo k3s kubectl` and Helm must include
    `--kubeconfig /etc/rancher/k3s/k3s.yaml`.
-6. Keep production synchronization manual. Argo CD prune and self-heal remain
+5. Keep production synchronization manual. Argo CD prune and self-heal remain
    disabled unless a later reviewed decision explicitly changes this.
-7. Keep runtime images in `110.120.0.3:8889` and pin immutable digests. Check
-   architecture before release. The production control node is AMD64; the
-   approved model runtime target is ARM64 Ascend and must use its own image.
-8. Use Git as the source of truth for non-secret manifests. Do not commit
+6. Publish every new image owned by the integrated platform to Artifact Keeper
+   under `110.120.0.3:30670/container-images` and pin immutable digests. The
+   legacy `110.120.0.3:8889` registry remains a compatibility source for
+   already-running references and must not be bulk-migrated. Check architecture
+   before release: the production control node is AMD64; the approved model
+   runtime target is ARM64 Ascend and must use its own image.
+7. Use Git as the source of truth for non-secret manifests. Do not commit
    rendered secrets, generated credentials, kubeconfigs or live object dumps.
 
 ## Collaboration and release workflow
@@ -42,13 +45,14 @@ The currently known topology is:
 | Name | What it is | Confirmed responsibility | May an Agent operate it directly? |
 |---|---|---|---|
 | `jumper-0041-pub` | Current Agent/local workspace host | Material checkout at `/home/ilya/Desktop/Material`; local source editing and validation | Only through the provided local tools and workspace permissions; Docker availability/permission must not be assumed |
-| `server-00` | Production K3s host/node, IP `110.120.0.3` | K3s control plane, production platform workloads, `/mnt/data`, internal Registry endpoint and Artifact Keeper NodePort | No SSH/SCP by the Agent; the user runs all commands |
-| `a3-server-00` | Previously observed model-source host | Source copy of Qwen/DeepSeek model material | No; it is not automatically an authorized Docker build host |
+| `server-00` | Production K3s host/node, IP `110.120.0.3` | K3s control plane, production platform workloads, `/mnt/data`, internal Registry endpoint and Artifact Keeper NodePort | Yes, when the user explicitly authorizes this host and the operation remains inside the stated task scope |
+| `a3-server-00` | Previously observed model-source host | Source copy of Qwen/DeepSeek model material | Only after separate explicit authorization for that host and task |
 | `admin` | A Linux login account used in user-side remote command examples | Authenticated shell identity on a named host | It is not a hostname and does not identify where a command runs |
-| authorized Docker build host | A role, not a known hostname yet | Has Docker permission, the reviewed build context, adequate disk/network, and access to the selected Registry endpoint | The user must identify and operate it |
+| authorized Docker build host | A role, not a known hostname yet | Has Docker permission, the reviewed build context, adequate disk/network, and access to the selected Registry endpoint | The user must identify it; the Agent may operate it when explicitly authorized |
 
-At the start of any host-dependent phase, ask the user to run and return this
-non-secret identity/capability check on the proposed host:
+At the start of any host-dependent phase, run this non-secret
+identity/capability check on the authorized host, or ask the user to run it when
+the Agent has no active remote access:
 
 ```bash
 hostname
@@ -80,8 +84,8 @@ host says nothing about the same path on another host.
 
 ### Responsibility boundary
 
-The Agent works only in the local Material repository. The Agent is
-responsible for:
+The Agent works in the local Material repository and on specifically authorized
+remote hosts. The Agent is responsible for:
 
 - reading the current plan, deployment records and Git status before editing;
 - modifying Dockerfiles, scripts, schemas, Kubernetes YAML, Helm values and
@@ -90,29 +94,35 @@ responsible for:
 - running local syntax checks, schema checks, `helm lint`, `helm template`,
   Kustomize rendering and Git diff review when the required tools are locally
   available;
-- preparing a minimal release directory under `/tmp` and giving the user exact
-  copy, dry-run, release and verification commands;
-- reviewing the sanitized command output returned by the user, identifying the
-  root cause of failures and deciding the next safe command;
-- replacing temporary image digest placeholders only after the user returns a
-  verified internal Registry digest;
-- updating the Material deployment record only from evidence returned from the
-  production K3s cluster.
+- preparing a minimal release directory under `/tmp`, transferring it to an
+  authorized host when needed, and running or providing exact dry-run, release
+  and verification commands;
+- reviewing sanitized command output, identifying the root cause of failures
+  and deciding the next safe command;
+- replacing temporary image digest placeholders only after verifying the
+  internal Registry digest and target architecture;
+- updating the Material deployment record only from observed production K3s
+  evidence.
 
-The user is responsible for all remote and privileged execution. The user:
+Remote and privileged work follows explicit authorization boundaries:
 
-- copies reviewed files to `server-00` with `scp` or another approved method;
-- runs Docker commands in an environment with Docker permission;
-- runs production `sudo k3s kubectl` and explicit-kubeconfig Helm commands;
-- enters sudo, Registry, Git or application credentials interactively;
-- returns command output after removing secrets or other sensitive values;
-- gives explicit approval before a production write or a phase that creates
-  storage, runtime workloads or NPU consumption.
+- the Agent may use SSH, SCP, SFTP or another remote-execution mechanism when
+  the user explicitly identifies and authorizes the target host;
+- authorization for one host or task does not authorize another host or an
+  unrelated operation;
+- the Agent must keep remote commands within the requested namespace,
+  component and release scope, and must inspect targets before destructive
+  actions;
+- production writes that affect RBAC, CRDs/XRDs, Helm releases, PVCs,
+  StatefulSets, databases, prune, rollback or NPU/runtime workloads still
+  require the user's explicit approval;
+- credentials must be supplied through an approved interactive or ephemeral
+  mechanism and must not be written into repository files, shell history,
+  process arguments, release bundles or logs.
 
-The Agent must not open an SSH session, run SCP, use saved remote credentials,
-or ask the user to paste a password or token. If a command prompts for a
-credential, instruct the user to enter it locally and return only the
-non-secret result.
+When direct remote access is unavailable, provide the user with exact commands
+and request only non-secret results. Never add credentials to a command merely
+to make unattended access work.
 
 ### The four independent delivery layers
 
@@ -124,9 +134,12 @@ Local Material repository
   -> design, source manifests, Dockerfiles, version locks and evidence
   -> GitHub push provides review/history only; it does not update K3s
 
-Internal Registry: 110.120.0.3:8889
-  -> docker build/tag/push publishes runtime content
-  -> Kubernetes consumes images by immutable digest
+Internal image registries
+  -> Artifact Keeper 110.120.0.3:30670/container-images is the destination for
+     every new integrated-platform image
+  -> legacy Docker Distribution 110.120.0.3:8889 remains available for existing
+     workload references during controlled migration
+  -> Kubernetes consumes images only by reviewed immutable digest
 
 Production Gitea: gitadmin/model-platform-config
   -> main push triggers the Tekton validation webhook
@@ -175,8 +188,8 @@ versioned temporary directory, for example:
 /tmp/model-platform-release-YYYYMMDD/
 ```
 
-The Agent records SHA256 checksums locally and gives the user a copy command
-similar to:
+The Agent records SHA256 checksums locally and may copy the bundle to an
+explicitly authorized host, or give the user a copy command similar to:
 
 ```bash
 scp -r /tmp/model-platform-release-YYYYMMDD \
@@ -206,7 +219,7 @@ the local Agent environment cannot access Docker, use this workflow:
 1. The Agent reviews the Dockerfile, its pinned base images, package versions,
    target architecture and build-time network requirements.
 2. The Agent asks the user to copy only the build context to a machine with
-   Docker permission and access to `110.120.0.3:8889`.
+   Docker permission and access to Artifact Keeper at `110.120.0.3:30670`.
 3. The user runs the exact `docker build` and `docker push` commands provided
    by the Agent.
 4. The user returns the pushed digest and architecture without credentials.
@@ -220,18 +233,20 @@ Typical user-side commands are:
 cd /path/to/copied/build-context
 docker build \
   --platform linux/amd64 \
-  -t 110.120.0.3:8889/platform/<image>:<version> .
-docker push 110.120.0.3:8889/platform/<image>:<version>
+  -t 110.120.0.3:30670/container-images/<image>:<version> .
+docker login 110.120.0.3:30670
+docker push 110.120.0.3:30670/container-images/<image>:<version>
 
 docker inspect \
   --format='{{index .RepoDigests 0}}' \
-  110.120.0.3:8889/platform/<image>:<version>
+  110.120.0.3:30670/container-images/<image>:<version>
 
 regctl manifest digest \
-  110.120.0.3:8889/platform/<image>:<version>
+  110.120.0.3:30670/container-images/<image>:<version>
 regctl image inspect \
-  110.120.0.3:8889/platform/<image>:<version> \
+  110.120.0.3:30670/container-images/<image>:<version> \
   --format '{{.OS}}/{{.Architecture}}'
+docker logout 110.120.0.3:30670
 ```
 
 If `regctl` is unavailable, the Agent must provide an equivalent read-only
@@ -317,52 +332,78 @@ For a CI tools image update, use this order:
 10. confirm existing platform Pods have not restarted or degraded;
 11. update deployment records and only then commit/push Material.
 
-### Dual image source policy
+### Dual image registry policy
 
-Runtime and CI images are served from two internal sources. Decision on
-2026-08-12: the active mainline uses the legacy 8889 registry; the Artifact
-Keeper OCI repository is provisioned but deferred.
+There are two internal image registries. Decision updated on 2026-08-13:
+Artifact Keeper is the destination for every new image belonging to the
+integrated platform; the legacy registry remains only for compatibility with
+existing immutable references while consumers are migrated one at a time.
 
 ```text
-Active image source              110.120.0.3:8889
-  -> primary for all runtime/CI images consumed by K3s, including
-     model-platform-ci-tools:v0.2.0; K3s containerd already mirrors it over HTTP
+Platform image destination       110.120.0.3:30670/container-images
+  -> Artifact Keeper Docker-format OCI repository, quota 50Gi
+  -> all new Backstage, Tekton/CI, Crossplane helper/function and other
+     integrated-platform-owned images are published here
+  -> server-00 K3s containerd is configured to reach it over internal HTTP
 
-Deferred image source            110.120.0.3:30670/container-images
-  -> Artifact Keeper OCI repo provisioned (docker format, repo container-images,
-     publisher token ci-image-publisher, quota 50Gi). v0.2.0 was pushed there
-     too and is identical by digest. K3s containerd is NOT configured to pull
-     from 30670, so nothing running may reference it yet.
+Legacy compatibility registry   110.120.0.3:8889
+  -> existing workloads continue to use their current digest-pinned references
+  -> do not re-tag, remove or bulk-switch those references
 ```
 
 Rules:
 
 1. Do not alter, re-tag or remove any image that already exists on
    `110.120.0.3:8889`. Existing workloads continue to consume 8889 by digest.
-2. The active mainline reference for new images stays on 8889 so K3s can pull
-   without a cluster registry change.
-3. A new image is published to 8889 and, if also wanted for the deferred AK
-   path, copied to `110.120.0.3:30670/container-images` with the same digest.
-   References in manifests stay on 8889 until the AK/K3s registry switch is a
-   separately reviewed change.
-4. The Artifact Keeper OCI repository uses Docker Registry v2 over plain HTTP
-   on `110.120.0.3:30670`. The `server-00` Docker daemon has that address in
-   `insecure-registries` (daemon.json, backup `daemon.json.bak.20260812`) so
-   manual `docker login/push` works over HTTP. Switching K3s to pull from AK
-   requires adding 30670 to `/etc/rancher/k3s/registries.yaml` and restarting
-   K3s; that is deferred.
+2. Publish new integrated-platform images to
+   `110.120.0.3:30670/container-images/<image>:<version>`; verify architecture
+   and immutable digest before a manifest references them.
+   Temporary exception recorded on 2026-08-17: the two newly enabled Tekton
+   Pruner images are currently in `110.120.0.3:8889/platform/` because no
+   Artifact Keeper writer credential was available during the emergency-safe
+   no-GHCR rollout. Do not treat that exception as the final policy; migrate
+   both exact digests to Artifact Keeper before the next Operator upgrade.
+3. Migrating an existing 8889 consumer is a separate reviewed release: copy
+   or rebuild the image in Artifact Keeper, prove an authenticated pull in a
+   disposable namespace, update exactly that consumer by digest, and retain
+   its prior digest as rollback. Never switch all workloads at once.
+4. The Artifact Keeper node endpoint uses Registry v2 over internal HTTP. On
+   2026-08-13 `server-00` K3s was configured with an HTTP endpoint for
+   `110.120.0.3:30670` in `/etc/rancher/k3s/registries.yaml`; the generated
+   containerd `hosts.toml` contains the `/v2` HTTP host. This node-local setting
+   must be repeated on every node that will pull these images. Crossplane Core
+   additionally has a working cluster-internal HTTPS route and dedicated CA at
+   `artifact-keeper-registry.artifact-keeper.svc.cluster.local`; it is used for
+   xpkg resolution and does not yet replace node containerd registration.
 5. Keep CI images amd64 (the production control node is AMD64). The ARM64
-   Ascend model runtime image stays on 8889 and is not affected by this policy.
+   Ascend model runtime remains on its verified current reference until its
+   target node has equivalent Artifact Keeper registry and credential setup.
+6. Use a dedicated repository-scoped read-only Artifact Keeper token in an
+   `imagePullSecret` in each consuming namespace. Never use or commit an admin
+   password. On 2026-08-17 an authenticated disposable Pod on `server-00`
+   pulled `model-platform-ci-tools:v0.2.0` from Artifact Keeper by its expected
+   immutable digest and completed successfully with only 10m CPU/16Mi memory
+   requested and no Ascend resource. The temporary Pod was deleted. The
+   Crossplane Function is the first live consumer and uses a dedicated read-only
+   pull Secret. Other worker nodes remain unconfigured for the 30670 HTTP endpoint
+   and must not receive
+   Artifact Keeper-backed Pods until separately registered and tested.
 
-| Image | Active reference |
+Registration evidence and restart observations are recorded in
+`production/model-platform/artifact-keeper-registry-registration-20260813.md`.
+
+| Existing image | Current compatibility reference |
 |---|---|
 | model-platform-ci-tools v0.2.0 | `110.120.0.3:8889/platform/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd` |
 
 
 Do not push a Gitea commit that requires a not-yet-published image or a
-not-yet-applied Pipeline definition. Do not let CI write back to Git, trigger
-Argo synchronization or access Kubernetes credentials unless a later phase
-explicitly designs and approves those permissions.
+not-yet-applied Pipeline definition. CI runners remain unable to write Git,
+trigger Argo synchronization or access Kubernetes credentials. The only
+approved write-back is the separate repository-scoped
+`gitea-ci-status-writer` credential used by the final Pipeline Step to update
+the exact commit's `tekton/model-platform-policy` status; it cannot merge or
+modify repository content.
 
 ### Priority runbook: dual Gitea/GitHub CI intake and GitHub-visible result
 
@@ -405,11 +446,19 @@ The prepared local files are:
   image `v0.2.0`;
 - `production/model-platform/tekton/README.md` — trust model and temporary
   Cloudflare integration path.
+- `production/model-platform/tekton/pruner.yaml` and
+  `pruner-installer-patch.json` — the enabled event-based Pruner policy and
+  the generated InstallerSet patch needed to keep its images and Pods on
+  `server-00`.
 
-Production currently still runs CI tools `v0.1.0`. CI tools v0.2.0 was built
-and published to 8889 (active reference) and also copied to the deferred AK
-OCI repo with the same digest. The local Pipeline must still be applied to
-production with the 8889 digest pinned.
+Production now runs CI tools `v0.2.0` from the immutable Artifact Keeper
+reference
+`110.120.0.3:30670/container-images/model-platform-ci-tools@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd`.
+The namespace-local `model-platform-ci/artifact-keeper-image-pull` Secret is
+repository-scoped read-only. The Pipeline and TriggerTemplate remain pinned to
+amd64 `server-00`, where an authenticated disposable pull and a complete
+validation Run succeeded; the previous 8889 digest remains the rollback
+reference. Other worker nodes have not been registered for this endpoint.
 
 #### Gate 1: build and publish CI tools v0.2.0
 
@@ -419,7 +468,7 @@ production with the 8889 digest pinned.
 digest `sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd`,
 verified as `linux/amd64` and content-checked (git 2.47.3, kubectl v1.35.0,
 Python 3.12.13, check-jsonschema 0.38.0). The same image was also pushed to
-the deferred AK OCI repo `110.120.0.3:30670/container-images` with an
+the Artifact Keeper OCI repo `110.120.0.3:30670/container-images` with an
 identical digest.
 
 The authoritative Dockerfile currently has this checksum:
@@ -468,7 +517,7 @@ only the internal image storage; it did not update Kubernetes.
 #### Gate 2: pin the digest and validate the complete local release
 
 **Status: DONE on 2026-08-12.** Both `REPLACE_WITH_V020_DIGEST` occurrences in
-`ci/pipeline.yaml` were replaced by the Agent with the active 8889 reference
+`ci/pipeline.yaml` were replaced by the Agent with the then-active 8889 reference
 `110.120.0.3:8889/platform/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd`.
 The Agent, not the user, performs this source-of-truth edit. Verification performed:
 
@@ -960,12 +1009,20 @@ source control; it is not evidence that production was changed.
    and the current manual, non-pruning GitOps loop.
 6. `production/model-platform/tekton/deployment-record-20260811.md` — current
    Gitea-to-Tekton CI loop and its tokenless security model.
-7. `production/model-platform/crossplane/deployment-record-20260811.md` —
-   Crossplane Core, XRD state, RBAC boundary and the kubeconfig trap.
+7. `production/model-platform/crossplane/deployment-record-20260811.md` and
+   `production/model-platform/crossplane/runtime-zero-deployment-record-20260814.md`
+   — Crossplane Core bootstrap, internal HTTPS package path, Function,
+   Composition and the zero-replica runtime proof.
 8. `production/model-platform/catalog/` and
    `production/model-platform/cache/` — prepared model metadata, runtime profile
    and cache implementation; these files are not proof that runtime deployment
    has occurred.
+9. `production/model-platform/backstage/README.md` — minimum usable portal,
+   identity, TLS, catalog, CI/CD connection, request-by-PR boundary and phased
+   acceptance plan. It is a plan, not deployment evidence.
+10. `production/model-platform/backstage/release-runbook.md` — exact staged
+    user-run commands for the Crossplane, Backstage, Tekton PR-status and
+    manual Argo control-plane closure.
 
 Before editing, also inspect `git status`, the current branch and recent log.
 Preserve unrelated user changes.
@@ -973,24 +1030,26 @@ Preserve unrelated user changes.
 ## Actual production state
 
 The production target is the K3s cluster on `server-00`, Kubernetes
-`v1.34.6+k3s1`. The old `kind-platform-poc-2` environment is only a POC and its
-resources must never be reported as production state.
+`v1.34.6+k3s1`. The old `kind-platform-poc-2` POC was decommissioned on
+2026-08-14; its historical results must never be reported as production state.
 
 | Module | Production state |
 |---|---|
 | Artifact Keeper | Running in `artifact-keeper`; 480Gi artifact PV + 20Gi PostgreSQL PV; Qwen model 24/24 files checksum-verified |
 | Gitea | Running in `gitea`; private config repository and persistent PostgreSQL are verified |
 | Argo CD | Running in `argocd`; one minimal manually synchronized Application; no prune/self-heal |
-| Tekton | Operator, Pipelines and Triggers Running; Gitea main-push webhook successfully runs tokenless validation |
-| Crossplane | Core 2.3.4 and RBAC Manager Running; 21 core CRDs; no Provider/Function/Configuration |
-| ModelDeployment API | v2 namespaced XRD Established; no Composition and no instances, therefore not Offered |
+| Tekton | Operator, Pipelines, Triggers, both EventListeners and event-based `TektonPruner/pruner` Running; Gitea PR status path and GitHub listener deployed; CI tools now run from the Artifact Keeper digest on server-00; migration Run `model-platform-config-ak-migration-20260817` succeeded with Gitea status write; Pruner Pods are server-00-only with `gpu-*` count 0; previous 8889 digest retained for rollback |
+| Crossplane | Core 2.3.4 Helm revision 2 and RBAC Manager Running; Function Patch and Transform v0.8.2 Installed/Healthy; no Provider/Configuration |
+| ModelDeployment API | v2 namespaced XRD Established/Offered; runtime-zero Composition installed; one stopped XR Synced/Ready |
 | ModelVersion / RuntimeProfile | YAML catalog materials exist but are not yet backed by completed production APIs/controllers |
 | Model cache | Fetcher and Job material exist; no production cache Job has run |
 | Qwen runtime | No new production inference deployment has been created by this project |
-| Backstage | Not deployed or connected in production |
+| Backstage | Running in `backstage`; service/RBAC/OIDC/Catalog/events, constrained Gitea PR action and real exact-head policy status accepted; mock scheduling form rolled out; v0.2.9 `linux/amd64` from Artifact Keeper at `sha256:fee9830d4ba7f99234033bbfde10c1a5e51edda908c734de70f30015ca92a934`; `artifact-keeper-backstage-pull` read-only Secret; Deployment and PostgreSQL Ready; no new ModelDeployment; effective model replicas remain 0; verify UI form and later stable HTTPS; Ray dynamic scheduling remains future work |
 
-Crossplane declares only 200m CPU and 512Mi memory requests in total and uses
-no PVC. At its first steady observation it used about 5m CPU and 176Mi memory.
+Crossplane Core and RBAC Manager declare 200m CPU and 512Mi memory requests in
+total and use no PVC. The Composition Function adds 100m CPU and 128Mi memory
+requests. The dormant model Deployment has zero replicas, so its template
+requests do not create a Pod or reserve CPU, memory or NPU resources.
 
 ## Current connections
 
@@ -998,72 +1057,118 @@ no PVC. At its first steady observation it used about 5m CPU and 176Mi memory.
 Gitea main push -> Tekton EventListener -> validation PipelineRun
 Gitea repository -> Argo CD repo-server -> manually synchronized bootstrap App
 Artifact Keeper <- verified Qwen model artifacts
-Crossplane Core -> established ModelDeployment API only
+Artifact Keeper internal HTTPS -> Crossplane Function package resolution
+Crossplane -> Offered ModelDeployment API -> runtime-zero Composition
+runtime-zero XR -> status ConfigMap + Service + Deployment(replicas=0)
 ```
 
-There is not yet a Tekton-to-Argo promotion path, Artifact Keeper publish task,
-Crossplane Composition, Crossplane-to-KubeRay runtime path, cache controller or
-Backstage self-service path.
+There is not yet a production Tekton-to-Argo promotion path, Artifact Keeper
+release publish task, Crossplane-to-KubeRay runtime path or cache controller.
+Backstage is now deployed; its Gitea PR validation/status path and events
+backend are installed, and a real Gitea PR delivery has passed exact-head
+validation and status reporting.
 
-## Current execution order (decision 2026-08-12)
+### Tekton Pruner safety boundary (2026-08-17)
 
-The platform has two active CI tracks. Track B (`ora-space/desktop`) is the
-highest priority. The user ordered the work as: complete the GitHub webhook
-entry and the PV/PVC cache first, and defer the scoped proxy gateway to the
-last step. Do not reorder without explicit user approval.
+The event-based `TektonPruner/pruner` is now `Ready=True` and applies only the
+seven-day/10-success/10-failure retention policy in `model-platform-ci`. Its
+two controller/webhook Pods are pinned to `server-00`; the final production
+check returned zero Pruner Pods on `gpu-*`, zero Pending Pods cluster-wide and
+zero legacy Pruner CronJobs. It has no Ascend resource requests and does not
+touch model Deployments, Ray workloads, PVCs or NPU cards.
+
+Do not assume the standalone Operator v0.81 `TektonPruner.spec.config` selector
+or image fields are propagated: the first reconciliation ignored them. The
+generated `TektonInstallerSet` must be patched from
+`production/model-platform/tekton/pruner-installer-patch.json`, and every
+Operator/Pruner upgrade must repeat the node/image/Pending checks before being
+accepted. The current two Pruner images are a documented temporary 8889
+mirror exception; the final destination is Artifact Keeper 30670.
+
+FastAPI work is a separate CPU-only application track. It should use exact-SHA
+checkout, lock-file dependency installation, lint/type checks, tests and PR
+status reporting in CI; merge/tag builds publish a digest-pinned image to
+Artifact Keeper, and initial CD remains a manual Argo sync with prune and
+self-heal disabled. Repository mirrors and lock-file-keyed dependency caches
+are later scoped PVC/proxy changes, not part of the current model validation
+Pipeline. The user reactivated the FastAPI track on 2026-08-17 for read-only
+production discovery and deployment-plan documentation. No FastAPI namespace,
+workload, Pipeline or release was created by that work. Implementation remains
+gated on the exact source repository, lock/test/health contract and a reviewed
+separate `fastapi-ci`/`fastapi` release. `ora-space/desktop` remains paused.
+
+## Current execution order (updated 2026-08-14)
+
+The user paused all `ora-space/desktop` work. Do not build its image, create a
+new listener, run its Pipeline, deploy a proxy or consume its cache PVC in the
+current phase. Existing Tekton, cache and tunnel objects remain untouched.
+
+The Crossplane runtime-zero stage is complete in production:
 
 ```text
-Track A: Material validation CI (foundation, mostly done)
-  Gate 1-4 DONE. Gate 5 partially done: cloudflared image mirrored to 8889
-  (sha256:b392761b... amd64), port-forward + Quick Tunnel RUNNING
-  (https://complications-magnificent-segments-blvd.trycloudflare.com,
-  temporary URL, changes on restart), GitHub webhook configured (ping 202,
-  green), PR #6 triggered a GitHub-labelled PipelineRun
-  (model-platform-config-validation-rxd7x, revision = PR head SHA
-  ab84e54d..., Succeeded, bootstrap_validation=PASS).
-  Remaining: Gate 5 acceptance items 4-7 (negative tests), then Gate 6/7.
-
-Track B: ora-space/desktop GitHub PR CI (highest priority)
-  1. GitHub webhook entry (own EventListener, own TriggerBindings, HMAC) - NOT
-     STARTED; the Track A tunnel/listener pattern will be reused
-  2. PV/PVC cache - DONE 2026-08-12: StorageClass ora-desktop-cache-local,
-     PV ora-desktop-cache-server-00 (100Gi RWO Retain,
-     /mnt/data/model-platform/ci-cache), PVC
-     model-platform-ci/ora-desktop-cache, all Bound. Manifest:
-     tekton/ci/cache-storage.yaml
-  3. CI image ora-desktop-ci (amd64, digest-pinned, Node/pnpm + Rust
-     toolchain + go-task + Tauri libs) - IN PROGRESS: repository toolchain
-     audit blocked; git clone of ora-space/desktop via github.com is too slow
-     (TLS drop / <1 B/s), curl tarball via codeload was being tested when the
-     session was paused. Remaining: confirm Node/pnpm/Rust versions from
-     package.json / Taskfile.yml / rust-toolchain.toml, then build the image.
-  4. Pipeline/Task clone/install/test single Pod, fresh emptyDir source,
-     bounded cache PVC - NOT STARTED
-  5. GitHub App + Check Run reporter (report-start/report-finish, checks
-     read/write only) - NOT STARTED
-  6. Scoped proxy gateway LAST (ci-egress, Mihomo/Clash-core, ClusterIP
-     Service, HTTP CONNECT, only Task/reporter Steps use proxy env)
-  7. Acceptance: cold vs warm run, real PR Check, regression health
+1. Function v0.8.2 is mirrored to Artifact Keeper and pinned by digest.
+2. Crossplane resolves it through an internal HTTPS/CA path; Function is Healthy.
+3. XRD is Established/Offered and runtime-zero Composition is installed.
+4. One stopped XR is Synced/Ready and composes Deployment(0), Service, ConfigMap.
+5. No Pod, Job, PVC, Ray object or NPU allocation was created; old Deployment is unchanged.
 ```
 
-Network reality on 2026-08-12: server-00 direct egress to github.com
-(git clone endpoint) is very slow (TLS drops, <1 B/s sustained), while
-codeload.github.com tarball download measured 147 KiB/s and api.github.com
-answered 200 in ~7s. registry.npmjs.org answered in ~1.1s and
-static.crates.io was reachable. A proxy may still be needed for reliable git
-clone and for pnpm/Cargo payload downloads; measure before deciding.
+Continue from this order:
 
-The deferred proxy does not block the first shallow-clone measurement: the
-repository is only 3.7 MiB with no LFS and no submodules, so a direct
-`--depth 1 --filter=blob:none` clone may be feasible without a proxy. Measure
-first; deploy the proxy only if clone/install measurements require it.
+```text
+1. Put reviewed XRD/Composition/XR source into the production Gitea GitOps tree.
+2. Add a narrowly scoped manual Argo CD Application; keep prune/self-heal off.
+3. Update the existing Gitea EventListener/Pipeline with exact-head PR
+   validation and `tekton/model-platform-policy` commit status reporting. DONE
+   in production; synthetic and real close/reopen delivery paths have passed
+   the validators and status writer.
+4. Backstage catalog/reference validation, constrained request action and
+   status feedback are DONE in production; the v0.2.9 Mock form records
+   requested scheduling values but keeps effective replicas and NPU at zero.
+5. Run the model-cache-only phase after separate node disk/network approval.
+6. Activate a runtime only in an explicitly approved idle-NPU window.
+```
+
+The stopped XR is an infrastructure template, not a running inference service.
+Do not scale its generated Deployment directly: Crossplane will reconcile it
+back to zero, and any future activation needs a reviewed Composition/API
+change plus NPU-capacity approval. The next RayCluster/RayService implementation
+is an in-place extension, not a cluster rebuild.
+
+## Backstage minimum usable closure
+
+Backstage is the portal, not an additional deployment controller. Its first
+production release includes Gitea OIDC login, catalog, links, narrowly scoped
+Kubernetes reads and one custom Scaffolder action. That action is fixed to
+`gitadmin/model-platform-config`, a single request directory, the verified
+Qwen catalog references, `Stopped` and `control-plane-only`. It may create a
+branch, file, PR and pending status. It must never merge, run `kubectl`, create
+Pods/PVCs, select physical NPU cards, accept arbitrary images or proxy large
+model uploads. Generic SCM publisher actions are not loaded.
+
+Keep the two product paths separate:
+
+- `ora-space/desktop` PRs run Tekton clone/install/test and report a GitHub
+  Check. Main/tag builds publish installer/archive, checksum and SBOM artifacts
+  to an Artifact Keeper generic repository. It is not deployed to K3s merely
+  to call the process CD.
+- Model deployment intent is created as a Gitea PR, validated by Tekton,
+  reviewed and merged by a human, observed as OutOfSync by Argo CD, manually
+  synchronized, and then rendered through Crossplane. NPU work remains behind
+  an explicit capacity approval.
+
+The first Backstage release is one application replica plus one PostgreSQL
+replica and a 20Gi Retain PV. Planning requests are 500m CPU/1Gi memory for
+Backstage and 250m/512Mi for PostgreSQL; re-measure the node before release.
+Use Gitea OIDC, separate read/write integration credentials, stable HTTPS,
+and a ServiceAccount that can only list/get/watch approved non-Secret objects
+in approved namespaces. Full gates and acceptance checks are in
+`production/model-platform/backstage/README.md`.
 
 ## Recommended next deployment sequence
 
-> 2026-08-12 update: step 1 below is DONE (schemas + validator + CI v0.2.0
-> validation). The active work is the `ora-space/desktop` track in "Current
-> execution order" above; this list is the platform track and resumes after
-> the CI tracks.
+> 2026-08-13 update: `ora-space/desktop` is paused. Execute the safe Crossplane
+> Composition and Backstage MVP described in "Current execution order" first.
 
 1. ~~Define production schemas for `ModelVersion` and `ModelRuntimeProfile`, and
    extend Tekton validation for schema, immutable digest and cross-reference
@@ -1071,21 +1176,34 @@ first; deploy the proxy only if clone/install measurements require it.
    (schemas in `catalog/schema/`, `validate-catalog.py`, CI v0.2.0 with
    `validate-catalog` step; catalog files staged in the gitops repository tree
    but not yet pushed to Gitea/Argo).
-2. Pin, architecture-check and mirror the required Crossplane Composition
-   Function image into the internal registry.
-3. Build the Crossplane v2 Pipeline-mode Composition for `ModelDeployment`.
-   First validate rendering with no real XR. Do not grant KubeRay management or
-   create a RayService yet.
-4. Put reviewed XRD/Composition/catalog files into the production Gitea GitOps
+2. ~~Pin, architecture-check and mirror the required Crossplane Composition
+   Function image into Artifact Keeper.~~ DONE 2026-08-14.
+3. ~~Install the Crossplane v2 Pipeline-mode runtime-zero Composition and
+   validate the Offered API with one stopped XR, zero Pods and zero NPU
+   allocation.~~ DONE 2026-08-14. No KubeRay permission or RayService was added.
+4. ~~Build and deploy the read-only Backstage MVP: Gitea OIDC login, catalog,
+   Kubernetes read-only status, constrained Gitea PR action and links.~~ DONE
+   2026-08-14 with v0.2.9; the Mock scheduling form is deployed but its
+   effective model runtime remains `replicas=0`, `NPU=0`.
+5. Establish stable internal DNS/TLS for Artifact Keeper OCI, Gitea and
+   Backstage. Prove digest-pinned HTTPS push/pull in a test namespace before
+   migrating existing image consumers. The first Backstage health/catalog
+   validation may use the temporary internal HTTP NodePort, but that endpoint
+   is not the final public identity boundary.
+6. Put reviewed XRD/Composition/catalog files into the production Gitea GitOps
    repository and add a narrowly scoped, manual Argo CD Application. Continue
    with no prune and no self-heal.
-5. Implement the model-cache control contract and read-only Artifact Keeper
+7. After the ModelDeployment API is Offered and the GitOps path is stable,
+   enable only the Gitea-PR deployment-request action and verify that it cannot
+   write Kubernetes directly.
+8. Resume and finish the `ora-space/desktop` GitHub PR Pipeline only when the
+   user explicitly reactivates that track.
+9. Implement the model-cache control contract and read-only Artifact Keeper
    runtime credential. Run a cache-only test only after the user approves node,
    disk and network impact; it must request zero NPU.
-6. When NPU capacity is explicitly confirmed idle, run one controlled Qwen
-   end-to-end test: approval, cache verification, runtime creation, health,
-   minimum inference, rollback and cleanup.
-7. Add Backstage only after the API and approval path are stable.
+10. When NPU capacity is explicitly confirmed idle, run one controlled Qwen
+    end-to-end test: approval, cache verification, runtime creation, health,
+    minimum inference, rollback and cleanup.
 
 This is an update path, not a rebuild. Helm revisions, CRD versions,
 Compositions and GitOps applications should be evolved in place with explicit

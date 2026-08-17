@@ -50,6 +50,21 @@ KUBECTL_CMD='sudo k3s kubectl' \
 ```
 
 It requires the render to contain exactly one ConfigMap with the accepted name
-and namespace, then performs a client-side Kubernetes dry-run. The script is
-CI-compatible, but Gitea Actions remains disabled; enforcement by a CI engine
-is a later gate.
+and namespace, then validates the model catalog and all files in
+`environments/production/modeldeployments/`.
+
+## Control-plane request application
+
+`model-platform-control-plane` and `model-platform-deployment-requests` form a
+second, independently scoped AppProject/Application pair. They are prepared,
+not production evidence. Their only allowed destination object is the
+namespaced `platform.example.com/ModelDeployment` kind in `model-serving`.
+The source uses Argo CD directory mode with `include: '*.yaml'`; README and
+other files are ignored. Automatic sync, prune and self-heal are absent.
+
+The schema and validator force current requests to use the verified Qwen
+references with `desiredState: Stopped` and `acceleratorPool:
+control-plane-only`. Backstage creates a PR, Tekton validates its exact head
+SHA and writes the `tekton/model-platform-policy` commit status, a human merges,
+and an administrator later inspects and manually synchronizes the Argo diff.
+The enforced Crossplane Composition may then create only a status ConfigMap.

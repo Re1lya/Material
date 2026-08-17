@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform.example.com/schemas/modeldeployment-control-plane",
+  "title": "Control-plane-only ModelDeployment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "platform.example.com/v1alpha1" },
+    "kind": { "const": "ModelDeployment" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "namespace", "labels"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$"
+        },
+        "namespace": { "const": "model-serving" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "app.kubernetes.io/part-of",
+            "app.kubernetes.io/managed-by",
+            "platform.example.com/requested-by"
+          ],
+          "properties": {
+            "app.kubernetes.io/part-of": { "const": "model-platform" },
+            "app.kubernetes.io/managed-by": { "const": "argocd" },
+            "platform.example.com/requested-by": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            }
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "platform.example.com/request-mode": {
+              "const": "mock-fixed-runtime"
+            },
+            "platform.example.com/requested-tensor-parallel-size": {
+              "type": "string",
+              "pattern": "^(?:[1-9]|1[0-6])$"
+            },
+            "platform.example.com/requested-pipeline-parallel-size": {
+              "type": "string",
+              "pattern": "^[1-4]$"
+            },
+            "platform.example.com/requested-replicas": {
+              "type": "string",
+              "pattern": "^[0-4]$"
+            },
+            "platform.example.com/requested-priority": {
+              "enum": ["low", "normal", "high"]
+            },
+            "platform.example.com/effective-runtime-profile": {
+              "const": "qwen36-w8a8-ascend-a3-v1"
+            },
+            "platform.example.com/effective-tensor-parallel-size": {
+              "const": "6"
+            },
+            "platform.example.com/effective-replicas": {
+              "const": "0"
+            },
+            "platform.example.com/effective-npu-per-replica": {
+              "const": "0"
+            }
+          }
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectRef",
+        "modelVersionRef",
+        "runtimeProfileRef",
+        "desiredState",
+        "placement",
+        "access"
+      ],
+      "properties": {
+        "projectRef": { "const": "model-serving" },
+        "modelVersionRef": { "const": "qwen3.6-27b-w8a8-20260806" },
+        "runtimeProfileRef": { "const": "qwen36-w8a8-ascend-a3-v1" },
+        "desiredState": { "const": "Stopped" },
+        "placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["acceleratorPool"],
+          "properties": {
+            "acceleratorPool": { "const": "control-plane-only" }
+          }
+        },
+        "access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["visibility"],
+          "properties": {
+            "visibility": { "enum": ["internal", "private"] }
+          }
+        }
+      }
+    }
+  }
+}

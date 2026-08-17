@@ -1,0 +1,73 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: modeldeployment-control-plane-v1alpha1
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: deployment-api
+    platform.example.com/stage: control-plane-only
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: ModelDeployment
+  mode: Pipeline
+  pipeline:
+    - step: render-control-plane-status
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: deployment-request-status
+            base:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: deployment-request
+                  backstage.io/kubernetes-id: model-serving-control-plane
+              data:
+                phase: AwaitingApproval
+                message: >-
+                  Control-plane request recorded. Runtime, cache and NPU
+                  resources are intentionally disabled.
+                runtimeEnabled: "false"
+                cacheEnabled: "false"
+                npuRequested: "0"
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-status"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.projectRef
+                toFieldPath: data.projectRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.modelVersionRef
+                toFieldPath: data.modelVersionRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtimeProfileRef
+                toFieldPath: data.runtimeProfileRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.desiredState
+                toFieldPath: data.desiredState
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.placement.acceleratorPool
+                toFieldPath: data.acceleratorPool
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.access.visibility
+                toFieldPath: data.visibility
+            readinessChecks:
+              - type: None

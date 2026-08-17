@@ -39,3 +39,12 @@ grep -qx '  namespace: model-platform-system' "${rendered_file}"
 
 echo "bootstrap_validation=PASS"
 sha256sum "${rendered_file}"
+
+python3 "${repo_root}/ci/validate-catalog.py" \
+  --catalog-dir "${repo_root}/environments/production/catalog" \
+  --schema-dir "${repo_root}/ci/schema"
+
+python3 "${repo_root}/ci/validate-modeldeployments.py" \
+  --requests-dir "${repo_root}/environments/production/modeldeployments" \
+  --catalog-dir "${repo_root}/environments/production/catalog" \
+  --schema "${repo_root}/ci/schema/modeldeployment.schema.json"

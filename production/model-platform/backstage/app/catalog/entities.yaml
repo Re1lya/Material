@@ -1,0 +1,170 @@
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-team
+  description: Model platform administrators and reviewers
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: gitadmin
+  description: Initial platform operator authenticated by the internal Gitea OIDC provider
+spec:
+  profile:
+    email: gitea-admin@local.invalid
+  memberOf:
+    - platform-team
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: model-platform
+  description: Internal artifact, CI, GitOps and model-serving control plane
+spec:
+  owner: group:default/platform-team
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: artifact-keeper
+  description: Model, release and OCI artifact registry
+  links:
+    - url: http://110.120.0.3:30670/health
+      title: Backend health
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/platform-team
+  system: model-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: gitea
+  description: Deployment-intent and GitOps source of truth
+  links:
+    - url: http://110.120.0.3:30081/gitadmin/model-platform-config
+      title: model-platform-config
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/platform-team
+  system: model-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: tekton
+  description: Existing Gitea and GitHub event-driven validation service
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/platform-team
+  system: model-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: argocd
+  description: Existing manual-sync, no-prune GitOps release controller
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/platform-team
+  system: model-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: production-k3s
+  description: Production K3s cluster on server-00; contains no credentials
+spec:
+  type: kubernetes-cluster
+  owner: group:default/platform-team
+  system: model-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage
+  description: Developer portal and read-only model-platform status entry point
+  annotations:
+    backstage.io/kubernetes-id: backstage
+    backstage.io/kubernetes-namespace: backstage
+    backstage.io/kubernetes-cluster: production-k3s
+  links:
+    - url: http://110.120.0.3:30070
+      title: Backstage portal
+spec:
+  type: website
+  lifecycle: production
+  owner: group:default/platform-team
+  system: model-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: crossplane-control-plane
+  description: Crossplane Composition Function and the ModelDeployment platform API
+  annotations:
+    backstage.io/kubernetes-id: crossplane-control-plane
+    backstage.io/kubernetes-namespace: crossplane-system
+    backstage.io/kubernetes-cluster: production-k3s
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/platform-team
+  system: model-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: model-serving-control-plane
+  description: Control-plane-only ModelDeployment requests; runtime is disabled
+  annotations:
+    backstage.io/kubernetes-id: model-serving-control-plane
+    backstage.io/kubernetes-namespace: model-serving
+    backstage.io/kubernetes-cluster: production-k3s
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: model-platform
+  dependsOn:
+    - component:default/crossplane-control-plane
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: model-deployment
+  description: Namespaced Crossplane ModelDeployment v1alpha1 API
+spec:
+  type: openapi
+  lifecycle: experimental
+  owner: group:default/platform-team
+  system: model-platform
+  definition: |
+    openapi: 3.0.3
+    info:
+      title: ModelDeployment
+      version: v1alpha1
+    paths: {}
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: qwen3-6-27b-w8a8-20260806
+  description: Qwen3.6-27B W8A8 model; 24 files verified by size and SHA256
+  links:
+    - url: http://110.120.0.3:30670/health
+      title: Artifact Keeper health
+spec:
+  type: model-version
+  lifecycle: production
+  owner: group:default/platform-team
+  system: model-platform
+  dependencyOf:
+    - component:default/model-serving-control-plane

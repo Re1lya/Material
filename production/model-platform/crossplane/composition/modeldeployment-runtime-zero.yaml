@@ -1,0 +1,387 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: modeldeployment-runtime-zero-v1alpha1
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: deployment-api
+    platform.example.com/stage: runtime-zero
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: ModelDeployment
+  mode: Pipeline
+  pipeline:
+    - step: render-runtime-zero
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: deployment-status
+            base:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: deployment-request
+                  platform.example.com/runtime-mode: deployment-zero
+              data:
+                phase: Stopped
+                message: >-
+                  Crossplane owns a zero-replica runtime template. No Pod,
+                  model-cache Job or NPU allocation is created.
+                runtimeMode: Deployment
+                runtimeEnabled: "false"
+                cacheEnabled: "false"
+                replicas: "0"
+                npuRequested: "0"
+                modelRepository: model-artifacts
+                modelArtifactPrefix: Qwen3.6-27B-w8a8
+                modelManifestDigest: sha256:9ecf94c8084062b613ca8eb4e76074c29fabc51644682e3d8708edc9737ea610
+                runtimeImageDigest: sha256:0c9a4668e0c15f862fee733ab5c5b721e8f88985dd9cfa6f33404b976b15eadb
+                telemetryConfigSHA256: 020f37491062810b838f60f4d496f2a6eefde61056a30bb1e3ce5a02293eb090
+                entrypointConfigSHA256: ce778517ed4fa7529a987ea6dfb713beb5ca47438d60092c52a7d32f871d90fc
+                scriptsConfigSHA256: 64a92d49041903c804d64aa9851ffc8d6d0a0343babf783f71c4b77c06c5a50a
+                controlCodeConfigSHA256: da29c63806663ef9b51cbdaacdaa93b3684f291b2e02eb4498faed9d37782ab3
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-status"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.projectRef
+                toFieldPath: data.projectRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.modelVersionRef
+                toFieldPath: data.modelVersionRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtimeProfileRef
+                toFieldPath: data.runtimeProfileRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.desiredState
+                toFieldPath: data.desiredState
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.placement.acceleratorPool
+                toFieldPath: data.acceleratorPool
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.access.visibility
+                toFieldPath: data.visibility
+            readinessChecks:
+              - type: None
+
+          - name: runtime-deployment-zero
+            base:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: model-runtime
+                  app.kubernetes.io/managed-by: crossplane
+                  platform.example.com/runtime-mode: deployment-zero
+                annotations:
+                  platform.example.com/model-manifest-digest: sha256:9ecf94c8084062b613ca8eb4e76074c29fabc51644682e3d8708edc9737ea610
+                  platform.example.com/source-baseline: pd_1p2d_control_v1
+              spec:
+                replicas: 0
+                strategy:
+                  type: Recreate
+                selector:
+                  matchLabels:
+                    platform.example.com/deployment: replaced-by-composition
+                template:
+                  metadata:
+                    labels:
+                      app.kubernetes.io/part-of: model-platform
+                      app.kubernetes.io/component: model-runtime
+                      platform.example.com/deployment: replaced-by-composition
+                      servingrom.openai/config-id: qwen36-1p2d-d2-full-decode-only-async-control-v1
+                    annotations:
+                      huawei.com/Ascend910: Ascend910-10,Ascend910-11,Ascend910-12,Ascend910-13,Ascend910-14,Ascend910-15
+                      predicate-time: "1"
+                      servingrom.openai/config-id: qwen36-1p2d-d2-full-decode-only-async-control-v1
+                      platform.example.com/replica-lock: "0"
+                      platform.example.com/model-manifest-digest: sha256:9ecf94c8084062b613ca8eb4e76074c29fabc51644682e3d8708edc9737ea610
+                  spec:
+                    automountServiceAccountToken: false
+                    schedulerName: default-scheduler
+                    nodeSelector:
+                      kubernetes.io/arch: arm64
+                      kubernetes.io/hostname: a3-server-00
+                      node.kubernetes.io/npu.chip.name: Ascend910
+                    containers:
+                      - name: pd-worker
+                        image: 110.120.0.3:8889/infra/qwen36-pd-worker:v0.22.1rc1-a3-ray248-servingrom-snapshot-v7@sha256:0c9a4668e0c15f862fee733ab5c5b721e8f88985dd9cfa6f33404b976b15eadb
+                        imagePullPolicy: IfNotPresent
+                        command:
+                          - /bin/bash
+                          - -lc
+                          - --
+                        args:
+                          - exec /opt/servingrom/scripts/pd-worker-entrypoint-instrumented.sh
+                        env:
+                          - name: SERVINGROM_CONFIG_ID
+                            value: qwen36-1p2d-d2-full-decode-only-async-control-v1
+                          - name: SERVINGROM_TELEMETRY_ENABLED
+                            value: "true"
+                          - name: SERVINGROM_EXPERIMENT_ID
+                            value: servingrom-control-pilot-v1
+                          - name: SERVINGROM_RUN_ID
+                            value: bootstrap-inactive
+                          - name: SERVINGROM_RESULTS_ROOT
+                            value: /servingrom-results
+                          - name: SERVINGROM_RUN_CONTROL_FILE
+                            value: /var/run/qwen36-pd/servingrom-run-control.json
+                          - name: SERVINGROM_RUN_CONTROL_ACK_DIR
+                            value: /var/run/qwen36-pd/servingrom-run-control-acks
+                          - name: SERVINGROM_PROXY_PATH
+                            value: /opt/servingrom-control/pd_proxy.py
+                          - name: SERVINGROM_CONTROL_ENABLED
+                            value: "true"
+                          - name: SERVINGROM_CONTROL_MIN_RHO_A
+                            value: "0.2"
+                          - name: SERVINGROM_CONTROL_MAX_RHO_A
+                            value: "0.8"
+                          - name: SERVINGROM_CONTROL_MAX_STEP
+                            value: "0.2"
+                          - name: SERVINGROM_CONTROL_MIN_DWELL_SECONDS
+                            value: "5"
+                          - name: SERVINGROM_CONTROL_MAX_LOAD_SKEW_TOKENS
+                            value: "2048"
+                          - name: PHYSICAL_IDS
+                            value: 10,11,12,13,14,15
+                          - name: DECODE_AB_MODE
+                            value: D2
+                          - name: MODEL_PATH
+                            value: /models/Qwen3.6-27B-w8a8
+                          - name: MODEL_NAME
+                            value: qwen36-27b-w8a8
+                          - name: RAY_ADDRESS
+                            value: ray-vllm-lab-head.infra-learning.svc.cluster.local:6379
+                          - name: POD_IP
+                            valueFrom:
+                              fieldRef:
+                                fieldPath: status.podIP
+                          - name: NO_PROXY
+                            value: localhost,127.0.0.1,::1,.svc,.svc.cluster.local,.cluster.local,110.120.0.3,110.123.0.3,10.0.0.0/8
+                        resources:
+                          requests:
+                            cpu: "64"
+                            memory: 256Gi
+                            huawei.com/Ascend910: "6"
+                          limits:
+                            cpu: "64"
+                            memory: 256Gi
+                            huawei.com/Ascend910: "6"
+                        readinessProbe:
+                          exec:
+                            command:
+                              - /bin/sh
+                              - -c
+                              - >-
+                                test -f /var/run/qwen36-pd/READY &&
+                                curl --noproxy '*' -fsS
+                                http://127.0.0.1:8080/openapi.json >/dev/null
+                          initialDelaySeconds: 30
+                          periodSeconds: 10
+                          timeoutSeconds: 5
+                          failureThreshold: 360
+                        securityContext:
+                          privileged: true
+                        volumeMounts:
+                          - name: model
+                            mountPath: /models/Qwen3.6-27B-w8a8
+                            readOnly: true
+                          - name: scripts
+                            mountPath: /opt/qwen36-pd
+                            readOnly: true
+                          - name: state
+                            mountPath: /var/run/qwen36-pd
+                          - name: logs
+                            mountPath: /var/log/qwen36-pd
+                          - name: shm
+                            mountPath: /dev/shm
+                          - name: driver
+                            mountPath: /usr/local/Ascend/driver
+                            readOnly: true
+                          - name: dcmi
+                            mountPath: /usr/local/dcmi
+                            readOnly: true
+                          - name: npu-smi
+                            mountPath: /usr/local/bin/npu-smi
+                            readOnly: true
+                          - name: hccn-tool
+                            mountPath: /usr/local/Ascend/driver/tools/hccn_tool
+                            readOnly: true
+                          - name: hccn-conf
+                            mountPath: /etc/hccn.conf
+                            readOnly: true
+                          - name: servingrom-results
+                            mountPath: /servingrom-results
+                          - name: telemetry-hot
+                            mountPath: /opt/servingrom/servingrom_telemetry
+                            readOnly: true
+                          - name: entrypoint-hot
+                            mountPath: /opt/servingrom/scripts/pd-worker-entrypoint-instrumented.sh
+                            subPath: pd-worker-entrypoint-instrumented.sh
+                            readOnly: true
+                          - name: control-code
+                            mountPath: /opt/servingrom-control
+                            readOnly: true
+                    volumes:
+                      - name: model
+                        hostPath:
+                          path: /home/admin/model-cache/artifact-keeper/qwen3.6-27b-w8a8/sha256-9ecf94c8084062b613ca8eb4e76074c29fabc51644682e3d8708edc9737ea610
+                          type: Directory
+                      - name: scripts
+                        configMap:
+                          name: qwen36-pd-control-pilot-scripts
+                          defaultMode: 365
+                      - name: state
+                        emptyDir: {}
+                      - name: logs
+                        emptyDir: {}
+                      - name: shm
+                        emptyDir:
+                          medium: Memory
+                          sizeLimit: 64Gi
+                      - name: driver
+                        hostPath:
+                          path: /usr/local/Ascend/driver
+                      - name: dcmi
+                        hostPath:
+                          path: /usr/local/dcmi
+                      - name: npu-smi
+                        hostPath:
+                          path: /usr/local/bin/npu-smi
+                          type: File
+                      - name: hccn-tool
+                        hostPath:
+                          path: /usr/local/Ascend/driver/tools/hccn_tool
+                          type: File
+                      - name: hccn-conf
+                        hostPath:
+                          path: /etc/hccn.conf
+                          type: File
+                      - name: servingrom-results
+                        hostPath:
+                          path: /home/admin/servingrom-results
+                          type: DirectoryOrCreate
+                      - name: telemetry-hot
+                        configMap:
+                          name: servingrom-telemetry-control-pilot-v1
+                          defaultMode: 365
+                      - name: entrypoint-hot
+                        configMap:
+                          name: servingrom-entrypoint-control-pilot-v1
+                          defaultMode: 365
+                      - name: control-code
+                        configMap:
+                          name: servingrom-control-pilot-v1-code
+                          defaultMode: 365
+                          items:
+                            - key: pd_proxy.py
+                              path: pd_proxy.py
+                            - key: package_init.py
+                              path: servingrom_control/__init__.py
+                            - key: manager.py
+                              path: servingrom_control/manager.py
+                            - key: schema.py
+                              path: servingrom_control/schema.py
+                            - key: safety.py
+                              path: servingrom_control/safety.py
+                            - key: state.py
+                              path: servingrom_control/state.py
+                            - key: telemetry.py
+                              path: servingrom_control/telemetry.py
+                            - key: actuators_init.py
+                              path: servingrom_control/actuators/__init__.py
+                            - key: routing_ratio.py
+                              path: servingrom_control/actuators/routing_ratio.py
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-runtime"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.selector.matchLabels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.template.metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.template.metadata.labels[app]
+            readinessChecks:
+              - type: None
+
+          - name: runtime-service
+            base:
+              apiVersion: v1
+              kind: Service
+              metadata:
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: model-runtime
+                  app.kubernetes.io/managed-by: crossplane
+                  platform.example.com/runtime-mode: deployment-zero
+              spec:
+                type: ClusterIP
+                selector:
+                  platform.example.com/deployment: replaced-by-composition
+                ports:
+                  - name: openai
+                    port: 8080
+                    targetPort: 8080
+                  - name: prefill
+                    port: 13700
+                    targetPort: 13700
+                  - name: decode-a
+                    port: 13701
+                    targetPort: 13701
+                  - name: decode-b
+                    port: 13702
+                    targetPort: 13702
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.selector[platform.example.com/deployment]
+            readinessChecks:
+              - type: None

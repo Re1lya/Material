@@ -1,4 +1,10 @@
 # upstream index source|internal target|linux/amd64 manifest digest
+## Temporary 2026-08-17 exception: the current Artifact Keeper writer token was
+## unavailable during the no-GHCR Pruner rollout, so these two Operator-owned
+## images are mirrored to the existing internal 8889 registry. Migrate them to
+## Artifact Keeper before treating this as the final image policy.
+ghcr.io/tektoncd/pruner/controller:v0.4.1@sha256:fdf683105a9ad0501cc855967a9ba8f7b5a1d38835d519f3075a2b8cb2fa506a|110.120.0.3:8889/platform/tekton-pruner-controller:v0.4.1|sha256:fdf683105a9ad0501cc855967a9ba8f7b5a1d38835d519f3075a2b8cb2fa506a
+ghcr.io/tektoncd/pruner/webhook:v0.4.1@sha256:d286f3a294df96a0662008145e5904d808c22b6a3e770b151326116ec441f308|110.120.0.3:8889/platform/tekton-pruner-webhook:v0.4.1|sha256:d286f3a294df96a0662008145e5904d808c22b6a3e770b151326116ec441f308
 ghcr.io/tektoncd/operator/operator-303303c315a48490ba6517859ef65b77:v0.81.0@sha256:a2559d7f9289ba3974f587c219d161c4f3cc9d41bc2876233415874077b6c55e|110.120.0.3:8889/platform/tekton-operator:v0.81.0|sha256:834aada144c4bb3726900a3fe699dc73edea7e73152eeacf0c0c8eaf4beb588f
 ghcr.io/tektoncd/operator/webhook-f2bb711aa8f0c0892856a4cbf6d9ddd8:v0.81.0@sha256:3f513319e5c79bb5dae64772d1629565a64cdf5a257005aac0bb5ca2ab6c9c5e|110.120.0.3:8889/platform/tekton-operator-webhook:v0.81.0|sha256:6bcb21d937bd95791f31a25ca527a2241b2a50d3b9ae4f5b68ca0491f21bbca3
 ghcr.io/tektoncd/operator/proxy-webhook-f6167da7bc41b96a27c5529f850e63d1:v0.81.0@sha256:b7c7de05756e63f38968e81b111d5d5727ca6803fc61463a56e9f73dde9ae42d|110.120.0.3:8889/platform/tekton-operator-proxy-webhook:v0.81.0|sha256:47f1bab4fc3d89eaae56ec9e12bc680f024aae7aadbcf59b236c5c2166598228
