@@ -31,7 +31,23 @@
       "required": ["modelId", "revision", "artifact", "format", "compatibility"],
       "properties": {
         "modelId": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
-        "revision": { "type": "string", "pattern": "^[0-9]{8}(\\.[0-9]+)?$" },
+        "revision": {
+          "type": "string",
+          "pattern": "^(?:[0-9]{8}(\\.[0-9]+)?|[0-9a-f]{8,64})$"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "modelId", "revision"],
+          "properties": {
+            "type": { "const": "modelscope" },
+            "modelId": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
+            "revision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8,64}$"
+            }
+          }
+        },
         "artifact": {
           "type": "object",
           "additionalProperties": false,
@@ -42,6 +58,29 @@
             "fileCount": { "type": "integer", "minimum": 1 },
             "sizeBytes": { "type": "integer", "minimum": 1 },
             "manifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        },
+        "quantization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tool", "version", "sourcePrecision", "target", "configDigest", "calibrationDatasetDigest", "inputArtifact"],
+          "properties": {
+            "tool": { "const": "msmodelslim" },
+            "version": { "type": "string", "minLength": 1 },
+            "sourcePrecision": { "const": "bf16" },
+            "target": { "const": "w8a8" },
+            "configDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "calibrationDatasetDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+            "inputArtifact": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["repository", "path", "manifestDigest"],
+              "properties": {
+                "repository": { "const": "model-artifacts" },
+                "path": { "type": "string", "pattern": "^qwen3\\.8-27b/bf16/[A-Za-z0-9._/-]+$" },
+                "manifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+              }
+            }
           }
         },
         "format": {

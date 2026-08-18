@@ -1,0 +1,52 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelDeployment
+metadata:
+  name: qwen38-27b
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/managed-by: argocd
+    platform.example.com/requested-by: platform-team
+spec:
+  projectRef: model-serving
+  modelVersionRef: qwen3.8-27b-w8a8
+  runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-v1
+  compositionRef:
+    name: modeldeployment-qwen38-ray-v1alpha1
+  desiredState: Stopped
+  placement:
+    acceleratorPool: ascend-910b3
+    nodeSelector:
+      kubernetes.io/arch: arm64
+      kubernetes.io/hostname: gpu-server-00
+      node.kubernetes.io/npu.chip.name: 910B3
+  access:
+    visibility: internal
+  artifact:
+    modelId: Qwen/Qwen3.8-27B
+    revision: <immutable-lowercase-modelscope-commit>
+    repository: model-artifacts
+    path: qwen3.8-27b/w8a8/<immutable-lowercase-modelscope-commit>/<immutable-quantization-id>
+    manifestDigest: sha256:<importer-manifest-digest>
+  runtime:
+    image: 110.120.0.3:30670/container-images/<runtime-image>@sha256:<runtime-image-digest>
+    rayVersion: "2.43.0"
+    modelPath: /models/qwen3.8-27b
+    modelName: qwen3.8-27b
+    serveConfigV2: |
+      applications:
+      - name: default
+        route_prefix: /
+        import_path: qwen_serve:app
+    headCPU: "2"
+    headMemory: 8Gi
+    workerCPU: "64"
+    workerMemory: 256Gi
+    npuPerWorker: 8
+    workerReplicas: 0
+  cache:
+    image: 110.120.0.3:30670/container-images/model-cache@sha256:<cache-image-digest>
+    baseURL: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+    readerSecret: artifact-keeper-model-runtime
+    storageClassName: model-cache-gpu-local
+    size: <artifact-size-plus-staging-headroom>

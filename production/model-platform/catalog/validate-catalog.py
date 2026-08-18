@@ -86,6 +86,29 @@ def main() -> int:
         errors.extend(f"{path}: {message}" for message in collect_errors(Draft202012Validator(mv_schema), document))
 
         name = document.get("metadata", {}).get("name")
+        if name == "qwen3.8-27b-w8a8":
+            source = document.get("spec", {}).get("source", {})
+            model_spec = document.get("spec", {})
+            if source.get("type") != "modelscope":
+                errors.append(f"{path}: Qwen3.8 ModelVersion source.type must be modelscope")
+            if source.get("modelId") != model_spec.get("modelId"):
+                errors.append(f"{path}: ModelScope modelId must match spec.modelId")
+            if source.get("revision") != model_spec.get("revision"):
+                errors.append(f"{path}: ModelScope revision must match spec.revision")
+            if model_spec.get("format", {}).get("quantization") != "w8a8":
+                errors.append(f"{path}: Qwen3.8 final format.quantization must be w8a8")
+            quantization = model_spec.get("quantization", {})
+            if quantization.get("tool") != "msmodelslim":
+                errors.append(f"{path}: Qwen3.8 quantization.tool must be msmodelslim")
+            if quantization.get("sourcePrecision") != "bf16":
+                errors.append(f"{path}: Qwen3.8 quantization.sourcePrecision must be bf16")
+            if quantization.get("target") != "w8a8":
+                errors.append(f"{path}: Qwen3.8 quantization.target must be w8a8")
+            if not str(model_spec.get("artifact", {}).get("path", "")).startswith("qwen3.8-27b/w8a8/"):
+                errors.append(f"{path}: Qwen3.8 artifact.path must be under qwen3.8-27b/w8a8/")
+            input_artifact = quantization.get("inputArtifact", {})
+            if not str(input_artifact.get("path", "")).startswith("qwen3.8-27b/bf16/"):
+                errors.append(f"{path}: Qwen3.8 inputArtifact.path must be under qwen3.8-27b/bf16/")
         artifact = document.get("spec", {}).get("artifact", {})
         manifest_path = catalog_dir / f"{name}.manifest.json"
         if not manifest_path.exists():

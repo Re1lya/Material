@@ -89,7 +89,11 @@ kubernetes:
               plural: modeldeployments
 
 permission:
-  enabled: true
+  # The MVP keeps the Scaffolder UI usable even when the browser cannot send
+  # a Backstage user credential to /api/permission/authorize. The backend
+  # action remains constrained by the allow-listed initiator/model/profile,
+  # and Kubernetes RBAC remains the authoritative read-only boundary.
+  enabled: false
 
 scaffolder: {}
 

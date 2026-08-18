@@ -45,7 +45,7 @@
           "additionalProperties": false,
           "required": ["kind", "strategy", "replicas"],
           "properties": {
-            "kind": { "const": "Deployment" },
+            "kind": { "enum": ["Deployment", "RayService"] },
             "strategy": { "const": "Recreate" },
             "replicas": { "const": 1 }
           }
@@ -53,15 +53,30 @@
         "runtime": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["image", "modelPath", "modelName", "rayAddress", "servingRomConfigId"],
+          "required": ["image", "modelPath", "modelName"],
           "properties": {
-            "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:8889/.+@sha256:[0-9a-f]{64}$" },
+            "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:(?:8889|30670)/.+@sha256:[0-9a-f]{64}$" },
             "command": { "type": "array", "items": { "type": "string" } },
             "args": { "type": "array", "items": { "type": "string" } },
             "modelPath": { "type": "string", "minLength": 1 },
             "modelName": { "type": "string", "minLength": 1 },
             "rayAddress": { "type": "string", "minLength": 1 },
-            "servingRomConfigId": { "type": "string", "minLength": 1 }
+            "servingRomConfigId": { "type": "string", "minLength": 1 },
+            "rayVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "serveConfigV2": { "type": "string", "minLength": 1, "maxLength": 20000 },
+            "npuPerWorker": { "type": "integer", "const": 8 },
+            "workerReplicas": { "type": "integer", "enum": [0, 1] },
+            "cache": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["image", "storageClassName", "size", "readerSecret"],
+              "properties": {
+                "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:30670/.+@sha256:[0-9a-f]{64}$" },
+                "storageClassName": { "type": "string", "pattern": "^model-cache-[a-z0-9-]+$" },
+                "size": { "type": "string", "pattern": "^[1-9][0-9]*(Gi|Ti)$" },
+                "readerSecret": { "const": "artifact-keeper-model-runtime" }
+              }
+            }
           }
         },
         "resources": {
@@ -95,7 +110,7 @@
         "placement": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["nodeSelector", "adminManagedPhysicalIds", "certifiedPhysicalIds"],
+          "required": ["nodeSelector"],
           "properties": {
             "nodeSelector": {
               "type": "object",

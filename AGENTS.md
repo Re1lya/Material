@@ -1017,10 +1017,13 @@ source control; it is not evidence that production was changed.
    `production/model-platform/cache/` — prepared model metadata, runtime profile
    and cache implementation; these files are not proof that runtime deployment
    has occurred.
-9. `production/model-platform/backstage/README.md` — minimum usable portal,
+9. `production/model-platform/qwen38-ray-mvp-plan-20260818.md` — the focused
+   ModelScope -> Artifact Keeper -> KubeRay/Argo execution path for the
+   user-reactivated Qwen3.8-27B test; it is a plan, not deployment evidence.
+10. `production/model-platform/backstage/README.md` — minimum usable portal,
    identity, TLS, catalog, CI/CD connection, request-by-PR boundary and phased
    acceptance plan. It is a plan, not deployment evidence.
-10. `production/model-platform/backstage/release-runbook.md` — exact staged
+11. `production/model-platform/backstage/release-runbook.md` — exact staged
     user-run commands for the Crossplane, Backstage, Tekton PR-status and
     manual Argo control-plane closure.
 
@@ -1039,12 +1042,13 @@ The production target is the K3s cluster on `server-00`, Kubernetes
 | Gitea | Running in `gitea`; private config repository and persistent PostgreSQL are verified |
 | Argo CD | Running in `argocd`; one minimal manually synchronized Application; no prune/self-heal |
 | Tekton | Operator, Pipelines, Triggers, both EventListeners and event-based `TektonPruner/pruner` Running; Gitea PR status path and GitHub listener deployed; CI tools now run from the Artifact Keeper digest on server-00; migration Run `model-platform-config-ak-migration-20260817` succeeded with Gitea status write; Pruner Pods are server-00-only with `gpu-*` count 0; previous 8889 digest retained for rollback |
-| Crossplane | Core 2.3.4 Helm revision 2 and RBAC Manager Running; Function Patch and Transform v0.8.2 Installed/Healthy; no Provider/Configuration |
+| Crossplane | Core 2.3.4 Helm revision 2 and RBAC Manager Running; Function Patch and Transform v0.8.2 Installed/Healthy; control-plane foundation now applied (provider ServiceAccount/namespace Role+RoleBinding, no-NPU DeploymentRuntimeConfig, Qwen3.8 XRD and Composition); provider package/ProviderConfig remain gated and not installed |
 | ModelDeployment API | v2 namespaced XRD Established/Offered; runtime-zero Composition installed; one stopped XR Synced/Ready |
 | ModelVersion / RuntimeProfile | YAML catalog materials exist but are not yet backed by completed production APIs/controllers |
 | Model cache | Fetcher and Job material exist; no production cache Job has run |
-| Qwen runtime | No new production inference deployment has been created by this project |
-| Backstage | Running in `backstage`; service/RBAC/OIDC/Catalog/events, constrained Gitea PR action and real exact-head policy status accepted; mock scheduling form rolled out; v0.2.9 `linux/amd64` from Artifact Keeper at `sha256:fee9830d4ba7f99234033bbfde10c1a5e51edda908c734de70f30015ca92a934`; `artifact-keeper-backstage-pull` read-only Secret; Deployment and PostgreSQL Ready; no new ModelDeployment; effective model replicas remain 0; verify UI form and later stable HTTPS; Ray dynamic scheduling remains future work |
+| Qwen runtime | No new production inference deployment has been created by this project. The reusable CPU-only BF16 importer, isolated ModelSlim W8A8 quantization contract, cache manifest-sidecar logic, provider-kubernetes/RBAC/Composition source and Qwen3.8 contract are prepared locally; the ModelScope candidate repository/revision, quantizer evidence, Artifact Keeper publisher/read credentials and final image/StorageClass evidence are not confirmed. |
+| KubeRay / KCC pretraining | Existing KubeRay Operator v1.6.0 is `1/1 Ready` in `ray-mangement`; `ray.io/v1` RayCluster/RayCronJob/RayJob/RayService CRDs exist. KCC integration is explicitly deferred until its host scripts, paths, state/logs and kubeconfig dependency are migrated into K3s. Do not deploy another KubeRay Operator; a future platform `PretrainingJob` business Operator must reuse the existing one. |
+| Backstage | Running in `backstage`; service/RBAC/OIDC/Catalog/events, constrained Gitea PR action and real exact-head policy status accepted; mock scheduling form rolled out; production runs v0.2.11 `linux/amd64` from Artifact Keeper at `sha256:5e779eaceeb6ab81b6a69547b5ad7f2f91fda291dfc09153ce4c7e5a81d3b698`; `artifact-keeper-backstage-pull` read-only Secret; Deployment and PostgreSQL Ready; NodePort 30070 health/form routes verified; no new ModelDeployment; effective model replicas remain 0; stable HTTPS and Ray dynamic scheduling remain future work. The KCC pretraining panel is mock/read-only and its training actions remain disabled. |
 
 Crossplane Core and RBAC Manager declare 200m CPU and 512Mi memory requests in
 total and use no PVC. The Composition Function adds 100m CPU and 128Mi memory
@@ -1056,14 +1060,27 @@ requests do not create a Pod or reserve CPU, memory or NPU resources.
 ```text
 Gitea main push -> Tekton EventListener -> validation PipelineRun
 Gitea repository -> Argo CD repo-server -> manually synchronized bootstrap App
-Artifact Keeper <- verified Qwen model artifacts
-Artifact Keeper internal HTTPS -> Crossplane Function package resolution
-Crossplane -> Offered ModelDeployment API -> runtime-zero Composition
-runtime-zero XR -> status ConfigMap + Service + Deployment(replicas=0)
+ModelScope BF16 -> CPU-only importer -> Artifact Keeper source -> isolated ModelSlim W8A8 quantizer -> Artifact Keeper final model artifact
+Artifact Keeper internal HTTPS -> Crossplane Function/provider package resolution
+Gitea ModelVersion/RuntimeProfile/ModelDeployment -> Tekton validation
+Argo CD -> ModelDeployment XR -> Crossplane Composition -> provider-kubernetes
+provider-kubernetes -> model-serving PVC/cache Job/stopped or Running RayService/Service
+KubeRay -> RayCluster/Pods (not installed by this phase)
+
+The first-stage importer and model release source remain local-only and no model
+file has been processed in the current foundation step. The Crossplane
+control-plane foundation is applied, but production still has no
+provider-kubernetes package, ProviderConfig, ModelScope Qwen3.8 artifact, cache
+Job, PVC, RayService or NPU workload from this track. The public candidate
+`Qwen/Qwen3.8-27B` and its ModelSlim W8A8 support were not confirmed during the 2026-08-18 read-only preflight;
+do not substitute Qwen3.6 without an explicit model decision.
 ```
 
 There is not yet a production Tekton-to-Argo promotion path, Artifact Keeper
-release publish task, Crossplane-to-KubeRay runtime path or cache controller.
+release publish Task, provider-kubernetes package or Crossplane-to-KubeRay runtime
+path. The Qwen3.8 plan uses Argo CD only to submit a ModelDeployment XR; Crossplane
+Composition/provider-kubernetes will combine the namespaced resources and KubeRay
+will own the Ray lifecycle after the package/digest and stopped-XR gates pass.
 Backstage is now deployed; its Gitea PR validation/status path and events
 backend are installed, and a real Gitea PR delivery has passed exact-head
 validation and status reporting.
@@ -1097,7 +1114,7 @@ workload, Pipeline or release was created by that work. Implementation remains
 gated on the exact source repository, lock/test/health contract and a reviewed
 separate `fastapi-ci`/`fastapi` release. `ora-space/desktop` remains paused.
 
-## Current execution order (updated 2026-08-14)
+## Current execution order (updated 2026-08-18)
 
 The user paused all `ora-space/desktop` work. Do not build its image, create a
 new listener, run its Pipeline, deploy a proxy or consume its cache PVC in the
@@ -1113,6 +1130,14 @@ The Crossplane runtime-zero stage is complete in production:
 5. No Pod, Job, PVC, Ray object or NPU allocation was created; old Deployment is unchanged.
 ```
 
+On 2026-08-18 the control-plane-only Qwen3.8 foundation was also applied:
+provider ServiceAccount plus `model-serving` Role/RoleBinding, an amd64
+server-00-only DeploymentRuntimeConfig, the XRD and the reviewed Composition.
+This did not install provider-kubernetes, create ProviderConfig/XR resources or
+touch model files. The next step is to mirror and audit the provider package,
+then adopt the same foundation through the reviewed Gitea/Argo path; do not
+create a stopped Qwen3.8 XR until that gate is complete.
+
 Continue from this order:
 
 ```text
@@ -1123,7 +1148,7 @@ Continue from this order:
    in production; synthetic and real close/reopen delivery paths have passed
    the validators and status writer.
 4. Backstage catalog/reference validation, constrained request action and
-   status feedback are DONE in production; the v0.2.9 Mock form records
+   status feedback are DONE in production; the v0.2.11 Mock form records
    requested scheduling values but keeps effective replicas and NPU at zero.
 5. Run the model-cache-only phase after separate node disk/network approval.
 6. Activate a runtime only in an explicitly approved idle-NPU window.
@@ -1146,6 +1171,17 @@ branch, file, PR and pending status. It must never merge, run `kubectl`, create
 Pods/PVCs, select physical NPU cards, accept arbitrary images or proxy large
 model uploads. Generic SCM publisher actions are not loaded.
 
+The current source and v0.2.11 production image contain the Create-page
+usability fix: the
+model template is explicitly in the `default` namespace, provides an
+`Open request form` card link, and sets `permission.enabled: false` for the
+MVP. This avoids the standard Scaffolder card hiding **Choose** when the
+browser cannot authorize `/api/permission/authorize`. It does not grant
+Kubernetes writes: the custom action's initiator/model/profile allow-lists and
+namespace-scoped RBAC remain in force. The v0.2.11 image has been rolled out
+and the direct route is reachable through NodePort `30070`; browser-level
+button visibility should be rechecked after refreshing the page.
+
 Keep the two product paths separate:
 
 - `ora-space/desktop` PRs run Tekton clone/install/test and report a GitHub
@@ -1165,6 +1201,33 @@ and a ServiceAccount that can only list/get/watch approved non-Secret objects
 in approved namespaces. Full gates and acceptance checks are in
 `production/model-platform/backstage/README.md`.
 
+### Planned Backstage unified Gitea + Artifact Keeper MVP
+
+This is planned work, not a deployed feature. The current portal still needs
+manual Artifact Keeper API/token operations. The small next step is to add:
+
+1. a read-only Artifact Keeper repository/format/quota/usage view;
+2. a bounded form to create an approved Artifact Keeper repository;
+3. a bounded Gitea project-repository form under the approved owner, recording
+   the Artifact Keeper repository as catalog metadata;
+4. a Backstage action that starts a Tekton artifact-publish PipelineRun.
+
+The browser submits metadata only. It must never proxy multi-gigabyte models.
+Tekton reads from controlled staging storage, injects a namespace-scoped
+Artifact Keeper publisher Secret, performs resumable chunk upload and SHA256
+verification, then reports status back to Backstage. The current Qwen source on
+`a3-server-00` needs a separate staging/ingestion path before this action can
+run; Backstage must not accept arbitrary SSH paths.
+
+Planned credentials are separate: Artifact Keeper read/provision, Artifact
+Keeper CI publisher, and Gitea project provisioner. Do not reuse the fixed
+Gitea deployment-PR token, expose token values in the browser, or write them to
+Git/logs/catalog. Repository deletion, arbitrary permission changes and
+administrator-token issuance are disabled in the MVP. Validate the installed
+Artifact Keeper 1.6.0 API against a disposable repository before production
+write actions. These changes must not add Kubernetes, Ray, Crossplane or NPU
+side effects.
+
 ## Recommended next deployment sequence
 
 > 2026-08-13 update: `ora-space/desktop` is paused. Execute the safe Crossplane
@@ -1183,7 +1246,8 @@ in approved namespaces. Full gates and acceptance checks are in
    allocation.~~ DONE 2026-08-14. No KubeRay permission or RayService was added.
 4. ~~Build and deploy the read-only Backstage MVP: Gitea OIDC login, catalog,
    Kubernetes read-only status, constrained Gitea PR action and links.~~ DONE
-   2026-08-14 with v0.2.9; the Mock scheduling form is deployed but its
+   2026-08-14 with v0.2.9, and the v0.2.10 chooser fix was rolled out
+   2026-08-17; the Mock scheduling form is deployed but its
    effective model runtime remains `replicas=0`, `NPU=0`.
 5. Establish stable internal DNS/TLS for Artifact Keeper OCI, Gitea and
    Backstage. Prove digest-pinned HTTPS push/pull in a test namespace before
@@ -1198,12 +1262,22 @@ in approved namespaces. Full gates and acceptance checks are in
    write Kubernetes directly.
 8. Resume and finish the `ora-space/desktop` GitHub PR Pipeline only when the
    user explicitly reactivates that track.
-9. Implement the model-cache control contract and read-only Artifact Keeper
-   runtime credential. Run a cache-only test only after the user approves node,
-   disk and network impact; it must request zero NPU.
-10. When NPU capacity is explicitly confirmed idle, run one controlled Qwen
-    end-to-end test: approval, cache verification, runtime creation, health,
-    minimum inference, rollback and cleanup.
+9. For the user-reactivated Qwen3.8-27B task, follow
+   `production/model-platform/qwen38-ray-mvp-plan-20260818.md`: freeze the
+   ModelScope/artifact/runtime/cache contracts and render the final release
+   unit first; do not create a disposable POC implementation.
+10. Run the canary from that same release unit: ModelScope→Artifact Keeper→cache
+    readback with zero NPU, then one RayService replica on `gpu-server-00`.
+    Tekton validates Git only; Argo CD submits the ModelDeployment XR; the
+    locked provider-kubernetes/Composition creates the cache and RayService;
+    KubeRay executes the Ray lifecycle.
+11. Promote only by changing the Git desired state/revision after the canary;
+    no manual Pod edits or second implementation. Keep KCC pretraining
+    integration deferred until the KCC control package is
+    migrated into K3s. After that separate migration is accepted, define a
+    platform `PretrainingJob` CRD and business Operator that emits RayJob and
+    reuses the existing KubeRay v1.6.0. Do not deploy a second KubeRay Operator
+    or grant Ray/NPU writes during the current phase.
 
 This is an update path, not a rebuild. Helm revisions, CRD versions,
 Compositions and GitOps applications should be evolved in place with explicit

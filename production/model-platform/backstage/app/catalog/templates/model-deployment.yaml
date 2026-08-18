@@ -2,8 +2,12 @@ apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:
   name: request-model-deployment
-  title: Model deployment request (mock runtime)
-  description: Fill a deployment request and open a reviewed Gitea PR. Requested TP/replicas are recorded for the future Ray path; the current fixed backend remains stopped with zero NPU allocation.
+  namespace: default
+  title: Model deployment request (GitOps)
+  description: Fill an allow-listed deployment request and open a reviewed Gitea PR. The request starts Stopped; Tekton validates it and an operator performs the Argo CD sync.
+  links:
+    - title: Open request form
+      url: /create/templates/default/request-model-deployment
   tags:
     - model-platform
     - gitops
@@ -53,7 +57,7 @@ spec:
           enum:
             - internal
             - private
-    - title: Mock scheduling request
+    - title: Scheduling intent
       required:
         - requestedTensorParallelSize
         - requestedPipelineParallelSize
@@ -66,21 +70,21 @@ spec:
           default: 4
           minimum: 1
           maximum: 16
-          description: Recorded in the PR only. The current fixed backend uses TP=6 and does not start a replica.
+          description: Recorded in the PR for the runtime contract; the first generated XR remains Stopped.
         requestedPipelineParallelSize:
           title: Requested pipeline parallel size (PP)
           type: integer
           default: 1
           minimum: 1
           maximum: 4
-          description: Recorded in the PR only. Ray scheduling is not enabled yet.
+          description: Recorded in the PR for the runtime contract; Ray workers remain at zero until the cache gate passes.
         requestedReplicas:
           title: Requested replicas
           type: integer
           default: 1
           minimum: 0
           maximum: 4
-          description: Recorded in the PR only. The effective replica count is locked to 0.
+          description: Requested intent; the generated ModelDeployment is always submitted with desiredState=Stopped.
         priority:
           title: Priority
           type: string
@@ -91,7 +95,7 @@ spec:
             - high
   steps:
     - id: createPullRequest
-      name: Create constrained Gitea pull request
+      name: Create constrained GitOps pull request
       action: model-platform:gitea-create-deployment-pr
       input:
         deploymentName: ${{ parameters.deploymentName }}
@@ -109,4 +113,4 @@ spec:
         url: ${{ steps.createPullRequest.output.pullRequestUrl }}
     text:
       - title: Safety state
-        content: The request is mock-fixed-runtime. Requested values are recorded for review, while the effective backend remains Qwen TP=6, replicas=0, NPU=0. Tekton and a human must approve it before a manual Argo CD Sync.
+        content: The request is declarative and starts Stopped. Tekton validates the catalog and immutable references; a human must approve the PR before a manual Argo CD Sync. Crossplane is the only component that writes the composed runtime objects.

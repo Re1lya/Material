@@ -6,7 +6,18 @@
 >
 > 目标环境：`server-00` 所在 K3s 集群
 >
-> 第一认证运行时：Qwen3.6-27B W8A8 + Ascend A3 + 现有 vLLM/ServingROM
+> 历史认证运行时：Qwen3.6-27B W8A8 + Ascend A3 + 现有 vLLM/ServingROM
+
+> **2026-08-18 执行收敛**：本次上线目标改为
+> `ModelScope -> Artifact Keeper -> 现有 KubeRay -> gpu-server-00` 上的
+> Qwen3.8-27B。请先阅读
+> [`production/model-platform/qwen38-ray-mvp-plan-20260818.md`](production/model-platform/qwen38-ray-mvp-plan-20260818.md)。
+> 该文档把工作压缩为一次零 NPU 缓存/校验、stopped XR/Composition 冒烟和一次
+> RayService 冒烟；通过后将同一份快照直接纳入 Gitea/Tekton/Argo/Crossplane
+> GitOps。本文其余章节是早期完整平台设计和
+> Qwen3.6/A3 历史基线，不应覆盖上述执行顺序。冒烟必须直接使用最终的制品、
+> 缓存、RayService、策略和 Argo 发布单元；不允许先做一套临时 POC、再另起
+> 工程化实现。
 
 ## 1. 执行摘要
 

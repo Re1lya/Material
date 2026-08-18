@@ -48,6 +48,27 @@ def valid_file(path: pathlib.Path, entry: dict) -> bool:
     )
 
 
+def load_manifest(base_url: str, repository: str, artifact_prefix: str, token: str) -> dict:
+    encoded_prefix = "/".join(
+        urllib.parse.quote(part, safe="")
+        for part in (artifact_prefix.strip("/"),)
+        if part
+    )
+    # Keep the manifest beside the model files in Artifact Keeper.  The
+    # importer uploads it last, so a successful read is also the publication
+    # marker for an immutable artifact version.
+    url = (
+        f"{base_url.rstrip('/')}/api/v1/repositories/"
+        f"{urllib.parse.quote(repository, safe='')}/download/{encoded_prefix}/manifest.json"
+    )
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f"failed to read Artifact Keeper manifest: HTTP {error.code}") from error
+
+
 def download(url: str, token: str, destination: pathlib.Path, entry: dict) -> None:
     partial = destination.with_name(destination.name + ".partial")
     partial.parent.mkdir(parents=True, exist_ok=True)
@@ -90,19 +111,22 @@ def main() -> int:
     model_id = required("MODEL_ID")
     expected_digest = required("MANIFEST_DIGEST")
     cache_root = pathlib.Path(required("CACHE_ROOT"))
-    manifest_path = pathlib.Path(required("MANIFEST_FILE"))
     token_path = pathlib.Path(required("TOKEN_FILE"))
 
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    token = token_path.read_text(encoding="utf-8").strip()
+    if not token:
+        raise RuntimeError("Artifact Keeper token is empty")
+
+    manifest_file = os.environ.get("MANIFEST_FILE", "").strip()
+    if manifest_file:
+        manifest = json.loads(pathlib.Path(manifest_file).read_text(encoding="utf-8"))
+    else:
+        manifest = load_manifest(base_url, repository, artifact_prefix, token)
     actual_digest = "sha256:" + hashlib.sha256(canonical_manifest(manifest)).hexdigest()
     if actual_digest != expected_digest:
         raise RuntimeError(
             f"manifest digest mismatch: expected {expected_digest}, got {actual_digest}"
         )
-
-    token = token_path.read_text(encoding="utf-8").strip()
-    if not token:
-        raise RuntimeError("Artifact Keeper token is empty")
 
     safe_digest = expected_digest.replace(":", "-")
     target = cache_root / model_id / safe_digest

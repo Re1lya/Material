@@ -1,0 +1,39 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelVersion
+metadata:
+  name: qwen3.8-27b-w8a8
+  labels:
+    owner: platform-team
+    project: model-serving
+spec:
+  modelId: Qwen/Qwen3.8-27B
+  revision: <immutable-lowercase-modelscope-commit>
+  source:
+    type: modelscope
+    modelId: Qwen/Qwen3.8-27B
+    revision: <immutable-lowercase-modelscope-commit>
+  artifact:
+    repository: model-artifacts
+    path: qwen3.8-27b/w8a8/<immutable-lowercase-modelscope-commit>/<immutable-quantization-id>
+    fileCount: <importer-file-count>
+    sizeBytes: <importer-size-bytes>
+    manifestDigest: sha256:<importer-manifest-digest>
+  quantization:
+    tool: msmodelslim
+    version: <msmodelslim-version>
+    sourcePrecision: bf16
+    target: w8a8
+    configDigest: sha256:<msmodelslim-config-digest>
+    calibrationDatasetDigest: sha256:<calibration-dataset-digest>
+    inputArtifact:
+      repository: model-artifacts
+      path: qwen3.8-27b/bf16/<immutable-lowercase-modelscope-commit>
+      manifestDigest: sha256:<bf16-manifest-digest>
+  format:
+    family: huggingface
+    weights: safetensors
+    architecture: qwen
+    quantization: w8a8
+  compatibility:
+    runtimeProfiles:
+      - qwen38-w8a8-ray-ascend-910b3-v1

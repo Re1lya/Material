@@ -7,8 +7,8 @@ spec:
     createAppVersion: 0.9.0
     releaseVersion: 1.53.0
     packageManager: yarn@4.13.0
-    targetImage: 110.120.0.3:30670/container-images/model-platform-backstage:v0.2.9
-    targetLinuxAMD64Digest: sha256:fee9830d4ba7f99234033bbfde10c1a5e51edda908c734de70f30015ca92a934
+    targetImage: 110.120.0.3:30670/container-images/model-platform-backstage:v0.2.11
+    targetLinuxAMD64Digest: sha256:5e779eaceeb6ab81b6a69547b5ad7f2f91fda291dfc09153ce4c7e5a81d3b698
   node:
     version: 24-trixie-slim
     sourceImage: docker.1ms.run/library/node:24-trixie-slim

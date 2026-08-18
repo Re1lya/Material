@@ -4,12 +4,12 @@
 
 Backstage is deployed in production in namespace `backstage` and the portal,
 OIDC login, Catalog, read-only Kubernetes view and constrained Gitea PR action
-have been accepted. The active image is v0.2.9 at the immutable internal
+have been accepted. The active image is v0.2.11 at the immutable internal
 AMD64 digest recorded in `versions.lock.yaml`. The image is pulled from
 Artifact Keeper with the namespace-local repository-scoped read-only Secret
-`artifact-keeper-backstage-pull`. The mock form records requested
-TP/PP/replicas/priority but keeps the effective backend fixed to Qwen TP=6,
-replicas=0 and NPU=0.
+`artifact-keeper-backstage-pull`. The deployment form records bounded
+TP/PP/replica/priority intent but always creates a stopped GitOps request;
+the effective runtime is selected by the reviewed ModelRuntimeProfile.
 
 The first production Backstage release is intentionally small. It must give a
 developer one place to:
@@ -18,8 +18,7 @@ developer one place to:
   `gitadmin` user;
 - find the verified Qwen model and current platform services;
 - submit one allow-listed, stopped model deployment request as a Gitea branch
-  and pull request, including bounded mock scheduling inputs for future Ray
-  support;
+  and pull request, including bounded scheduling intent for the Ray contract;
 - see Backstage, Crossplane and control-plane-only model request state through
   namespace-scoped Kubernetes reads;
 - follow links to Gitea and Artifact Keeper without receiving direct
@@ -62,6 +61,53 @@ Backstage is not the source of truth and must not create Pods, PVCs,
 RayServices or NPU allocations directly. Gitea holds deployment intent,
 Artifact Keeper holds immutable artifacts, Kubernetes holds runtime state, and
 GitHub holds the source and PR review state for `ora-space/desktop`.
+
+## Planned unified Gitea and Artifact Keeper onboarding (MVP)
+
+The current production image does not yet create Artifact Keeper or Gitea
+repositories. It only creates the constrained ModelDeployment PR in the fixed
+Gitea repository. The next small integration should make Backstage the single
+operator-facing entry point while keeping each system as the source of truth:
+
+```text
+Backstage form
+  -> backend validation and audit
+      -> Artifact Keeper repository API
+      -> Gitea repository/project API
+      -> Tekton upload or CI PipelineRun
+          -> Artifact Keeper stores the bytes
+```
+
+The first MVP should provide:
+
+- read-only Artifact Keeper repository/format/quota/usage status;
+- a bounded `Create artifact repository` form for approved formats
+  (`generic`, `huggingface` and `docker` after API compatibility validation);
+- a bounded Gitea project-repository form under the approved owner, with the
+  matching Artifact Keeper repository recorded as catalog metadata;
+- a `Publish artifact` action that starts a Tekton PipelineRun and shows its
+  status and checksum in Backstage.
+
+The browser submits metadata only. It must not proxy large model files. The
+Tekton Task reads from a controlled staging PV/object store or an approved
+uploader source, performs resumable chunked upload to Artifact Keeper, verifies
+SHA256 and reports the result. For the current Qwen files on `a3-server-00`,
+the source must first be made reachable to the Task; Backstage cannot mount or
+arbitrarily SSH into that host.
+
+Token automation is a later phase, not part of the first write path. The MVP
+uses separate out-of-band Kubernetes Secrets for an Artifact Keeper
+read/provision credential, an Artifact Keeper CI publisher credential and a
+Gitea project-provisioner credential. They are never returned by a browser,
+written to Gitea or logged. Repository deletion, arbitrary permission changes
+and unrestricted administrator-token creation remain disabled. The deployed
+Artifact Keeper is version 1.6.0, so the repository and token API request
+shapes must be probed against that instance before any production write.
+
+Because the current Backstage MVP has `permission.enabled: false`, every new
+write action must enforce the exact Backstage identity and allow-lists in the
+backend itself. Do not expose repository or token administration to all
+logged-in users merely by adding a frontend button.
 
 ## Two supported delivery paths
 
@@ -124,14 +170,23 @@ The repository includes one custom Gitea deployment-request action. It is not
 a general SCM action: repository, owner, branch, path, model version, runtime
 profile, desired state, placement and allowed initiator are fixed or
 allow-listed. It can create a branch, one YAML file, a PR and pending commit
-status; it cannot merge or write Kubernetes. The mock form accepts bounded
-TP/PP/replica/priority inputs and writes them as constrained annotations
-alongside explicit effective values (fixed Qwen Profile, TP=6, replicas=0,
-NPU=0). The generic GitHub publisher module is deliberately not loaded.
+status; it cannot merge or write Kubernetes. The form accepts bounded
+TP/PP/replica/priority intent and the action always writes a stopped
+ModelDeployment with the selected catalog references. The generic GitHub
+publisher module is deliberately not loaded.
 
 Initially omit TechDocs, Elasticsearch/OpenSearch, notifications, cost
 insights and a complex permission policy. Link to the existing native UIs when
 that is enough. This keeps the first image and operational surface small.
+
+The current MVP sets `permission.enabled: false` so the Scaffolder template
+chooser does not hide its **Choose** action when a browser session cannot send
+credentials to `/api/permission/authorize`. This is a UI-availability choice,
+not a Kubernetes write grant: the model request action still allow-lists the
+Backstage initiator, model and runtime profile, while namespace-scoped
+Kubernetes RBAC remains the authoritative boundary. Re-enable the permission
+backend after the portal has a stable HTTPS identity/session path and verify
+the authorization endpoint before tightening the UI policy.
 
 ### Catalog entities
 
@@ -257,15 +312,24 @@ The small backend module should provide a read-only aggregate API such as:
 
 - `GET /api/model-platform/models` — Gitea catalog plus Artifact Keeper
   availability/checksum metadata;
+- `GET /api/model-platform/artifact-repositories` — approved Artifact Keeper
+  repository metadata and usage, without artifact bytes or token values;
+- `POST /api/model-platform/artifact-repositories` — create one bounded local
+  repository after identity, format and quota validation;
+- `POST /api/model-platform/projects` — create one approved Gitea project and
+  its Artifact Keeper metadata binding; no arbitrary owner or admin settings;
+- `POST /api/model-platform/artifact-publish-runs` — start a Tekton upload
+  PipelineRun and return only its run reference;
 - `GET /api/model-platform/deployments` — selected ModelDeployment and
   workload conditions from Kubernetes;
 - `GET /api/model-platform/ci/:repository/:revision` — links/status from
   GitHub Checks or Tekton labels;
 - `POST /api/model-platform/deployment-requests` — validate an allow-listed
-  request and create exactly one Gitea branch and PR.
+  request and create exactly one Gitea branch and PR (the current Scaffolder
+  action is the implementation).
 
 The write action accepts model version, certified runtime profile and bounded
-mock TP/PP/replica/priority inputs. It must reject arbitrary images, node
+TP/PP/replica/priority intent. It must reject arbitrary images, node
 names, host paths, NPU card identifiers, namespaces and free-form Kubernetes
 YAML. It records requested and effective values separately, never merges the
 PR and never calls Kubernetes.
@@ -279,6 +343,12 @@ The first Software Templates are:
 Template 3 stays hidden or disabled until the ModelDeployment XRD is Offered,
 the Composition renders successfully with no real XR, and the target Gitea
 path is watched by the reviewed Argo CD Application.
+
+The repository/project and publish actions are a separate follow-up to the
+already-deployed ModelDeployment template. They must first pass a read-only
+API compatibility check and a dry-run/negative-input test using a disposable
+repository. They do not call Kubernetes and do not change Argo, Crossplane,
+existing model workloads or NPU allocation.
 
 ## CI/CD integration details
 
@@ -335,6 +405,19 @@ remains the release boundary.
 - confirm its ServiceAccount cannot read Secrets or write resources;
 - create only an allow-listed, stopped request branch/PR in Gitea and verify
   that no Kubernetes resource changes before merge/manual Sync.
+
+### Gate 2a — unified repository and publish MVP (planned)
+
+- add the read-only Artifact Keeper repository status API first;
+- validate the installed Artifact Keeper 1.6.0 repository/token API against a
+  disposable repository before adding any write action;
+- add bounded Backstage actions for Artifact Keeper repository creation and
+  Gitea project creation, with separate provisioner credentials;
+- trigger a Tekton chunked-upload PipelineRun instead of uploading large files
+  through the browser or Backstage;
+- verify checksum, retry/idempotency and no Kubernetes/NPU side effects;
+- keep delete, arbitrary permission changes and administrator-token issuance
+  disabled until a separate security review.
 
 ### Gate 3 — stable HTTPS and GitOps ownership
 

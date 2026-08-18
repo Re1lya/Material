@@ -6,7 +6,7 @@ This runbook is partially executed in production. The Backstage portal stage,
 Crossplane safe Composition and production Gitea PR status path have been
 deployed and functionally exercised; manual Argo materialization remains
 gated.
-It also tracks the rolled-out mock scheduling form. It covers four safe
+It also tracks the rolled-out declarative scheduling form. It covers four safe
 control-plane release units:
 
 1. one Crossplane Composition Function plus a ConfigMap-only Composition;
@@ -14,8 +14,9 @@ control-plane release units:
    namespace with a dedicated 20Gi Retain local PV;
 3. one constrained Backstage-to-Gitea PR path, Tekton policy/status path and
    manual Argo CD Application that may create only a stopped ModelDeployment.
-4. one local mock form that records requested TP/PP/replicas/priority while the
-   effective runtime remains fixed and stopped.
+4. one declarative form that records bounded TP/PP/replicas/priority intent and
+   opens a stopped ModelDeployment PR; the runtime is selected by the reviewed
+   RuntimeProfile and remains stopped until Argo approval.
 
 The three user-facing phases map to the release steps as follows:
 
@@ -43,8 +44,8 @@ Backstage evidence returned from `server-00`:
 - Namespace `backstage` exists; Deployment and PostgreSQL StatefulSet are
   `1/1 Ready`, with zero restarts after the K3s restart;
 - `http://110.120.0.3:30070/healthcheck` returns HTTP 200;
-- Backstage v0.2.9 runs the Artifact Keeper AMD64 image at digest
-  `sha256:fee9830d4ba7f99234033bbfde10c1a5e51edda908c734de70f30015ca92a934`;
+- Backstage v0.2.10 runs the Artifact Keeper AMD64 image at digest
+  `sha256:fc73c418d9e95932143e45106e13555b9583be6415bc4c474c0f293c40105c21`;
   the Pod uses repository-scoped read-only Secret
   `artifact-keeper-backstage-pull`;
 - OIDC maps the production Gitea account to `User:default/gitadmin`; the
@@ -78,11 +79,41 @@ Remaining gates:
 - stable HTTPS is still required before treating NodePort 30070 as a durable
   identity boundary.
 
+### Backstage v0.2.11 rollout — 2026-08-18
+
+The KCC pretraining frontend mock panel was built as an AMD64 Backstage image
+and pushed to Artifact Keeper `container-images`:
+
+- image: `110.120.0.3:30670/container-images/model-platform-backstage:v0.2.11`;
+- immutable digest: `sha256:5e779eaceeb6ab81b6a69547b5ad7f2f91fda291dfc09153ce4c7e5a81d3b698`;
+- architecture: `linux/amd64`.
+
+The Kubernetes manifest and component version lock are pinned to this digest.
+Server-side dry-run and object diff showed only the Backstage Deployment image
+change; the ServiceAccount and Service were unchanged. The Backstage
+Deployment rolled out successfully, the new Pod is Ready, the NodePort health
+route returns HTTP 200, and `/kcc-pretraining` returns HTTP 200. The release
+boundary was Backstage Deployment only; the panel's training actions remain
+disabled and cannot create Ray, NPU or model workloads.
+
+### Create-page template chooser fix — released 2026-08-17
+
+On 2026-08-17 the source was updated so the model template explicitly uses the
+`default` catalog namespace, exposes an `Open request form` link, and keeps the
+MVP permission gate disabled. The latter prevents the standard Scaffolder
+card's `Choose` action from disappearing when `/api/permission/authorize`
+rejects a browser request without a usable session credential. The custom
+Gitea action and Kubernetes RBAC remain the enforcement boundaries. The fix was
+built as Backstage `v0.2.10`, pushed to Artifact Keeper `container-images` and
+pinned to the immutable AMD64 digest recorded above. Production rollout
+completed successfully; the NodePort `30070` health check and direct form
+route both return HTTP 200.
+
 ## Resolved gates and remaining blockers
 
 The following original release gates are now closed by the observed production
 acceptance above: Gitea OIDC identity mapping to `User:default/gitadmin`, the
-Backstage session Secret, the v0.2.9 image digest/architecture, namespace/PV
+Backstage session Secret, the v0.2.10 image digest/architecture, namespace/PV
 availability, repository-scoped Backstage and Tekton credentials, Gitea PR
 status writing, and the real Gitea webhook delivery path. Do not recreate or
 rotate those values merely by rerunning the historical commands below.
@@ -91,6 +122,8 @@ The remaining blockers before calling the full platform path complete are:
 
 - stable internal HTTPS and a durable hostname for Backstage, Artifact Keeper,
   Gitea and Argo CD;
+- a small Backstage repository-onboarding and artifact-publish MVP; the
+  current portal still requires manual Artifact Keeper API/token operations;
 - node-by-node validation before moving live Tekton Task images from 8889 to
   Artifact Keeper `30670`, even though the namespace-local pull Secret already
   exists;
@@ -102,6 +135,39 @@ The remaining blockers before calling the full platform path complete are:
 
 Secrets are entered only on `server-00`. They must not be returned to an Agent,
 written into this repository or included in a release bundle.
+
+## Planned Backstage repository and artifact-management MVP
+
+This is a design gate, not a deployed feature. Backstage should become the
+operator-facing entry point for a small set of approved actions:
+
+1. list Artifact Keeper repositories and show format, quota, usage and links;
+2. create a bounded Artifact Keeper repository (`generic`, `huggingface` or
+   `docker`) under the approved platform naming policy;
+3. create a Gitea project repository under the approved owner and record the
+   corresponding Artifact Keeper repository in catalog metadata;
+4. start a Tekton publish PipelineRun for a staged artifact and show its
+   checksum/status in Backstage.
+
+The browser carries only request metadata. Large model files remain in the
+Tekton data path: a Task Pod reads from controlled staging storage, uses a
+namespace-scoped Artifact Keeper publisher Secret, uploads resumable chunks,
+and verifies SHA256. Backstage must not proxy multi-gigabyte files or accept an
+arbitrary SSH path. The current Qwen source on `a3-server-00` therefore needs a
+separate staging/ingestion decision before this action can run.
+
+Use separate planned credentials for Artifact Keeper read/provision, Artifact
+Keeper CI publishing and Gitea project provisioning. Do not reuse the existing
+fixed Gitea deployment-PR token. Do not expose token values in the browser,
+logs, catalog or Git. Token creation/revocation and repository deletion remain
+out of the first MVP; if enabled later, use repository-scoped, expiring tokens
+and validate the installed Artifact Keeper 1.6.0 API before rollout.
+
+Acceptance for this gate is limited to a disposable repository: valid and
+invalid form inputs, API authorization, idempotent retry, quota enforcement,
+Tekton upload/checksum status and proof that no Kubernetes/NPU resource is
+created. Production repositories and credentials are not changed by the
+design work alone.
 
 ## Stage 0 — read-only production baseline
 
@@ -428,14 +494,13 @@ false and zero. There must be no new Deployment, Service, Job, PVC, Ray object
 or NPU request. Do not manually edit the XR to `Running`; the XRD, CI schema and
 Backstage action intentionally reject it in this phase.
 
-## Mock scheduling form release gate
+## Declarative scheduling form release gate
 
 The updated Backstage source adds TP, PP, requested replica count and priority
-fields. It is not production-visible until a new AMD64 image is built,
-published to Artifact Keeper and explicitly rolled out. Before that rollout,
-verify the generated request contains only the approved annotations and keeps
-the effective values fixed to Qwen TP=6, replicas=0 and NPU=0. A form submission
-must create only a Gitea PR; it must not call Kubernetes or start a model Pod.
+intent fields. A form submission must create only a constrained Gitea PR with
+`desiredState: Stopped` and the selected allow-listed RuntimeProfile; it must
+not call Kubernetes or start a model Pod. Tekton validates the PR, and a human
+performs the Argo CD sync.
 
 ## Rollback boundary
 

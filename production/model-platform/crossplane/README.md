@@ -8,6 +8,10 @@ the model platform.
 - Crossplane Core and RBAC Manager run as one replica each on `server-00`.
 - No Provider or Configuration package is installed. Function Patch and
   Transform `v0.8.2` is installed by immutable digest and is Healthy.
+- The control-plane-only foundation (`foundation/kustomization.yaml`) is
+  applied: provider ServiceAccount/namespace Role+RoleBinding,
+  `DeploymentRuntimeConfig`, the ModelDeployment XRD and the reviewed Qwen3.8
+  Composition are registered. It creates no Provider Pod or managed runtime.
 - Package and function caches use bounded, disposable `emptyDir` volumes.
 - No PVC, NPU Pod, RayService or model-cache Job is created in this phase.
   Production contains exactly one stopped `ModelDeployment` proof instance.
@@ -21,6 +25,28 @@ ConfigMap, ClusterIP Service and an exact dormant runtime Deployment. The
 Deployment is continuously reconciled to `replicas: 0`, so it creates no Pod
 and performs no NPU allocation. It also creates no PVC, cache Job, RayCluster
 or RayService. Runtime activation remains a separate NPU-gated phase.
+
+For the focused Qwen3.8-27B rollout, Crossplane is now an explicit runtime
+composition layer. Argo CD remains the CD executor and submits a
+`ModelDeployment` XR; a pinned `provider-kubernetes` plus a namespace-limited
+ProviderConfig/ServiceAccount will create the cache PVC/Job, stopped/Running
+RayService, Service and policies. KubeRay then owns the RayService lifecycle.
+The current runtime-zero Composition is kept as the control-plane baseline; the
+Qwen3.8 Composition is now registered as a separate, reviewed extension but is
+not selected by any XR. See `foundation-deployment-record-20260818.md` and
+`../qwen38-ray-mvp-plan-20260818.md` for the provider, RBAC, cache gate and
+composition sequence.
+
+The reusable first-stage source now lives in
+`provider-kubernetes/` (RuntimeConfig, namespaced ProviderConfig, target Role/
+RoleBinding and a non-applied package example) and
+`composition/modeldeployment-qwen38-ray.yaml`. These files are intentionally
+not included in the existing Argo bootstrap Application. The new
+`foundation/kustomization.yaml` is the control-plane-only release unit for the
+ServiceAccount/Role/RoleBinding, DeploymentRuntimeConfig, XRD and Composition;
+it creates no Provider, ProviderConfig, PVC, cache Job, RayService or Service.
+The provider package digest, Artifact Keeper cache/runtime image digests and
+node-local StorageClass/PV evidence remain separate release gates.
 
 ## Pinned inputs
 
@@ -46,9 +72,44 @@ The released instance and complete evidence are recorded in
 `runtime-zero-deployment-record-20260814.md`.
 
 The aggregate ClusterRoles are necessarily cluster-scoped because Crossplane's
-primary controller role is cluster-scoped. They grant reconciliation of only
-ConfigMaps, Deployments and Services for this Composition. No permissions for
-Job, PVC, Secret, Ray, Volcano or NPU-specific custom resource types are added.
+primary controller role is cluster-scoped. The existing runtime-zero roles grant
+only ConfigMaps, Deployments and Services. The planned Qwen3.8 Provider uses a
+separate ServiceAccount/Role limited to `model-serving`; it will add only the
+namespaced permissions for PVC, Job, Service, policy objects and
+`ray.io/RayService`. It will not manage PV/StorageClass, nodes, Device Plugin,
+other namespaces or existing Ray objects.
+
+## Qwen3.8 Provider and Composition boundary
+
+The foundation source is ready, but the provider package and ProviderConfig are
+still deliberately gated. This section does not authorize model download,
+quantization, cache creation or an NPU window.
+
+```text
+Argo Application
+  -> ModelDeployment XR (model-serving)
+  -> Crossplane Composition
+  -> provider-kubernetes ProviderConfig
+  -> PVC + zero-NPU cache Job + stopped RayService + Service/NetworkPolicy
+  -> cache READY + desiredState=Running
+  -> RayService worker=1
+  -> existing KubeRay v1.6.0
+```
+
+Required release units:
+
+1. Lock the provider-kubernetes package and mirror its controller image to
+   Artifact Keeper; schedule the provider on `server-00` with no NPU request.
+2. Create a ProviderConfig with in-cluster credentials and a dedicated
+   ServiceAccount/Role/RoleBinding scoped to `model-serving`.
+3. Extend the namespaced ModelDeployment XRD with allow-listed Qwen3.8 refs and
+   `Running` while preserving the existing stopped/control-plane behavior.
+4. Add a Composition that renders provider Objects for the cache PVC, cache Job,
+   RayService, Service, NetworkPolicy, Quota and status conditions.
+5. Keep the RayService worker replicas at zero until the cache Job is Complete and
+   `READY` is verified; then change the XR desired state through Git/Argo.
+6. First validate with a stopped XR and harmless namespaced object; only then allow
+   the composition to request the 8 NPU worker.
 
 ## Validation sequence
 

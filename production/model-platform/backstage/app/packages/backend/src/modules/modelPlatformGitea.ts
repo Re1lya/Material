@@ -118,7 +118,7 @@ function createDeploymentRequestAction(config: Config) {
   return createTemplateAction({
     id: 'model-platform:gitea-create-deployment-pr',
     description:
-      'Create a constrained, stopped ModelDeployment request in one fixed Gitea repository and open a PR.',
+      'Create a constrained, stopped GitOps ModelDeployment request in one fixed Gitea repository and open a PR.',
     supportsDryRun: false,
     schema: {
       input: {
@@ -196,7 +196,7 @@ function createDeploymentRequestAction(config: Config) {
               .replace(/[^A-Za-z0-9_.-]/g, '-'),
           },
           annotations: {
-            'platform.example.com/request-mode': 'mock-fixed-runtime',
+            'platform.example.com/request-mode': 'declarative-stopped',
             'platform.example.com/requested-tensor-parallel-size': String(
               input.requestedTensorParallelSize,
             ),
@@ -208,8 +208,8 @@ function createDeploymentRequestAction(config: Config) {
             ),
             'platform.example.com/requested-priority': input.priority,
             'platform.example.com/effective-runtime-profile':
-              'qwen36-w8a8-ascend-a3-v1',
-            'platform.example.com/effective-tensor-parallel-size': '6',
+              input.runtimeProfileRef,
+            'platform.example.com/effective-tensor-parallel-size': '0',
             'platform.example.com/effective-replicas': '0',
             'platform.example.com/effective-npu-per-replica': '0',
           },
@@ -260,10 +260,10 @@ function createDeploymentRequestAction(config: Config) {
                 '',
                 '- Desired state: `Stopped`',
                 '- Accelerator pool: `control-plane-only`',
-                '- Execution mode: `mock-fixed-runtime`',
+                '- Execution mode: `declarative-stopped`',
                 `- Requested TP/PP/replicas: ${input.requestedTensorParallelSize}/${input.requestedPipelineParallelSize}/${input.requestedReplicas}`,
-                '- Effective runtime: fixed Qwen Profile, TP=6, replicas=0',
-                '- Runtime/NPU creation: disabled by the active Crossplane Composition',
+                `- Runtime profile: ${input.runtimeProfileRef}`,
+                '- Runtime/NPU creation: remains stopped until a reviewed Argo CD sync',
                 '',
                 'Merge only after the Tekton validation status succeeds and a human reviews the diff.',
               ].join('\n'),
@@ -317,8 +317,8 @@ function createDeploymentRequestAction(config: Config) {
       ctx.output('pullRequestNumber', pullRequest.number);
       ctx.output('branch', branch);
       ctx.output('manifestPath', manifestPath);
-      ctx.output('executionMode', 'mock-fixed-runtime');
-      ctx.output('effectiveTensorParallelSize', 6);
+      ctx.output('executionMode', 'declarative-stopped');
+      ctx.output('effectiveTensorParallelSize', 0);
       ctx.output('effectiveReplicas', 0);
     },
   });

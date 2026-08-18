@@ -1,0 +1,667 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: modeldeployment-qwen38-ray-v1alpha1
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: deployment-api
+    platform.example.com/stage: qwen38-ray
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: ModelDeployment
+  mode: Pipeline
+  pipeline:
+    - step: render-qwen38-ray-release
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: release-status
+            base:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: qwen38-release-status
+                namespace: model-serving
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: model-deployment-status
+              data:
+                phase: Stopped
+                desiredState: Stopped
+                modelVersionRef: ""
+                runtimeProfileRef: ""
+                manifestDigest: ""
+                cacheReadyFile: /cache/READY
+                npuRequested: "0"
+                message: >-
+                  The Crossplane release unit is reconciled. The cache Job must
+                  complete before the worker replica is changed from zero.
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-status"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.desiredState
+                toFieldPath: data.desiredState
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.modelVersionRef
+                toFieldPath: data.modelVersionRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtimeProfileRef
+                toFieldPath: data.runtimeProfileRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.artifact.manifestDigest
+                toFieldPath: data.manifestDigest
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.workerReplicas
+                toFieldPath: data.npuRequested
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s"
+            readinessChecks:
+              - type: None
+
+          - name: model-cache-pvc
+            base:
+              apiVersion: kubernetes.m.crossplane.io/v1alpha1
+              kind: Object
+              metadata:
+                name: qwen38-cache-pvc
+                namespace: model-serving
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: model-cache
+              spec:
+                providerConfigRef:
+                  name: model-serving
+                  kind: ProviderConfig
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: PersistentVolumeClaim
+                    metadata:
+                      name: qwen38-cache
+                      namespace: model-serving
+                      labels:
+                        app.kubernetes.io/part-of: model-platform
+                        app.kubernetes.io/component: model-cache
+                    spec:
+                      accessModes:
+                        - ReadWriteOnce
+                      volumeMode: Filesystem
+                      storageClassName: model-cache-gpu-local
+                      resources:
+                        requests:
+                          storage: 1Gi
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-cache-pvc"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-cache"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cache.storageClassName
+                toFieldPath: spec.forProvider.manifest.spec.storageClassName
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cache.size
+                toFieldPath: spec.forProvider.manifest.spec.resources.requests.storage
+            readinessChecks:
+              - type: None
+
+          - name: model-cache-job
+            base:
+              apiVersion: kubernetes.m.crossplane.io/v1alpha1
+              kind: Object
+              metadata:
+                name: qwen38-cache-job
+                namespace: model-serving
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: model-cache
+              spec:
+                providerConfigRef:
+                  name: model-serving
+                  kind: ProviderConfig
+                forProvider:
+                  manifest:
+                    apiVersion: batch/v1
+                    kind: Job
+                    metadata:
+                      name: qwen38-cache
+                      namespace: model-serving
+                      labels:
+                        app.kubernetes.io/part-of: model-platform
+                        app.kubernetes.io/component: model-cache
+                    spec:
+                      backoffLimit: 2
+                      activeDeadlineSeconds: 7200
+                      template:
+                        metadata:
+                          labels:
+                            app.kubernetes.io/part-of: model-platform
+                            app.kubernetes.io/component: model-cache
+                        spec:
+                          serviceAccountName: model-cache
+                          automountServiceAccountToken: false
+                          restartPolicy: Never
+                          nodeSelector:
+                            kubernetes.io/arch: arm64
+                            kubernetes.io/hostname: gpu-server-00
+                          containers:
+                            - name: fetch
+                              imagePullPolicy: IfNotPresent
+                              command:
+                                - python3
+                                - /opt/model-cache/model-cache-fetch.py
+                              env:
+                                - name: AK_BASE_URL
+                                  value: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+                                - name: AK_REPOSITORY
+                                  value: model-artifacts
+                                - name: AK_ARTIFACT_PREFIX
+                                  value: ""
+                                - name: MODEL_ID
+                                  value: qwen3.8-27b
+                                - name: MANIFEST_DIGEST
+                                  value: ""
+                                - name: CACHE_ROOT
+                                  value: /cache
+                                - name: TOKEN_FILE
+                                  value: /var/run/secrets/artifact-keeper/token
+                              resources:
+                                requests:
+                                  cpu: "2"
+                                  memory: 2Gi
+                                  ephemeral-storage: 256Mi
+                                limits:
+                                  cpu: "8"
+                                  memory: 8Gi
+                                  ephemeral-storage: 1Gi
+                              securityContext:
+                                allowPrivilegeEscalation: false
+                                capabilities:
+                                  drop:
+                                    - ALL
+                                readOnlyRootFilesystem: true
+                                runAsNonRoot: true
+                                runAsUser: 65532
+                                runAsGroup: 65532
+                              volumeMounts:
+                                - name: cache
+                                  mountPath: /cache
+                                - name: runtime-token
+                                  mountPath: /var/run/secrets/artifact-keeper
+                                  readOnly: true
+                                - name: tmp
+                                  mountPath: /tmp
+                          volumes:
+                            - name: cache
+                              persistentVolumeClaim:
+                                claimName: qwen38-cache
+                            - name: runtime-token
+                              secret:
+                                secretName: artifact-keeper-model-runtime
+                                items:
+                                  - key: token
+                                    path: token
+                            - name: tmp
+                              emptyDir:
+                                sizeLimit: 256Mi
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-cache-job"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-cache"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.placement.nodeSelector
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.nodeSelector
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-cache"
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cache.image
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cache.baseURL
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].value
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.artifact.path
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].value
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.artifact.modelId
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[3].value
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.artifact.manifestDigest
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cache.readerSecret
+                toFieldPath: spec.forProvider.manifest.spec.template.spec.volumes[1].secret.secretName
+            readinessChecks:
+              - type: None
+
+          - name: rayservice
+            base:
+              apiVersion: kubernetes.m.crossplane.io/v1alpha1
+              kind: Object
+              metadata:
+                name: qwen38-rayservice
+                namespace: model-serving
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: rayservice
+              spec:
+                providerConfigRef:
+                  name: model-serving
+                  kind: ProviderConfig
+                forProvider:
+                  manifest:
+                    apiVersion: ray.io/v1
+                    kind: RayService
+                    metadata:
+                      name: qwen38-27b
+                      namespace: model-serving
+                      labels:
+                        app.kubernetes.io/part-of: model-platform
+                        app.kubernetes.io/component: rayservice
+                    spec:
+                      serviceUnhealthySecondThreshold: 900
+                      deploymentUnhealthySecondThreshold: 300
+                      serveConfigV2: |
+                        applications:
+                        - name: default
+                          route_prefix: /
+                          import_path: qwen_serve:app
+                      rayClusterConfig:
+                        rayVersion: "2.43.0"
+                        headGroupSpec:
+                          serviceType: ClusterIP
+                          rayStartParams:
+                            dashboard-host: "0.0.0.0"
+                          template:
+                            metadata:
+                              labels:
+                                app.kubernetes.io/part-of: model-platform
+                                app.kubernetes.io/component: rayservice
+                            spec:
+                              imagePullSecrets:
+                                - name: artifact-keeper-image-pull
+                              containers:
+                                - name: ray-head
+                                  ports:
+                                    - name: gcs
+                                      containerPort: 6379
+                                    - name: dashboard
+                                      containerPort: 8265
+                                  resources:
+                                    requests:
+                                      cpu: "2"
+                                      memory: 8Gi
+                                    limits:
+                                      cpu: "2"
+                                      memory: 8Gi
+                        workerGroupSpecs:
+                          - groupName: worker
+                            replicas: 0
+                            minReplicas: 0
+                            maxReplicas: 1
+                            rayStartParams: {}
+                            template:
+                              metadata:
+                                labels:
+                                  app.kubernetes.io/part-of: model-platform
+                                  app.kubernetes.io/component: rayservice
+                              spec:
+                                imagePullSecrets:
+                                  - name: artifact-keeper-image-pull
+                                nodeSelector:
+                                  kubernetes.io/arch: arm64
+                                  kubernetes.io/hostname: gpu-server-00
+                                containers:
+                                  - name: ray-worker
+                                    env:
+                                      - name: MODEL_PATH
+                                        value: /models/qwen3.8-27b
+                                      - name: MODEL_NAME
+                                        value: qwen3.8-27b
+                                      - name: MODEL_MANIFEST_DIGEST
+                                        value: ""
+                                    resources:
+                                      requests:
+                                        cpu: "64"
+                                        memory: 256Gi
+                                        huawei.com/Ascend910: "0"
+                                      limits:
+                                        cpu: "64"
+                                        memory: 256Gi
+                                        huawei.com/Ascend910: "0"
+                                    volumeMounts:
+                                      - name: model-cache
+                                        mountPath: /models/qwen3.8-27b
+                                        readOnly: true
+                                volumes:
+                                  - name: model-cache
+                                    persistentVolumeClaim:
+                                      claimName: qwen38-cache
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-rayservice"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.rayVersion
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.rayVersion
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.image
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].image
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.image
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].image
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.headCPU
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.requests.cpu
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.headCPU
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.limits.cpu
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.headMemory
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.requests.memory
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.headMemory
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.limits.memory
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.workerCPU
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests.cpu
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.workerCPU
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits.cpu
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.workerMemory
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests.memory
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.workerMemory
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits.memory
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.npuPerWorker
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests["huawei.com/Ascend910"]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.npuPerWorker
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits["huawei.com/Ascend910"]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.workerReplicas
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].replicas
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.workerReplicas
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].minReplicas
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.placement.nodeSelector
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.nodeSelector
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.modelPath
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[0].value
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.modelName
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[1].value
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.artifact.manifestDigest
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[2].value
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.modelPath
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].volumeMounts[0].mountPath
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.volumes[0].persistentVolumeClaim.claimName
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-cache"
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.serveConfigV2
+                toFieldPath: spec.forProvider.manifest.spec.serveConfigV2
+            readinessChecks:
+              - type: None
+
+          - name: stable-service
+            base:
+              apiVersion: kubernetes.m.crossplane.io/v1alpha1
+              kind: Object
+              metadata:
+                name: qwen38-service
+                namespace: model-serving
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: model-service
+              spec:
+                providerConfigRef:
+                  name: model-serving
+                  kind: ProviderConfig
+                forProvider:
+                  manifest:
+                    apiVersion: v1
+                    kind: Service
+                    metadata:
+                      name: qwen38-27b
+                      namespace: model-serving
+                      labels:
+                        app.kubernetes.io/part-of: model-platform
+                        app.kubernetes.io/component: model-service
+                    spec:
+                      type: ExternalName
+                      externalName: qwen38-27b-serve-svc.model-serving.svc.cluster.local
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-service"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.name
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.externalName
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-serve-svc.model-serving.svc.cluster.local"
+            readinessChecks:
+              - type: None
+
+          - name: network-policy
+            base:
+              apiVersion: kubernetes.m.crossplane.io/v1alpha1
+              kind: Object
+              metadata:
+                name: qwen38-network-policy
+                namespace: model-serving
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: model-network-policy
+              spec:
+                providerConfigRef:
+                  name: model-serving
+                  kind: ProviderConfig
+                forProvider:
+                  manifest:
+                    apiVersion: networking.k8s.io/v1
+                    kind: NetworkPolicy
+                    metadata:
+                      name: qwen38-default-deny
+                      namespace: model-serving
+                      labels:
+                        app.kubernetes.io/part-of: model-platform
+                        app.kubernetes.io/component: model-network-policy
+                    spec:
+                      podSelector:
+                        matchLabels:
+                          app.kubernetes.io/part-of: model-platform
+                          platform.example.com/deployment: qwen38-27b
+                      policyTypes:
+                        - Ingress
+                        - Egress
+                      ingress:
+                        - from:
+                            - namespaceSelector:
+                                matchLabels:
+                                  kubernetes.io/metadata.name: model-serving
+                          ports:
+                            - protocol: TCP
+                              port: 8000
+                      egress:
+                        - to:
+                            - namespaceSelector:
+                                matchLabels:
+                                  kubernetes.io/metadata.name: artifact-keeper
+                              podSelector:
+                                matchLabels:
+                                  app.kubernetes.io/component: backend
+                          ports:
+                            - protocol: TCP
+                              port: 8080
+                        - to:
+                            - namespaceSelector:
+                                matchLabels:
+                                  kubernetes.io/metadata.name: kube-system
+                          ports:
+                            - protocol: UDP
+                              port: 53
+                            - protocol: TCP
+                              port: 53
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-network-policy"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.spec.podSelector.matchLabels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: spec.forProvider.manifest.metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-default-deny"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: spec.forProvider.manifest.metadata.namespace
+            readinessChecks:
+              - type: None

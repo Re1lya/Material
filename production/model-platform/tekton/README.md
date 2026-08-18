@@ -6,6 +6,16 @@ models, write Git content, or ask Argo CD to synchronize. Its first job is
 narrower: receive a trusted Gitea or GitHub event, clone that exact commit, and
 run the repository's bootstrap/catalog/ModelDeployment policy validation.
 
+The ModelDeployment validator now has a bounded Qwen3.8 BF16-to-W8A8 branch:
+when the allow-listed ModelScope model reference appears, it requires the
+Composition, `gpu-server-00`/910B3 placement, Artifact Keeper digest-pinned
+runtime/cache images, 8-device worker contract, immutable manifest/path match
+with the catalog, ModelSlim provenance (`sourcePrecision=bf16`, `target=w8a8`),
+and the `Stopped=0` / `Running=1` worker gate. It never downloads model bytes,
+reads Artifact Keeper tokens, creates Kubernetes objects, or schedules an NPU
+Pod. The actual ModelSlim quantization is an isolated artifact-build step
+before the catalog PR, not a Tekton validation step.
+
 ## What "single replica" means
 
 This does not create another Kubernetes cluster. Tekton is installed into the
