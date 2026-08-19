@@ -98,6 +98,43 @@ The separately approved provider release was applied after the foundation:
 The provider release did not create a ModelDeployment XR and did not touch model
 files, `gpu-server-00`, NPU allocation or existing application workloads.
 
+## Follow-up: Qwen3.8 stopped control-plane release 2026-08-19
+
+The XRD schema was corrected before the first Argo sync. Crossplane v2 requires
+an explicit scalar `type` alongside `const`/`enum`, and rejects nested
+`additionalProperties: false` when the generated structural schema contains
+declared properties. The allow-list therefore keeps the top-level structural
+contract and adds explicit scalar types for the constrained fields. After
+re-applying the XRD and restarting only the Crossplane controller, the generated
+CRD was accepted and exposes the Qwen3.8 and control-plane composition values.
+
+The stopped ModelDeployment request was published to Gitea `main` at commit
+`45460d9748e116e0b8c8633c64aa1459e9d8d2d0`. Argo Application
+`model-platform-deployment-requests` is manual-sync, namespace-scoped and
+reported `Synced/Healthy/Succeeded` at follow-up commit
+`6fdb3022b791d56cc1cba3a14fce0aca64eec7cf` (the release objects remain
+unchanged). Tekton catalog and ModelDeployment validation for that commit
+completed `Succeeded` and wrote the Gitea policy status `success`. The XR's internal
+Crossplane selector is `modeldeployment-control-plane-v1alpha1`; this explicit
+selector is required because the XRD default remains the runtime-zero baseline.
+The control-plane Composition reconciles one status ConfigMap with
+`phase=AwaitingApproval`, `runtimeEnabled=false`, `cacheEnabled=false` and
+`npuRequested=0`.
+
+During the selector transition Crossplane briefly reconciled the old
+runtime-zero Deployment/Service and removed them when the control-plane
+Composition became active. Final verification found only
+`model-serving/qwen38-27b-status`: no Qwen3.8 PVC, Job, RayService, Service,
+Deployment, Pod, cache bytes or NPU request. The transient watch-circuit status
+was observed after the composition switch; `Synced=True` and `Ready=True`
+remained true and no runtime resource was left behind.
+
+The A3 source and Artifact Keeper copy are recorded in
+`qwen38-artifact-transfer-record-20260819.md`. The existing Docker/vLLM
+processes on `a3-server-00` were inspected read-only; no container, process,
+NPU chip, source file or running application was stopped, restarted or
+modified.
+
 ## Next gated step
 
 Create the first GitOps `ModelDeployment` XR only after the model artifact,

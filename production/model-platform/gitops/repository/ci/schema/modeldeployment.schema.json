@@ -142,6 +142,7 @@
           "properties": {
             "name": {
               "enum": [
+                "modeldeployment-control-plane-v1alpha1",
                 "modeldeployment-runtime-zero-v1alpha1",
                 "modeldeployment-qwen38-ray-v1alpha1"
               ]

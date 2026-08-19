@@ -40,7 +40,7 @@
           "additionalProperties": false,
           "required": ["type", "modelId", "revision"],
           "properties": {
-            "type": { "const": "modelscope" },
+            "type": { "enum": ["modelscope", "a3-preloaded"] },
             "modelId": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
             "revision": {
               "type": "string",
@@ -63,7 +63,7 @@
         "quantization": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["tool", "version", "sourcePrecision", "target", "configDigest", "calibrationDatasetDigest", "inputArtifact"],
+          "required": ["tool", "version", "sourcePrecision", "target", "configDigest"],
           "properties": {
             "tool": { "const": "msmodelslim" },
             "version": { "type": "string", "minLength": 1 },

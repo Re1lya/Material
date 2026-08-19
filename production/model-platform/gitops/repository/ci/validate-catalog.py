@@ -89,8 +89,11 @@ def main() -> int:
         if name == "qwen3.8-27b-w8a8":
             source = document.get("spec", {}).get("source", {})
             model_spec = document.get("spec", {})
-            if source.get("type") != "modelscope":
-                errors.append(f"{path}: Qwen3.8 ModelVersion source.type must be modelscope")
+            source_type = source.get("type")
+            if source_type not in {"modelscope", "a3-preloaded"}:
+                errors.append(
+                    f"{path}: Qwen3.8 ModelVersion source.type must be modelscope or a3-preloaded"
+                )
             if source.get("modelId") != model_spec.get("modelId"):
                 errors.append(f"{path}: ModelScope modelId must match spec.modelId")
             if source.get("revision") != model_spec.get("revision"):
@@ -106,9 +109,16 @@ def main() -> int:
                 errors.append(f"{path}: Qwen3.8 quantization.target must be w8a8")
             if not str(model_spec.get("artifact", {}).get("path", "")).startswith("qwen3.8-27b/w8a8/"):
                 errors.append(f"{path}: Qwen3.8 artifact.path must be under qwen3.8-27b/w8a8/")
-            input_artifact = quantization.get("inputArtifact", {})
-            if not str(input_artifact.get("path", "")).startswith("qwen3.8-27b/bf16/"):
-                errors.append(f"{path}: Qwen3.8 inputArtifact.path must be under qwen3.8-27b/bf16/")
+            if source_type == "modelscope":
+                if not quantization.get("calibrationDatasetDigest"):
+                    errors.append(
+                        f"{path}: ModelScope quantization requires calibrationDatasetDigest"
+                    )
+                input_artifact = quantization.get("inputArtifact", {})
+                if not str(input_artifact.get("path", "")).startswith("qwen3.8-27b/bf16/"):
+                    errors.append(
+                        f"{path}: ModelScope inputArtifact.path must be under qwen3.8-27b/bf16/"
+                    )
         artifact = document.get("spec", {}).get("artifact", {})
         manifest_path = catalog_dir / f"{name}.manifest.json"
         if not manifest_path.exists():

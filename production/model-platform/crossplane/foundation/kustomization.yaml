@@ -8,4 +8,5 @@ resources:
   - ../provider-kubernetes/provider-rbac.yaml
   - ../provider-kubernetes/runtime-config.yaml
   - ../xrd/modeldeployment-xrd.yaml
+  - ../composition/modeldeployment-control-plane.yaml
   - ../composition/modeldeployment-qwen38-ray.yaml

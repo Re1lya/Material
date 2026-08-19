@@ -27,7 +27,6 @@ spec:
           properties:
             spec:
               type: object
-              additionalProperties: false
               required:
                 - projectRef
                 - modelVersionRef
@@ -57,7 +56,6 @@ spec:
                     - Running
                 placement:
                   type: object
-                  additionalProperties: false
                   required:
                     - acceleratorPool
                   properties:
@@ -69,25 +67,26 @@ spec:
                         - ascend-910b3
                     nodeSelector:
                       type: object
-                      additionalProperties: false
                       required:
                         - kubernetes.io/arch
                         - kubernetes.io/hostname
                         - node.kubernetes.io/npu.chip.name
                       properties:
                         kubernetes.io/arch:
+                          type: string
                           const: arm64
                         kubernetes.io/hostname:
+                          type: string
                           enum:
                             - gpu-server-00
                             - a3-server-00
                         node.kubernetes.io/npu.chip.name:
+                          type: string
                           enum:
                             - 910B3
                             - Ascend910
                 access:
                   type: object
-                  additionalProperties: false
                   required:
                     - visibility
                   properties:
@@ -98,7 +97,6 @@ spec:
                         - private
                 artifact:
                   type: object
-                  additionalProperties: false
                   required:
                     - modelId
                     - revision
@@ -113,6 +111,7 @@ spec:
                       type: string
                       pattern: "^[0-9a-f]{8,64}$"
                     repository:
+                      type: string
                       const: model-artifacts
                     path:
                       type: string
@@ -122,7 +121,6 @@ spec:
                       pattern: "^sha256:[0-9a-f]{64}$"
                 runtime:
                   type: object
-                  additionalProperties: false
                   required:
                     - image
                     - rayVersion
@@ -165,6 +163,7 @@ spec:
                       type: string
                       pattern: "^[0-9]+(Mi|Gi)$"
                     npuPerWorker:
+                      type: integer
                       const: 8
                     workerReplicas:
                       type: integer
@@ -173,7 +172,6 @@ spec:
                         - 1
                 cache:
                   type: object
-                  additionalProperties: false
                   required:
                     - image
                     - baseURL
@@ -188,6 +186,7 @@ spec:
                       type: string
                       pattern: "^https?://[A-Za-z0-9.-]+(:[0-9]+)?$"
                     readerSecret:
+                      type: string
                       const: artifact-keeper-model-runtime
                     storageClassName:
                       type: string
@@ -197,13 +196,13 @@ spec:
                       pattern: "^[1-9][0-9]*(Gi|Ti)$"
                 compositionRef:
                   type: object
-                  additionalProperties: false
                   required:
                     - name
                   properties:
                     name:
                       type: string
                       enum:
+                        - modeldeployment-control-plane-v1alpha1
                         - modeldeployment-runtime-zero-v1alpha1
                         - modeldeployment-qwen38-ray-v1alpha1
             status:

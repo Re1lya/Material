@@ -389,9 +389,9 @@ spec:
                                   - name: ray-worker
                                     env:
                                       - name: MODEL_PATH
-                                        value: /models/qwen3.8-27b
+                                        value: /models/Qwen3.8-27B-w8a8
                                       - name: MODEL_NAME
-                                        value: qwen3.8-27b
+                                        value: qwen3.8-27b-w8a8
                                       - name: MODEL_MANIFEST_DIGEST
                                         value: ""
                                     resources:
@@ -405,7 +405,7 @@ spec:
                                         huawei.com/Ascend910: "0"
                                     volumeMounts:
                                       - name: model-cache
-                                        mountPath: /models/qwen3.8-27b
+                                        mountPath: /models/Qwen3.8-27B-w8a8
                                         readOnly: true
                                 volumes:
                                   - name: model-cache

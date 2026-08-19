@@ -120,17 +120,35 @@ def validate_qwen38_release(
     spec = deployment.get("spec", {})
     if spec.get("runtimeProfileRef") != "qwen38-w8a8-ray-ascend-910b3-v1":
         errors.append(f"{prefix}: runtimeProfileRef must be qwen38-w8a8-ray-ascend-910b3-v1")
-    if spec.get("compositionRef", {}).get("name") != "modeldeployment-qwen38-ray-v1alpha1":
-        errors.append(f"{prefix}: compositionRef must select the qwen38 Ray Composition")
-    if spec.get("placement", {}).get("acceleratorPool") != "ascend-910b3":
-        errors.append(f"{prefix}: placement.acceleratorPool must be ascend-910b3")
-    selector = spec.get("placement", {}).get("nodeSelector", {})
-    if selector != {
-        "kubernetes.io/arch": "arm64",
-        "kubernetes.io/hostname": "gpu-server-00",
-        "node.kubernetes.io/npu.chip.name": "910B3",
+    composition = spec.get("compositionRef", {}).get("name")
+    control_plane_only = composition == "modeldeployment-control-plane-v1alpha1"
+    if composition not in {
+        "modeldeployment-control-plane-v1alpha1",
+        "modeldeployment-qwen38-ray-v1alpha1",
     }:
-        errors.append(f"{prefix}: nodeSelector must pin gpu-server-00/arm64/910B3")
+        errors.append(
+            f"{prefix}: compositionRef must select control-plane or qwen38 Ray Composition"
+        )
+    placement = spec.get("placement", {})
+    if control_plane_only:
+        if spec.get("desiredState") != "Stopped":
+            errors.append(f"{prefix}: control-plane composition requires desiredState=Stopped")
+        if placement.get("acceleratorPool") != "control-plane-only":
+            errors.append(
+                f"{prefix}: control-plane composition requires placement.acceleratorPool=control-plane-only"
+            )
+        if placement.get("nodeSelector"):
+            errors.append(f"{prefix}: control-plane composition must not select a physical node")
+    else:
+        if placement.get("acceleratorPool") != "ascend-910b3":
+            errors.append(f"{prefix}: placement.acceleratorPool must be ascend-910b3")
+        selector = placement.get("nodeSelector", {})
+        if selector != {
+            "kubernetes.io/arch": "arm64",
+            "kubernetes.io/hostname": "gpu-server-00",
+            "node.kubernetes.io/npu.chip.name": "910B3",
+        }:
+            errors.append(f"{prefix}: nodeSelector must pin gpu-server-00/arm64/910B3")
 
     artifact = spec.get("artifact", {})
     runtime = spec.get("runtime", {})
@@ -151,8 +169,11 @@ def validate_qwen38_release(
     else:
         model_spec = model_version.get("spec", {})
         source = model_spec.get("source", {})
-        if source.get("type") != "modelscope":
-            errors.append(f"{prefix}: ModelVersion source.type must be modelscope")
+        source_type = source.get("type")
+        if source_type not in {"modelscope", "a3-preloaded"}:
+            errors.append(
+                f"{prefix}: ModelVersion source.type must be modelscope or a3-preloaded"
+            )
         if source.get("modelId") != model_spec.get("modelId"):
             errors.append(f"{prefix}: ModelScope modelId must match ModelVersion modelId")
         if source.get("revision") != model_spec.get("revision"):
@@ -170,8 +191,13 @@ def validate_qwen38_release(
             errors.append(f"{prefix}: ModelVersion quantization.sourcePrecision must be bf16")
         if quantization.get("target") != "w8a8":
             errors.append(f"{prefix}: ModelVersion quantization.target must be w8a8")
-        if not str(quantization.get("inputArtifact", {}).get("path", "")).startswith("qwen3.8-27b/bf16/"):
-            errors.append(f"{prefix}: quantization.inputArtifact.path must be under qwen3.8-27b/bf16/")
+        if source_type == "modelscope":
+            if not quantization.get("calibrationDatasetDigest"):
+                errors.append(f"{prefix}: ModelScope quantization requires calibrationDatasetDigest")
+            if not str(quantization.get("inputArtifact", {}).get("path", "")).startswith("qwen3.8-27b/bf16/"):
+                errors.append(
+                    f"{prefix}: ModelScope quantization.inputArtifact.path must be under qwen3.8-27b/bf16/"
+                )
 
     if runtime.get("npuPerWorker") != 8:
         errors.append(f"{prefix}: runtime.npuPerWorker must be 8")

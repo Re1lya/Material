@@ -15,7 +15,7 @@ spec:
     strategy: Recreate
     replicas: 1
   runtime:
-    image: 110.120.0.3:30670/container-images/<runtime-image>@sha256:<runtime-image-digest>
+    image: 110.120.0.3:30670/container-images/vllm-ascend@sha256:a27a79c2021cdda071eb207c169a5dd44537d22df11ccd7b62b52de117ceac14
     modelPath: /models/Qwen3.8-27B-w8a8
     modelName: qwen3.8-27b-w8a8
     rayVersion: "2.43.0"
@@ -27,9 +27,9 @@ spec:
     npuPerWorker: 8
     workerReplicas: 0
     cache:
-      image: 110.120.0.3:30670/container-images/model-cache@sha256:<cache-image-digest>
+      image: 110.120.0.3:30670/container-images/model-cache@sha256:2c38a8bb8be05414a5afebdd88fde3c2032098d0d1edb3f3e005f0adb6d78e13
       storageClassName: model-cache-gpu-local
-      size: <artifact-size-plus-staging-headroom>
+      size: 40Gi
       readerSecret: artifact-keeper-model-runtime
   resources:
     requests:

@@ -1,0 +1,34 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelVersion
+metadata:
+  name: qwen3.8-27b-w8a8
+  labels:
+    owner: platform-team
+    project: model-serving
+spec:
+  modelId: Qwen/Qwen3.8-27B
+  revision: e823e888ae179eb3be02c1a48899c4f828371376
+  source:
+    type: a3-preloaded
+    modelId: Qwen/Qwen3.8-27B
+    revision: e823e888ae179eb3be02c1a48899c4f828371376
+  artifact:
+    repository: model-artifacts
+    path: qwen3.8-27b/w8a8/e823e888ae179eb3be02c1a48899c4f828371376/msmodelslim-w8a8-a3-f2afa9e2
+    fileCount: 26
+    sizeBytes: 32152070926
+    manifestDigest: sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f
+  quantization:
+    tool: msmodelslim
+    version: 173fc3787b496d4ef2e1e995bbf17c19f65a2083
+    sourcePrecision: bf16
+    target: w8a8
+    configDigest: sha256:7053cd08546b8a00158e49ec890742259dd72f7915e1b278c408d055eb1dc2b5
+  format:
+    family: huggingface
+    weights: safetensors
+    architecture: qwen
+    quantization: w8a8
+  compatibility:
+    runtimeProfiles:
+      - qwen38-w8a8-ray-ascend-910b3-v1

@@ -31,8 +31,8 @@ spec:
   runtime:
     image: 110.120.0.3:30670/container-images/<runtime-image>@sha256:<runtime-image-digest>
     rayVersion: "2.43.0"
-    modelPath: /models/qwen3.8-27b
-    modelName: qwen3.8-27b
+    modelPath: /models/Qwen3.8-27B-w8a8
+    modelName: qwen3.8-27b-w8a8
     serveConfigV2: |
       applications:
       - name: default

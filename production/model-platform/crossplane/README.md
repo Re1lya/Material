@@ -36,9 +36,10 @@ composition layer. Argo CD remains the CD executor and submits a
 namespaced ProviderConfig/ServiceAccount will create the cache PVC/Job,
 stopped/Running RayService, Service and policies only after that XR is
 approved. KubeRay then owns the RayService lifecycle.
-The current runtime-zero Composition is kept as the control-plane baseline; the
-Qwen3.8 Composition is now registered as a separate, reviewed extension but is
-not selected by any XR. See `foundation-deployment-record-20260818.md` and
+The current control-plane Composition is selected by the stopped Qwen3.8 XR
+and creates only its status ConfigMap. The Qwen3.8 runtime Composition remains
+registered as a separately reviewed extension and is not selected while the XR
+is stopped. See `foundation-deployment-record-20260818.md` and
 `../qwen38-ray-mvp-plan-20260818.md` for the provider, RBAC, cache gate and
 composition sequence.
 
@@ -91,9 +92,10 @@ other namespaces or existing Ray objects.
 
 ## Qwen3.8 Provider and Composition boundary
 
-The provider package and namespaced ProviderConfig are installed and audited,
-but no ModelDeployment XR has been submitted. This section does not authorize
-model download, quantization, cache creation or an NPU window.
+The provider package and namespaced ProviderConfig are installed and audited.
+The first Qwen3.8 ModelDeployment XR is stopped and control-plane-only; this
+section does not authorize model download, quantization, cache creation or an
+NPU window.
 
 ```text
 Argo Application
@@ -116,8 +118,10 @@ Required release units:
    **Completed 2026-08-19.**
 3. Extend the namespaced ModelDeployment XRD with allow-listed Qwen3.8 refs and
    `Running` while preserving the existing stopped/control-plane behavior.
+   **Completed 2026-08-19; the structural schema was re-applied and verified.**
 4. Add a Composition that renders provider Objects for the cache PVC, cache Job,
    RayService, Service, NetworkPolicy, Quota and status conditions.
+   **Runtime Composition registered; not selected by the stopped XR.**
 5. Keep the RayService worker replicas at zero until the cache Job is Complete and
    `READY` is verified; then change the XR desired state through Git/Argo.
 6. First validate with a stopped XR and harmless namespaced object; only then allow
