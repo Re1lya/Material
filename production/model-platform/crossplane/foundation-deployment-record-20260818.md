@@ -84,10 +84,12 @@ The separately approved provider release was applied after the foundation:
   the explicit runtime image override in `provider-kubernetes/runtime-config.yaml`
   corrected this without changing node configuration.
 - Generated RBAC was audited. The provider API/controller role is cluster-scoped
-  for Crossplane internals; the target workload permissions come from the
-  `model-serving-provider-kubernetes` Role (ConfigMap, PVC, Job, Service,
-  NetworkPolicy and `ray.io/RayService`). It cannot create RayCluster, PV,
-  StorageClass, Node resources or PVCs in another namespace.
+  for Crossplane internals and retains the upstream controller's cluster-scoped
+  Secret/ConfigMap/Event/Lease permissions; the target workload permissions
+  come from the `model-serving-provider-kubernetes` Role (ConfigMap, PVC, Job,
+  Service, NetworkPolicy and `ray.io/RayService`). It cannot create RayCluster,
+  PV, StorageClass, Node resources or PVCs in another namespace. Strict
+  cluster-wide Secret isolation remains a follow-up hardening decision.
 - A temporary namespaced `Object` created and reconciled one ConfigMap with
   `Synced=True/Ready=True`; the Object and ConfigMap were then deleted. This
   verifies ProviderConfig → provider controller → target Role without creating

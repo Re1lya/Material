@@ -68,10 +68,13 @@ manage the objects emitted by the Qwen3.8 Composition:
 
 The target Role does not grant access to Secrets, PV/StorageClass, Nodes,
 device plugins, other namespaces or `rayclusters`. The package's generated
-controller role is separate and retains only the provider API plus its
-control-plane Secret/ConfigMap/Event/Lease permissions; it adds no target
-PVC/Job/RayCluster or node binding. `ProviderConfig` uses `InjectedIdentity`,
-so no kubeconfig or token is stored in Git.
+controller role is separate and retains the provider API plus the upstream
+cluster-scoped Secret/ConfigMap/Event/Lease permissions required by the
+package controller; it adds no target PVC/Job/RayCluster or node binding.
+`ProviderConfig` uses `InjectedIdentity`, so no kubeconfig or token is stored
+in Git. If strict cluster-wide Secret isolation is required later, use a
+custom provider package or a separately scoped target-cluster credential as a
+follow-up hardening step.
 
 The DeploymentRuntimeConfig pins the provider controller to the AMD64
 `server-00` control-plane node and has no accelerator request. Crossplane
