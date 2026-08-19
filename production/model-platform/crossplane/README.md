@@ -6,12 +6,16 @@ the model platform.
 ## Current production boundary
 
 - Crossplane Core and RBAC Manager run as one replica each on `server-00`.
-- No Provider or Configuration package is installed. Function Patch and
-  Transform `v0.8.2` is installed by immutable digest and is Healthy.
+- Function Patch and Transform `v0.8.2` and the pinned
+  `provider-kubernetes:v1.0.0` package are installed by immutable digest and
+  are Healthy. The provider runtime is pinned to `server-00` and requests no
+  accelerator.
 - The control-plane-only foundation (`foundation/kustomization.yaml`) is
   applied: provider ServiceAccount/namespace Role+RoleBinding,
   `DeploymentRuntimeConfig`, the ModelDeployment XRD and the reviewed Qwen3.8
-  Composition are registered. It creates no Provider Pod or managed runtime.
+  Composition are registered. The foundation itself creates no managed
+  runtime; the separate provider release creates only the control-plane
+  provider Pod.
 - Package and function caches use bounded, disposable `emptyDir` volumes.
 - No PVC, NPU Pod, RayService or model-cache Job is created in this phase.
   Production contains exactly one stopped `ModelDeployment` proof instance.
@@ -28,9 +32,10 @@ or RayService. Runtime activation remains a separate NPU-gated phase.
 
 For the focused Qwen3.8-27B rollout, Crossplane is now an explicit runtime
 composition layer. Argo CD remains the CD executor and submits a
-`ModelDeployment` XR; a pinned `provider-kubernetes` plus a namespace-limited
-ProviderConfig/ServiceAccount will create the cache PVC/Job, stopped/Running
-RayService, Service and policies. KubeRay then owns the RayService lifecycle.
+`ModelDeployment` XR; the installed pinned `provider-kubernetes` plus its
+namespaced ProviderConfig/ServiceAccount will create the cache PVC/Job,
+stopped/Running RayService, Service and policies only after that XR is
+approved. KubeRay then owns the RayService lifecycle.
 The current runtime-zero Composition is kept as the control-plane baseline; the
 Qwen3.8 Composition is now registered as a separate, reviewed extension but is
 not selected by any XR. See `foundation-deployment-record-20260818.md` and
@@ -44,7 +49,9 @@ RoleBinding and a non-applied package example) and
 not included in the existing Argo bootstrap Application. The new
 `foundation/kustomization.yaml` is the control-plane-only release unit for the
 ServiceAccount/Role/RoleBinding, DeploymentRuntimeConfig, XRD and Composition;
-it creates no Provider, ProviderConfig, PVC, cache Job, RayService or Service.
+it deliberately creates no Provider, ProviderConfig, PVC, cache Job, RayService
+or Service; Provider and ProviderConfig are applied as a separately audited
+release unit.
 The provider package digest, Artifact Keeper cache/runtime image digests and
 node-local StorageClass/PV evidence remain separate release gates.
 
@@ -67,23 +74,26 @@ from `artifact-keeper-registry-ca`. The Function runtime itself is pulled by
 K3s containerd from `110.120.0.3:30670/container-images` with a namespace-local
 read-only pull Secret. This split is intentional: Crossplane Core does not use
 the node containerd insecure-registry configuration when resolving packages.
+The provider runtime follows the same split: its xpkg is resolved over the
+internal route, while its controller image is explicitly pinned to the
+`110.120.0.3:30670` node endpoint in `provider-kubernetes/runtime-config.yaml`.
 
 The released instance and complete evidence are recorded in
 `runtime-zero-deployment-record-20260814.md`.
 
 The aggregate ClusterRoles are necessarily cluster-scoped because Crossplane's
 primary controller role is cluster-scoped. The existing runtime-zero roles grant
-only ConfigMaps, Deployments and Services. The planned Qwen3.8 Provider uses a
-separate ServiceAccount/Role limited to `model-serving`; it will add only the
+only ConfigMaps, Deployments and Services. The installed Qwen3.8 Provider uses a
+separate ServiceAccount/Role limited to `model-serving`; it adds only the
 namespaced permissions for PVC, Job, Service, policy objects and
 `ray.io/RayService`. It will not manage PV/StorageClass, nodes, Device Plugin,
 other namespaces or existing Ray objects.
 
 ## Qwen3.8 Provider and Composition boundary
 
-The foundation source is ready, but the provider package and ProviderConfig are
-still deliberately gated. This section does not authorize model download,
-quantization, cache creation or an NPU window.
+The provider package and namespaced ProviderConfig are installed and audited,
+but no ModelDeployment XR has been submitted. This section does not authorize
+model download, quantization, cache creation or an NPU window.
 
 ```text
 Argo Application
@@ -100,8 +110,10 @@ Required release units:
 
 1. Lock the provider-kubernetes package and mirror its controller image to
    Artifact Keeper; schedule the provider on `server-00` with no NPU request.
+   **Completed 2026-08-19.**
 2. Create a ProviderConfig with in-cluster credentials and a dedicated
    ServiceAccount/Role/RoleBinding scoped to `model-serving`.
+   **Completed 2026-08-19.**
 3. Extend the namespaced ModelDeployment XRD with allow-listed Qwen3.8 refs and
    `Running` while preserving the existing stopped/control-plane behavior.
 4. Add a Composition that renders provider Objects for the cache PVC, cache Job,

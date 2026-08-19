@@ -2,7 +2,9 @@
 
 This directory is the control-plane part of the Qwen3.8 first-stage release.
 It is intentionally not included in the current Crossplane bootstrap
-Kustomization and has not been applied to production.
+Kustomization. The separately audited Provider and namespaced ProviderConfig
+release was applied to production on 2026-08-19; the package example remains a
+review template rather than the live source of truth.
 
 The upstream provider exposes a namespaced `ProviderConfig`/`Object` API in
 the `kubernetes.m.crossplane.io/v1alpha1` group. The source lock records the
@@ -64,26 +66,34 @@ manage the objects emitted by the Qwen3.8 Composition:
 - `ray.io/RayService` (the KubeRay operator, not this provider, owns the
   generated RayCluster and Pods).
 
-It does not grant access to Secrets, PV/StorageClass, Nodes, device plugins,
-other namespaces or `rayclusters`.  The package's generated controller RBAC
-must be audited after installation; the release is rejected if the provider
-package adds a broader target-cluster binding.  `ProviderConfig` uses
-`InjectedIdentity`, so no kubeconfig or token is stored in Git.
+The target Role does not grant access to Secrets, PV/StorageClass, Nodes,
+device plugins, other namespaces or `rayclusters`. The package's generated
+controller role is separate and retains only the provider API plus its
+control-plane Secret/ConfigMap/Event/Lease permissions; it adds no target
+PVC/Job/RayCluster or node binding. `ProviderConfig` uses `InjectedIdentity`,
+so no kubeconfig or token is stored in Git.
 
 The DeploymentRuntimeConfig pins the provider controller to the AMD64
-`server-00` control-plane node and has no accelerator request.  It does not
-schedule anything on `gpu-server-00`.
+`server-00` control-plane node and has no accelerator request. Crossplane
+resolves the package through the internal HTTPS registry route, while the
+runtime image is explicitly pinned to the node-registered
+`110.120.0.3:30670` endpoint because K3s containerd pulls images from the node
+and cannot resolve `*.svc.cluster.local`. It does not schedule anything on
+`gpu-server-00`.
 
-## Apply order (after separate approval)
+## Apply order and current state
 
 1. Apply `../foundation/kustomization.yaml`. This is control-plane-only and
    does not install the provider or create an XR.
 2. The provider package is already mirrored and digest-verified; review the
    generated provider RBAC, then apply the Provider and confirm
    `Installed=True` and `Healthy=True` without any Pending Pod or NPU request.
+   **Completed 2026-08-19.**
 3. Apply the namespaced ProviderConfig and verify `SelfSubjectRulesReview`
-   for the provider identity.  The test must allow only `model-serving` namespaced
-   resources.
+   for the provider identity. The target workload API test must allow only the
+   `model-serving` namespaced resources; the generated control-plane role is
+   audited separately.
+   **Completed 2026-08-19.**
 4. Install the Composition and render a stopped XR. At this point the
    expected objects are only the cache PVC, zero-NPU cache Job, stopped
    RayService and stable Service/NetworkPolicy; do not create the PVC or Job

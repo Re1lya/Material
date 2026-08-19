@@ -26,15 +26,16 @@ XR, PVC, Job, RayService or Service was created.
 - XRD: `Established=True` (`WatchingCompositeResource`).
 - Qwen3.8 Composition: registered successfully.
 - `model-serving`: no PVC, Job, RayService or Service from this release unit.
-- Provider package and namespaced ProviderConfig CRDs: not installed yet; the
-  package remains gated on an Artifact Keeper mirror and generated-RBAC audit.
+- Provider package and namespaced ProviderConfig CRDs were not installed at the
+  time of this foundation record; they were gated on an Artifact Keeper mirror
+  and generated-RBAC audit.
 - Provider ServiceAccount checks: target `model-serving` ConfigMap/PVC/Job
   access is allowed; another namespace PVC creation, node access, Secret access
   and `rayclusters` creation are denied.
 - No provider Pod was present and `gpu-server-00` retained its existing
   allocatable NPU count; no NPU request was created.
 
-## Resume read-only check
+## Resume read-only check at the foundation boundary
 
 After the repository changes were resumed, a read-only check against the
 production kubeconfig confirmed the same boundary: `providerconfigs.kubernetes`
@@ -65,10 +66,39 @@ Kubernetes or this record.
 
 The internal digest lock and reviewed package template now point at the
 immutable Linux/AMD64 child digest. The Provider package, ProviderConfig and
-any provider Pod were not installed.
+any provider Pod were not installed at the time of this dated foundation
+record.
+
+## Follow-up: provider release completed 2026-08-19
+
+The separately approved provider release was applied after the foundation:
+
+- `Provider/provider-kubernetes` uses the immutable Artifact Keeper package
+  digest `sha256:e0198c31a99eedcfc061c008da56fbffff967f54b211475cd19185408ed2e61d`.
+- `ProviderConfig/model-serving` uses `InjectedIdentity` and is namespaced to
+  `model-serving`; no kubeconfig or token was written to Git.
+- The provider revision reports `Installed=True` and `Healthy=True`. Its one
+  Pod runs on `server-00` with CPU/memory requests only and the same immutable
+  digest through the registered `110.120.0.3:30670` node endpoint. The initial
+  runtime pull failed because containerd cannot resolve `*.svc.cluster.local`;
+  the explicit runtime image override in `provider-kubernetes/runtime-config.yaml`
+  corrected this without changing node configuration.
+- Generated RBAC was audited. The provider API/controller role is cluster-scoped
+  for Crossplane internals; the target workload permissions come from the
+  `model-serving-provider-kubernetes` Role (ConfigMap, PVC, Job, Service,
+  NetworkPolicy and `ray.io/RayService`). It cannot create RayCluster, PV,
+  StorageClass, Node resources or PVCs in another namespace.
+- A temporary namespaced `Object` created and reconciled one ConfigMap with
+  `Synced=True/Ready=True`; the Object and ConfigMap were then deleted. This
+  verifies ProviderConfig → provider controller → target Role without creating
+  a model, PVC, Job, RayService, Service or NPU Pod.
+
+The provider release did not create a ModelDeployment XR and did not touch model
+files, `gpu-server-00`, NPU allocation or existing application workloads.
 
 ## Next gated step
 
-Audit the generated provider RBAC, then separately approve and apply the
-Provider and namespaced ProviderConfig. That step is separate from this
-foundation and must not create a ModelDeployment XR or touch model files.
+Create the first GitOps `ModelDeployment` XR only after the model artifact,
+runtime profile, cache storage and Argo CD manual-sync review are approved. Keep
+the first XR stopped and control-plane-only; do not start a cache Job or request
+an NPU in this phase.

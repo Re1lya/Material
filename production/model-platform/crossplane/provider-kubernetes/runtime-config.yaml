@@ -30,6 +30,11 @@ spec:
               type: RuntimeDefault
           containers:
             - name: package-runtime
+              # Crossplane resolves the package through the internal HTTPS
+              # route. K3s containerd pulls the runtime image through the
+              # node-registered Artifact Keeper NodePort because the node
+              # resolver cannot resolve *.svc.cluster.local.
+              image: 110.120.0.3:30670/container-images/provider-kubernetes@sha256:e0198c31a99eedcfc061c008da56fbffff967f54b211475cd19185408ed2e61d
               resources:
                 requests:
                   cpu: 100m
