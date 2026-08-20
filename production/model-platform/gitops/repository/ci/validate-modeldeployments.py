@@ -167,6 +167,18 @@ def validate_qwen38_release(
         }:
             errors.append(f"{prefix}: nodeSelector must pin a3-server-00/arm64/Ascend910")
 
+        allocation = placement.get("staticDeviceAllocation", "")
+        devices = allocation.split(",") if allocation else []
+        if len(devices) != len(set(devices)):
+            errors.append(f"{prefix}: staticDeviceAllocation must not contain duplicate devices")
+        if runtime_ref == "qwen38-w8a8-ray-ascend-910b3-tp2-v1" and devices != [
+            "Ascend910-8",
+            "Ascend910-9",
+        ]:
+            errors.append(
+                f"{prefix}: A3 TP2 release must be isolated to Ascend910-8,Ascend910-9"
+            )
+
     artifact = spec.get("artifact", {})
     runtime = spec.get("runtime", {})
     cache = spec.get("cache", {})
@@ -223,6 +235,8 @@ def validate_qwen38_release(
         )
     if runtime.get("workerReplicas") not in {0, 1}:
         errors.append(f"{prefix}: runtime.workerReplicas must be 0 or 1")
+    if runtime_ref == "qwen38-w8a8-ray-ascend-910b3-tp2-v1" and runtime.get("workerCPU") != "48":
+        errors.append(f"{prefix}: A3 TP2 runtime.workerCPU must be 48 to preserve node headroom")
     if spec.get("desiredState") == "Stopped" and runtime.get("workerReplicas") != 0:
         errors.append(f"{prefix}: Stopped releases must have workerReplicas=0")
     if spec.get("desiredState") == "Running" and runtime.get("workerReplicas") != 1:
@@ -283,6 +297,12 @@ def validate_qwen38_release(
                         f"{prefix}: RuntimeProfile resources.{resource_type}."
                         f"huawei.com/Ascend910 must be {expected_npu}"
                     )
+            if runtime_ref == "qwen38-w8a8-ray-ascend-910b3-tp2-v1":
+                for resource_type in ("requests", "limits"):
+                    if profile_resources.get(resource_type, {}).get("cpu") != "48":
+                        errors.append(
+                            f"{prefix}: RuntimeProfile resources.{resource_type}.cpu must be 48"
+                        )
         if runtime_ref == "qwen38-w8a8-ray-ascend-910b3-tp2-v1":
             validate_qwen38_tp2_serve_config(
                 prefix,

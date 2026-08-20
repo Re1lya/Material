@@ -8,15 +8,15 @@ metadata:
     app.kubernetes.io/managed-by: argocd
     platform.example.com/requested-by: platform-team
   annotations:
-    platform.example.com/request-mode: declarative-running
+    platform.example.com/request-mode: declarative-stopped
     platform.example.com/requested-tensor-parallel-size: "2"
     platform.example.com/requested-pipeline-parallel-size: "1"
     platform.example.com/requested-replicas: "1"
     platform.example.com/requested-priority: normal
     platform.example.com/effective-runtime-profile: qwen38-w8a8-ray-ascend-910b3-tp2-v1
-    platform.example.com/effective-tensor-parallel-size: "2"
-    platform.example.com/effective-replicas: "1"
-    platform.example.com/effective-npu-per-replica: "2"
+    platform.example.com/effective-tensor-parallel-size: "0"
+    platform.example.com/effective-replicas: "0"
+    platform.example.com/effective-npu-per-replica: "0"
 spec:
   crossplane:
     compositionRef:
@@ -27,9 +27,10 @@ spec:
   runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-tp2-v1
   compositionRef:
     name: modeldeployment-qwen38-ray-v1alpha1
-  desiredState: Running
+  desiredState: Stopped
   placement:
     acceleratorPool: ascend-a3
+    staticDeviceAllocation: Ascend910-8,Ascend910-9
     nodeSelector:
       kubernetes.io/arch: arm64
       kubernetes.io/hostname: a3-server-00
@@ -83,10 +84,10 @@ spec:
                 cudagraph_mode: FULL_DECODE_ONLY
     headCPU: "2"
     headMemory: 16Gi
-    workerCPU: "64"
+    workerCPU: "48"
     workerMemory: 256Gi
     npuPerWorker: 2
-    workerReplicas: 1
+    workerReplicas: 0
   cache:
     image: 110.120.0.3:30670/container-images/model-cache@sha256:3c2ee21efa53da44ec816fe2581ca35088caba91b3648db64949a2aea428db37
     baseURL: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080

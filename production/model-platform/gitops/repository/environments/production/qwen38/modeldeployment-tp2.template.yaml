@@ -75,7 +75,7 @@ spec:
                 cudagraph_mode: FULL_DECODE_ONLY
     headCPU: "2"
     headMemory: 16Gi
-    workerCPU: "64"
+    workerCPU: "48"
     workerMemory: 256Gi
     npuPerWorker: 2
     workerReplicas: 0

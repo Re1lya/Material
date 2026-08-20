@@ -359,6 +359,7 @@ spec:
                                 app.kubernetes.io/part-of: model-platform
                                 app.kubernetes.io/component: rayservice
                             spec:
+                              schedulerName: default-scheduler
                               imagePullSecrets:
                                 - name: artifact-keeper-image-pull
                               nodeSelector:
@@ -430,10 +431,12 @@ spec:
                               num-gpus: "8"
                             template:
                               metadata:
+                                annotations: {}
                                 labels:
                                   app.kubernetes.io/part-of: model-platform
                                   app.kubernetes.io/component: rayservice
                               spec:
+                                schedulerName: default-scheduler
                                 runtimeClassName: ascend
                                 imagePullSecrets:
                                   - name: artifact-keeper-image-pull
@@ -591,6 +594,9 @@ spec:
                 fromFieldPath: spec.runtime.npuPerWorker
                 toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].rayStartParams.resources
                 transforms:
+                  - type: convert
+                    convert:
+                      toType: string
                   - type: string
                     string:
                       type: Format
@@ -599,10 +605,9 @@ spec:
                 fromFieldPath: spec.runtime.npuPerWorker
                 toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].rayStartParams.num-gpus
                 transforms:
-                  - type: string
-                    string:
-                      type: Format
-                      fmt: "%s"
+                  - type: convert
+                    convert:
+                      toType: string
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.runtime.workerReplicas
                 toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].replicas
@@ -612,6 +617,9 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.placement.nodeSelector
                 toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.nodeSelector
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.placement.staticDeviceAllocation
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.metadata.annotations[huawei.com/Ascend910]
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.runtime.modelPath
                 toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[0].value

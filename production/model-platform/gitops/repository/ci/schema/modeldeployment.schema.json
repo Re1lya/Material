@@ -151,6 +151,10 @@
                   "enum": ["910B3", "Ascend910"]
                 }
               }
+            },
+            "staticDeviceAllocation": {
+              "type": "string",
+              "pattern": "^Ascend910-([0-9]|1[0-5])(,Ascend910-([0-9]|1[0-5]))*$"
             }
           }
         },

@@ -62,11 +62,11 @@ spec:
       readerSecret: artifact-keeper-model-runtime
   resources:
     requests:
-      cpu: "64"
+      cpu: "48"
       memory: 256Gi
       huawei.com/Ascend910: "2"
     limits:
-      cpu: "64"
+      cpu: "48"
       memory: 256Gi
       huawei.com/Ascend910: "2"
     sharedMemory: 64Gi

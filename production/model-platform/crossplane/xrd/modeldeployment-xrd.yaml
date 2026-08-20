@@ -86,6 +86,13 @@ spec:
                           enum:
                             - 910B3
                             - Ascend910
+                    staticDeviceAllocation:
+                      type: string
+                      description: >-
+                        Optional Ascend device-plugin allocation list, for example
+                        Ascend910-8,Ascend910-9. Use only when physical workloads
+                        outside Kubernetes make automatic allocation unsafe.
+                      pattern: "^Ascend910-([0-9]|1[0-5])(,Ascend910-([0-9]|1[0-5]))*$"
                 access:
                   type: object
                   required:
