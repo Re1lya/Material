@@ -39,7 +39,7 @@ spec:
         route_prefix: /
         import_path: qwen_serve:app
     headCPU: "2"
-    headMemory: 8Gi
+    headMemory: 16Gi
     workerCPU: "64"
     workerMemory: 256Gi
     npuPerWorker: 8

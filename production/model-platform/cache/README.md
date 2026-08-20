@@ -11,3 +11,11 @@ Build and mirror the image to
 contract image with the immutable digest. Until that gate passes, the
 Composition is not installed. Do not point it at `ora-desktop-cache-local` or
 at an existing hostPath.
+
+`a3-local-pv.yaml` is the cluster-admin-owned cache substrate for the first
+Qwen3.8 release. It creates one `Retain` local PV pinned to `a3-server-00` and
+the reusable `model-cache-gpu-local` no-provisioner StorageClass. Crossplane
+creates only the namespaced PVC; it does not receive PV, StorageClass or Node
+permissions. The host directory must be created explicitly with UID/GID 65532
+before applying the manifest. Deleting the XR or PVC therefore cannot delete
+the downloaded model files.

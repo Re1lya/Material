@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qwen38-ray-runtime-smoke
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: runtime-smoke
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  imagePullSecrets:
+    - name: artifact-keeper-image-pull
+  nodeSelector:
+    kubernetes.io/arch: arm64
+    kubernetes.io/hostname: a3-server-00
+  containers:
+    - name: validate
+      image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:16995677e10be892e92d164c7a6c8902f37ccb9c2c2d0d79180664006b55d0fb
+      imagePullPolicy: IfNotPresent
+      env:
+        - name: VLLM_PLUGINS
+          value: ""
+      command:
+        - /bin/bash
+        - -lc
+        - >-
+          source /usr/local/Ascend/ascend-toolkit/set_env.sh &&
+          source /usr/local/Ascend/cann-9.1.0/share/info/ascendnpu-ir/bin/set_env.sh &&
+          source /usr/local/Ascend/nnal/atb/set_env.sh --cxx_abi=${ATB_CXX_ABI:-1} &&
+          python /opt/qwen38-ray/validate_runtime.py --mode runtime
+      resources:
+        requests:
+          cpu: "1"
+          memory: 2Gi
+        limits:
+          cpu: "2"
+          memory: 4Gi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL

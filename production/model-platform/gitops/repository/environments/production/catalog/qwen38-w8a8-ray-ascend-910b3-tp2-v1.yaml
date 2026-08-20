@@ -15,10 +15,10 @@ spec:
     strategy: Recreate
     replicas: 1
   runtime:
-    image: 110.120.0.3:30670/container-images/vllm-ascend@sha256:a27a79c2021cdda071eb207c169a5dd44537d22df11ccd7b62b52de117ceac14
+    image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:16995677e10be892e92d164c7a6c8902f37ccb9c2c2d0d79180664006b55d0fb
     modelPath: /models/Qwen3.8-27B-w8a8
     modelName: qwen3.8-27b-w8a8
-    rayVersion: "2.43.0"
+    rayVersion: "2.48.0"
     serveConfigV2: |
       applications:
       - name: default
@@ -32,11 +32,9 @@ spec:
             deployment_config:
               num_replicas: 1
               max_ongoing_requests: 64
-            placement_group_config:
-              bundles:
-              - huawei.com/Ascend910: 1
-              - huawei.com/Ascend910: 1
-              strategy: STRICT_PACK
+            resources_per_bundle:
+              NPU: 1
+              GPU: 1
             engine_kwargs:
               tensor_parallel_size: 2
               data_parallel_size: 1
@@ -58,7 +56,7 @@ spec:
     npuPerWorker: 2
     workerReplicas: 0
     cache:
-      image: 110.120.0.3:30670/container-images/model-cache@sha256:2c38a8bb8be05414a5afebdd88fde3c2032098d0d1edb3f3e005f0adb6d78e13
+      image: 110.120.0.3:30670/container-images/model-cache@sha256:3c2ee21efa53da44ec816fe2581ca35088caba91b3648db64949a2aea428db37
       storageClassName: model-cache-gpu-local
       size: 40Gi
       readerSecret: artifact-keeper-model-runtime
@@ -75,8 +73,8 @@ spec:
   placement:
     nodeSelector:
       kubernetes.io/arch: arm64
-      kubernetes.io/hostname: gpu-server-00
-      node.kubernetes.io/npu.chip.name: 910B3
+      kubernetes.io/hostname: a3-server-00
+      node.kubernetes.io/npu.chip.name: Ascend910
   probes:
     healthPath: /health
     inferencePath: /v1/chat/completions

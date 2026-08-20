@@ -43,7 +43,7 @@
           "additionalProperties": false,
           "properties": {
             "platform.example.com/request-mode": {
-              "const": "declarative-stopped"
+              "enum": ["declarative-stopped", "declarative-running"]
             },
             "platform.example.com/requested-tensor-parallel-size": {
               "type": "string",
@@ -68,13 +68,13 @@
               ]
             },
             "platform.example.com/effective-tensor-parallel-size": {
-              "const": "0"
+              "enum": ["0", "2", "8"]
             },
             "platform.example.com/effective-replicas": {
-              "const": "0"
+              "enum": ["0", "1"]
             },
             "platform.example.com/effective-npu-per-replica": {
-              "const": "0"
+              "enum": ["0", "2", "8"]
             }
           }
         }
@@ -92,6 +92,28 @@
         "access"
       ],
       "properties": {
+        "crossplane": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["compositionRef", "compositionUpdatePolicy"],
+          "properties": {
+            "compositionRef": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name"],
+              "properties": {
+                "name": {
+                  "enum": [
+                    "modeldeployment-control-plane-v1alpha1",
+                    "modeldeployment-runtime-zero-v1alpha1",
+                    "modeldeployment-qwen38-ray-v1alpha1"
+                  ]
+                }
+              }
+            },
+            "compositionUpdatePolicy": { "const": "Automatic" }
+          }
+        },
         "projectRef": { "const": "model-serving" },
         "modelVersionRef": {
           "enum": ["qwen3.6-27b-w8a8-20260806", "qwen3.8-27b-w8a8"]

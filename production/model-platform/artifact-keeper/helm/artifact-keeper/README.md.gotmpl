@@ -1,0 +1,317 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.badgesSection" . }}
+
+## TL;DR
+
+Install from a cloned checkout:
+
+```bash
+git clone https://github.com/artifact-keeper/artifact-keeper-iac.git
+cd artifact-keeper-iac
+helm install ak charts/artifact-keeper/ \
+  --namespace artifact-keeper \
+  --create-namespace
+```
+
+A published Helm repository at `https://artifact-keeper.github.io/artifact-keeper-iac/` is planned but not yet live. See [issue #51](https://github.com/artifact-keeper/artifact-keeper-iac/issues/51) for tracking.
+
+## Introduction
+
+This chart deploys [Artifact Keeper](https://github.com/artifact-keeper/artifact-keeper), an enterprise artifact registry supporting 45+ package formats (Maven, npm, PyPI, Docker/OCI, Cargo, NuGet, and many more). The chart packages the backend API, web frontend, and all supporting services into a single Helm release with per-component toggles.
+
+All files in this chart are provided as example configurations. Review and modify them to match your specific infrastructure requirements, security policies, and operational needs before use in production.
+
+## Compatibility Matrix
+
+The chart and backend versions must match. The current chart on `main` deploys OpenSearch (replacing Meilisearch from v1.1.x), so it requires backend v1.2.0 or later.
+
+| Chart version | Backend image | Search backend |
+|---|---|---|
+| `main` (unreleased v1.2.x) | v1.2.0+ (`:dev`, `:1.2-dev`, or `:1.2.0`+) | OpenSearch |
+| tag `chart-1.1.x` (planned) | v1.1.x line | Meilisearch |
+
+For deployments running backend v1.1.x, pin the chart to a tag matching that line. Mixing chart `main` with backend `:1.1-dev` will fail at startup because the backend will not find an OpenSearch endpoint.
+
+Tracking issues: chart release tags are coordinated in [#74](https://github.com/artifact-keeper/artifact-keeper-iac/issues/74), and a published Helm repository is tracked in [#51](https://github.com/artifact-keeper/artifact-keeper-iac/issues/51).
+
+## Prerequisites
+
+- Kubernetes 1.26+
+- Helm 3.12+
+- PV provisioner support in the underlying infrastructure
+- `vm.max_map_count >= 262144` on nodes running OpenSearch (recommended by Lucene)
+
+To set `vm.max_map_count` on your nodes:
+
+```bash
+sysctl -w vm.max_map_count=262144
+echo "vm.max_map_count = 262144" >> /etc/sysctl.d/99-opensearch.conf
+```
+
+## Installing the Chart
+
+Install the chart from a local clone with the release name `ak`:
+
+```bash
+git clone https://github.com/artifact-keeper/artifact-keeper-iac.git
+cd artifact-keeper-iac
+helm install ak charts/artifact-keeper/ \
+  --namespace artifact-keeper \
+  --create-namespace
+```
+
+A published Helm repository at `https://artifact-keeper.github.io/artifact-keeper-iac/` is planned but not yet live (see [issue #51](https://github.com/artifact-keeper/artifact-keeper-iac/issues/51)). Once published, the equivalent install command will be `helm install ak artifact-keeper/artifact-keeper`.
+
+If you are running backend v1.1.x, do not install from `main`. See the [Compatibility Matrix](#compatibility-matrix) above for chart/backend version pairing.
+
+These commands deploy Artifact Keeper with the default development configuration. See the [Values](#values) section for the full list of configurable parameters.
+
+## Uninstalling the Chart
+
+```bash
+helm uninstall ak --namespace artifact-keeper
+```
+
+This removes all Kubernetes resources associated with the release. PersistentVolumeClaims are not deleted automatically. To remove them:
+
+```bash
+kubectl delete pvc -l app.kubernetes.io/instance=ak -n artifact-keeper
+```
+
+{{ template "chart.valuesSection" . }}
+
+## Deployment Profiles
+
+The chart ships with several values overlay files for common deployment scenarios.
+
+### Development (default)
+
+The base `values.yaml` targets a single-node dev cluster. All services run in-cluster, autoscaling and network policies are disabled, and resource requests are kept small.
+
+```bash
+helm install ak charts/artifact-keeper/ \
+  --namespace artifact-keeper \
+  --create-namespace
+```
+
+### Staging
+
+Enables autoscaling, PodDisruptionBudgets, network policies, and ServiceMonitor. PostgreSQL remains in-cluster. TLS is enabled.
+
+```bash
+helm install ak charts/artifact-keeper/ \
+  -f charts/artifact-keeper/values-staging.yaml \
+  --namespace artifact-keeper \
+  --create-namespace
+```
+
+### Production
+
+Designed for multi-node clusters with external RDS. Enables HPA (up to 20 replicas), PDBs, network policies, TLS via cert-manager, External Secrets Operator integration, and 15-second monitoring scrape intervals. In-cluster PostgreSQL is disabled in favor of a managed database.
+
+```bash
+helm install ak charts/artifact-keeper/ \
+  -f charts/artifact-keeper/values-production.yaml \
+  --namespace artifact-keeper \
+  --create-namespace \
+  --set ingress.host=registry.example.com \
+  --set externalDatabase.host=your-rds-endpoint.amazonaws.com \
+  --set secrets.jwtSecret=$(openssl rand 64 | openssl base64 -A)
+```
+
+### Smoke / Release-Gate Testing
+
+`values-smoke.yaml` is the canonical overlay for smoke installs and the release-gate test suites in [artifact-keeper-test](https://github.com/artifact-keeper/artifact-keeper-test). It pins resource requests to fit a 4 CPU / 8 Gi namespace, sets a non-default admin password, exempts the `admin` user from rate limiting, and disables every external dependency the smoke can't satisfy (Trivy, DependencyTrack, ingress, ServiceMonitor, NetworkPolicy, External Secrets, edge replication, cosign verification).
+
+```bash
+helm install ak charts/artifact-keeper/ \
+  -f charts/artifact-keeper/values-smoke.yaml \
+  --set backend.image.tag=dev \
+  --set web.image.tag=dev \
+  --namespace artifact-keeper-smoke \
+  --create-namespace
+```
+
+This file is the single source of truth for smoke overrides. When the chart adds a new default-on subsystem, update `values-smoke.yaml` rather than encoding overrides as inline `--set` flags in test scripts.
+
+### Mesh (Multi-Instance Replication)
+
+Two overlay files support multi-instance mesh testing via ArgoCD:
+
+- `values-mesh-main.yaml` configures the primary instance with peer identity and public endpoint.
+- `values-mesh-peer.yaml` configures peer instances with reduced resource footprints.
+
+Both use `fullnameOverride` for stable service names and disable non-essential components (Trivy, DependencyTrack, ingress).
+
+## Architecture
+
+The chart deploys the following components:
+
+| Component | Description | Default |
+|-----------|-------------|---------|
+| **Backend** | Rust (Axum) API server handling all format-specific wire protocols | Enabled |
+| **Web** | Next.js 15 frontend | Enabled |
+| **Edge** | Edge replication service for distributed deployments | Disabled |
+| **PostgreSQL** | In-cluster database (disable for external/managed DB) | Enabled |
+| **OpenSearch** | Full-text search engine for artifact discovery | Enabled |
+| **Trivy** | Vulnerability scanner for container images and SBOMs (fs/incus path via `TRIVY_URL`) | Enabled |
+| **Scanner-adapter** | In-house Harbor scanner-adapter for container-image Trivy scans (`TRIVY_ADAPTER_URL`); stateless, multi-arch, no PVC | Enabled |
+| **DependencyTrack** | SBOM analysis platform for license and vulnerability correlation | Enabled |
+
+### Component Diagram
+
+```
+Ingress
+  |
+  +-- /api/* --> Backend (port 8080, gRPC 9090)
+  +-- /*     --> Web (port 3000)
+
+Backend --> PostgreSQL (port 5432)
+Backend --> OpenSearch (port 9200)
+Backend --> Trivy (port 8090)
+Backend --> Scanner-adapter (port 8090)
+Scanner-adapter --> Backend registry (pull target images)
+Backend --> DependencyTrack (port 8080)
+```
+
+## Storage
+
+Services that use PersistentVolumeClaims run with the Recreate deployment strategy (or a StatefulSet with per-pod PVCs, in the case of multi-node OpenSearch). This prevents two pods from competing for the same volume lock during rolling updates.
+
+The backend uses two PVCs: one for artifact storage and one for scan workspace (temp files during security scans). Both can be sized independently.
+
+| Component | Default Size | Purpose |
+|-----------|-------------|---------|
+| Backend storage | 10Gi | Artifact file storage |
+| Backend scan workspace | 2Gi | Temporary scan files |
+| PostgreSQL | 20Gi | Database files |
+| OpenSearch | 5Gi | Search index (Lucene) |
+| Trivy | 5Gi | Vulnerability database cache |
+| DependencyTrack | 5Gi | Internal vulnerability database |
+
+## Ingress
+
+The chart creates a single Ingress resource that routes traffic to the backend and web frontend. By default it uses the `nginx` IngressClass with a 1024m proxy body size limit (for large artifact uploads) and 300-second timeouts.
+
+To enable TLS with cert-manager:
+
+```yaml
+ingress:
+  host: registry.example.com
+  tls:
+    enabled: true
+    secretName: artifact-keeper-tls
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+```
+
+## Security
+
+### Cosign Image Verification
+
+When `cosign.enabled` is set to `true`, an init container verifies the backend image signature before the pod starts. This uses sigstore keyless verification with GitHub OIDC, confirming the image was built by the Artifact Keeper CI pipeline.
+
+### Network Policies
+
+When `networkPolicy.enabled` is set to `true`, the chart creates NetworkPolicy resources that restrict traffic between components. Only the required communication paths are allowed (for example, backend to PostgreSQL, backend to OpenSearch on port 9200, and OpenSearch-to-OpenSearch transport on port 9300).
+
+### Secrets Management
+
+For development, secrets are stored directly in the chart's Secret template. For production, two options exist:
+
+1. **External overrides**: Pass secrets via `--set` flags or external values files that are not committed to version control.
+2. **External Secrets Operator**: Set `externalSecrets.enabled: true` to pull secrets from AWS Secrets Manager (or another provider) using ExternalSecret CRDs.
+
+### Security Contexts
+
+All deployments include restrictive security contexts: non-root users, read-only root filesystems where possible, and dropped capabilities.
+
+## Monitoring
+
+Set `serviceMonitor.enabled: true` to create a Prometheus ServiceMonitor that scrapes the backend's `/metrics` endpoint. The scrape interval defaults to 30 seconds and can be adjusted via `serviceMonitor.interval`.
+
+The [monitoring/](../../monitoring/) directory contains a pre-built Grafana dashboard (12 panels across 4 rows) and 7 PrometheusRule alert definitions covering error rates, latency, pod health, storage usage, and database connectivity.
+
+## High Availability
+
+For production deployments:
+
+- Set `backend.replicaCount: 3` (or higher) and enable `backend.autoscaling` to scale based on CPU and memory utilization.
+- Enable `backend.podDisruptionBudget` to ensure at least N replicas remain available during voluntary disruptions.
+- Use `backend.affinity` with pod anti-affinity to spread replicas across nodes.
+- Disable in-cluster PostgreSQL (`postgres.enabled: false`) and point `externalDatabase` at a managed, multi-AZ database like Amazon RDS.
+- Set `opensearch.replicaCount: 3` to switch OpenSearch from single-node Deployment mode to a StatefulSet with cluster bootstrapping. The chart sets `cluster.initial_cluster_manager_nodes` automatically.
+- DependencyTrack runs as a single replica due to PVC lock constraints. Plan maintenance windows for upgrades.
+
+## Upgrading
+
+### Image Tags
+
+The default `dev` tag is a floating tag that always points to the latest build from main. When using ArgoCD, the Image Updater pins these to specific digests so rollouts are deterministic. For manual deployments, consider using a specific version tag (e.g. `1.1.0`).
+
+Docker tags use semver without a `v` prefix: git tag `v1.1.0` produces Docker tag `1.1.0`.
+
+### Container Registry
+
+Images are published to `ghcr.io/artifact-keeper/artifact-keeper-{backend,web}` by default. Docker Hub mirrors are available at `docker.io/artifactkeeper/{backend,web}`. Change the registry via `global.imageRegistry` or per-component `image.repository` values.
+
+## Troubleshooting
+
+### OpenSearch OOMKill
+
+OpenSearch JVM heap is set via `opensearch.javaOpts` (`-Xms`/`-Xmx`). The container memory limit must be roughly 2x the heap size to leave room for off-heap, Lucene page cache, and native threads. If the pod is OOMKilled, raise both values together.
+
+### OpenSearch "max_map_count" warning
+
+OpenSearch recommends `vm.max_map_count >= 262144`. This is a host-level sysctl and cannot be set from inside the pod. Apply it on every node:
+
+```bash
+sysctl -w vm.max_map_count=262144
+echo "vm.max_map_count = 262144" >> /etc/sysctl.d/99-opensearch.conf
+```
+
+### OpenSearch cluster will not form (multi-node)
+
+When `replicaCount >= 2`, the chart renders a StatefulSet with `cluster.initial_cluster_manager_nodes` set to the pod names (`ak-opensearch-0`, `ak-opensearch-1`, ...). If pods cannot reach each other, check that the headless service `<release>-opensearch-headless` exists and the NetworkPolicy (if enabled) allows traffic between OpenSearch pods on port 9300.
+
+### DependencyTrack Slow Startup
+
+DependencyTrack loads its vulnerability database on first boot, which requires 4Gi+ of memory and can take several minutes. The readiness probe is configured with a generous initial delay. If the pod is killed before initialization completes, increase `dependencyTrack.resources.limits.memory`.
+
+### Backend PVC Permissions
+
+If the backend fails to write artifacts, verify that the PVC is writable by the container user. The init container in the backend deployment sets ownership to the correct UID.
+
+## Development
+
+### Generating Documentation
+
+This README is generated by [helm-docs](https://github.com/norwoodj/helm-docs). After modifying `values.yaml`, regenerate it:
+
+```bash
+cd charts/artifact-keeper
+helm-docs
+```
+
+The CI pipeline verifies that the README is up to date on every pull request. If it detects a drift, the build will fail with instructions to run helm-docs locally.
+
+### Linting
+
+```bash
+helm lint charts/artifact-keeper/
+helm template ak charts/artifact-keeper/ > /dev/null
+helm template ak charts/artifact-keeper/ -f charts/artifact-keeper/values-production.yaml > /dev/null
+helm template ak charts/artifact-keeper/ -f charts/artifact-keeper/values-smoke.yaml \
+  --set backend.image.tag=dev --set web.image.tag=dev > /dev/null
+```
+
+## Contributing
+
+1. Fork the repository and create a feature branch.
+2. Make your changes to `values.yaml`, templates, or overlay files.
+3. Run `helm-docs` in the `charts/artifact-keeper/` directory to regenerate the README.
+4. Run `helm lint` and `helm template` to validate the chart.
+5. Open a pull request against the `main` branch.
+
+{{ template "helm-docs.versionFooter" . }}

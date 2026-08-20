@@ -58,7 +58,8 @@ the device plugin owns that mapping and a preflight must confirm the pair is val
 The successful A3 Docker record remains the hardware/engine reference. Its
 `vllm serve` flags are represented as `engine_kwargs` in the TP2 profile, while
 `deployment_config.max_ongoing_requests` represents the Ray Serve admission limit
-and `placement_group_config` represents the two-chip gang reservation. This is a
+and `resources_per_bundle` represents one physical NPU plus the Ray GPU scheduling
+alias per tensor-parallel rank. Ray derives two STRICT_PACK bundles from TP=2. This is a
 RayService/KubeRay workload, not an `apps/v1 Deployment`: Argo submits the XR,
 Crossplane composes the RayService, KubeRay creates the RayCluster, and Ray schedules
 the vLLM engine actors. No TP2 worker is created while this document is being prepared.

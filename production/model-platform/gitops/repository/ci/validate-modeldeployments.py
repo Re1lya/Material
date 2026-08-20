@@ -131,6 +131,13 @@ def validate_qwen38_release(
             f"{', '.join(sorted(QWEN38_RUNTIME_PROFILES))}"
         )
     composition = spec.get("compositionRef", {}).get("name")
+    crossplane_composition = (
+        spec.get("crossplane", {}).get("compositionRef", {}).get("name")
+    )
+    if crossplane_composition != composition:
+        errors.append(
+            f"{prefix}: crossplane.compositionRef.name must match compositionRef.name"
+        )
     control_plane_only = composition == "modeldeployment-control-plane-v1alpha1"
     if composition not in {
         "modeldeployment-control-plane-v1alpha1",
@@ -150,15 +157,15 @@ def validate_qwen38_release(
         if placement.get("nodeSelector"):
             errors.append(f"{prefix}: control-plane composition must not select a physical node")
     else:
-        if placement.get("acceleratorPool") != "ascend-910b3":
-            errors.append(f"{prefix}: placement.acceleratorPool must be ascend-910b3")
+        if placement.get("acceleratorPool") != "ascend-a3":
+            errors.append(f"{prefix}: placement.acceleratorPool must be ascend-a3")
         selector = placement.get("nodeSelector", {})
         if selector != {
             "kubernetes.io/arch": "arm64",
-            "kubernetes.io/hostname": "gpu-server-00",
-            "node.kubernetes.io/npu.chip.name": "910B3",
+            "kubernetes.io/hostname": "a3-server-00",
+            "node.kubernetes.io/npu.chip.name": "Ascend910",
         }:
-            errors.append(f"{prefix}: nodeSelector must pin gpu-server-00/arm64/910B3")
+            errors.append(f"{prefix}: nodeSelector must pin a3-server-00/arm64/Ascend910")
 
     artifact = spec.get("artifact", {})
     runtime = spec.get("runtime", {})
@@ -220,6 +227,26 @@ def validate_qwen38_release(
         errors.append(f"{prefix}: Stopped releases must have workerReplicas=0")
     if spec.get("desiredState") == "Running" and runtime.get("workerReplicas") != 1:
         errors.append(f"{prefix}: Running releases must have workerReplicas=1")
+    annotations = deployment.get("metadata", {}).get("annotations", {})
+    if spec.get("desiredState") == "Stopped":
+        expected_effective = ("declarative-stopped", "0", "0", "0")
+    else:
+        expected_effective = (
+            "declarative-running",
+            str(expected_npu),
+            "1",
+            str(expected_npu),
+        )
+    actual_effective = (
+        annotations.get("platform.example.com/request-mode"),
+        annotations.get("platform.example.com/effective-tensor-parallel-size"),
+        annotations.get("platform.example.com/effective-replicas"),
+        annotations.get("platform.example.com/effective-npu-per-replica"),
+    )
+    if actual_effective != expected_effective:
+        errors.append(
+            f"{prefix}: effective annotations must match desiredState/runtime resources"
+        )
     if not str(runtime.get("image", "")).startswith("110.120.0.3:30670/"):
         errors.append(f"{prefix}: runtime.image must come from Artifact Keeper")
     if not str(cache.get("image", "")).startswith("110.120.0.3:30670/"):
@@ -298,12 +325,10 @@ def validate_qwen38_tp2_serve_config(
     if deployment.get("num_replicas") != 1 or deployment.get("max_ongoing_requests") != 64:
         errors.append(f"{prefix}: TP2 Ray Serve deployment must be 1 replica with 64 max ongoing requests")
 
-    placement = llm_config.get("placement_group_config", {})
-    if placement.get("strategy") != "STRICT_PACK" or placement.get("bundles") != [
-        {"huawei.com/Ascend910": 1},
-        {"huawei.com/Ascend910": 1},
-    ]:
-        errors.append(f"{prefix}: TP2 placement group must STRICT_PACK two Ascend910 bundles")
+    if "placement_group_config" in llm_config:
+        errors.append(f"{prefix}: Ray 2.48 LLMConfig does not accept placement_group_config")
+    if llm_config.get("resources_per_bundle") != {"NPU": 1, "GPU": 1}:
+        errors.append(f"{prefix}: TP2 resources_per_bundle must expose one NPU and one Ray GPU alias")
 
     engine = llm_config.get("engine_kwargs", {})
     expected_engine = {

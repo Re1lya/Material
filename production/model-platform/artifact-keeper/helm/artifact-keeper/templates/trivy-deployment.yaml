@@ -1,0 +1,189 @@
+{{/*
+=============================================================================
+EXAMPLE CONFIGURATION - Getting Started Template
+=============================================================================
+This file is provided as a starting point for deployments. It should be
+reviewed and modified to match your specific infrastructure requirements,
+security policies, and operational needs before use in production.
+=============================================================================
+*/}}
+{{- if .Values.trivy.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "artifact-keeper.fullname" . }}-trivy
+  labels:
+    {{- include "artifact-keeper.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trivy
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "artifact-keeper.trivy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "artifact-keeper.trivy.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with (.Values.trivy.tolerations | default .Values.global.tolerations) }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (.Values.trivy.affinity | default .Values.global.affinity) }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (.Values.trivy.nodeSelector | default .Values.global.nodeSelector) }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with (.Values.trivy.topologySpreadConstraints | default .Values.global.topologySpreadConstraints) }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      automountServiceAccountToken: false
+      {{- with .Values.trivy.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.trivy.db.preseed.enabled }}
+      initContainers:
+        # Pre-seed the vulnerability DB into the shared cache before the server
+        # starts. Trivy downloads the DB lazily on first scan otherwise, and the
+        # upstream default registry (ghcr.io) is rate-limited, so the first scan
+        # (and the pinned-cve-gate pre-flight) can fail with an empty DB. Pulling
+        # from the configured mirror here makes the DB present on rollout.
+        - name: trivy-db-init
+          image: "{{ .Values.trivy.image.repository }}:{{ .Values.trivy.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          {{- with .Values.trivy.initContainerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command: ["trivy"]
+          # --download-db-only fetches the vuln DB (and Java DB) into the cache and
+          # exits. The DB repository is supplied via env so it stays identical to the
+          # server container and is not sensitive to per-subcommand flag differences.
+          args: ["image", "--download-db-only", "--cache-dir", "/home/trivy/.cache"]
+          env:
+            - name: HOME
+              value: /home/trivy
+            - name: TMPDIR
+              value: /tmp
+            {{- with .Values.trivy.db.repository }}
+            - name: TRIVY_DB_REPOSITORY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.trivy.db.javaRepository }}
+            - name: TRIVY_JAVA_DB_REPOSITORY
+              value: {{ . | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.trivy.resources | nindent 12 }}
+          volumeMounts:
+            - name: trivy-cache
+              mountPath: /home/trivy/.cache
+            - name: tmp
+              mountPath: /tmp
+      {{- end }}
+      containers:
+        - name: trivy
+          image: "{{ .Values.trivy.image.repository }}:{{ .Values.trivy.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          {{- with .Values.trivy.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command: ["trivy"]
+          args: ["server", "--listen", "0.0.0.0:8090", "--cache-dir", "/home/trivy/.cache"]
+          env:
+            - name: HOME
+              value: /home/trivy
+            - name: TMPDIR
+              value: /tmp
+            # DB repository is set via env (TRIVY_DB_REPOSITORY) rather than a CLI
+            # flag because the `server` subcommand in trivy 0.62 does not expose
+            # --db-repository; env vars are honored by every subcommand.
+            {{- with .Values.trivy.db.repository }}
+            - name: TRIVY_DB_REPOSITORY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.trivy.db.javaRepository }}
+            - name: TRIVY_JAVA_DB_REPOSITORY
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.trivy.db.skipUpdate }}
+            - name: TRIVY_SKIP_DB_UPDATE
+              value: "true"
+            - name: TRIVY_SKIP_JAVA_DB_UPDATE
+              value: "true"
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8090
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.trivy.resources | nindent 12 }}
+          readinessProbe:
+            tcpSocket:
+              port: 8090
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8090
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: trivy-cache
+              mountPath: /home/trivy/.cache
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        - name: trivy-cache
+          persistentVolumeClaim:
+            claimName: {{ include "artifact-keeper.fullname" . }}-trivy-cache
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "artifact-keeper.fullname" . }}-trivy-cache
+  labels:
+    {{- include "artifact-keeper.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trivy
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.trivy.persistence.size }}
+  {{- if .Values.trivy.persistence.storageClass }}
+  storageClassName: {{ .Values.trivy.persistence.storageClass | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "artifact-keeper.fullname" . }}-trivy
+  labels:
+    {{- include "artifact-keeper.labels" . | nindent 4 }}
+    app.kubernetes.io/component: trivy
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8090
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "artifact-keeper.trivy.selectorLabels" . | nindent 4 }}
+{{- end }}

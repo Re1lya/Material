@@ -36,7 +36,7 @@ spec:
     manifestDigest: sha256:<importer-manifest-digest>
   runtime:
     image: 110.120.0.3:30670/container-images/<runtime-image>@sha256:<runtime-image-digest>
-    rayVersion: "2.43.0"
+    rayVersion: "2.48.0"
     modelPath: /models/Qwen3.8-27B-w8a8
     modelName: qwen3.8-27b-w8a8
     serveConfigV2: |
@@ -52,11 +52,9 @@ spec:
             deployment_config:
               num_replicas: 1
               max_ongoing_requests: 64
-            placement_group_config:
-              bundles:
-              - huawei.com/Ascend910: 1
-              - huawei.com/Ascend910: 1
-              strategy: STRICT_PACK
+            resources_per_bundle:
+              NPU: 1
+              GPU: 1
             engine_kwargs:
               tensor_parallel_size: 2
               data_parallel_size: 1
@@ -76,7 +74,7 @@ spec:
               compilation_config:
                 cudagraph_mode: FULL_DECODE_ONLY
     headCPU: "2"
-    headMemory: 8Gi
+    headMemory: 16Gi
     workerCPU: "64"
     workerMemory: 256Gi
     npuPerWorker: 2

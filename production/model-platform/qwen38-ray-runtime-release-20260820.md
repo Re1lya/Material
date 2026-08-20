@@ -1,0 +1,86 @@
+# Qwen3.8 A3 Ray 2.48 runtime 构建与发布记录
+
+日期：2026-08-20  
+范围：补齐 Ray Serve LLM 依赖、离线构建并发布运行时镜像；不创建 Pod、
+RayService 或 NPU 请求。
+
+## 版本基线
+
+保留已经由厂商镜像验证的 Ascend 软件栈，只补 Ray 2.48 LLM extra 缺失项：
+
+| 组件 | 固定版本 |
+|---|---|
+| 架构 | `linux/arm64` |
+| Python | `3.12.13` |
+| Ray | `2.48.0` |
+| PyArrow | `20.0.0` |
+| vLLM | `0.23.0+empty` |
+| KubeRay | `1.6.0` |
+
+没有升级或替换基础镜像中的 CANN、torch、torch-npu、vLLM-Ascend。构建定义、
+顶层依赖锁和双阶段校验脚本位于 `runtime/qwen38-ray/`。
+
+## 离线依赖供应链
+
+jumper 使用其现有 HTTP/HTTPS 代理下载 CPython 3.12、Linux ARM64 wheel；A3
+不访问公网。共传输 43 个 wheel 和 `SHA256SUMS`，A3 校验为 43/43。关键 wheel：
+
+```text
+pyarrow-20.0.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+sha256:4ba3cf4182828be7a896cbd232aa8dd6a31bd1f9e32776cc3796c012855e1199
+```
+
+Docker build 使用 `--network=none`、`--no-index` 和本地 wheelhouse。wheel 二进制
+不进入 Git；Git 只保存依赖锁与 wheel 摘要。
+
+## 验证结果
+
+1. 构建门禁校验架构、Python/Ray/PyArrow/vLLM 版本及全部新增模块，返回
+   `qwen38_ray_runtime_build=PASS`。
+2. 完整导入门禁只读挂载 `/usr/local/Ascend/driver`，不传入 `/dev/davinci*`，
+   `ray.serve.llm` 和 vLLM-Ascend 导入成功，返回
+   `qwen38_ray_runtime_runtime=PASS`。
+3. Ray head 不申请 NPU，因此单独验证 `VLLM_PLUGINS=""`：在不挂载 driver、
+   不暴露设备的容器中完整 `ray.serve.llm` 导入成功。Composition 据此只对 head
+   禁用平台插件；worker 仍加载 Ascend 插件。
+4. 基础镜像和派生镜像的 `pip check` 均为 12 条相同的厂商既有告警；派生镜像
+   没有新增依赖冲突。
+
+## Artifact Keeper 发布
+
+发布使用已有 Qwen publisher service account 的一次性 token：限定
+`container-images` 仓库、1 天有效，发布完成后立即撤销。Artifact Keeper 1.6.0
+的 OCI v2 上传要求裸 `write`，但 token API 不允许签发裸 `write`，且
+`write:artifacts` 不满足裸 `write`；因此本次 token 使用 `*`，同时由单仓库绑定、
+短有效期和用后撤销收敛权限。首次权限不足 token 也已撤销。管理员身份只用于
+签发/撤销，未用于上传。
+
+发布工具为官方 `regctl v0.11.5` Linux/ARM64，下载摘要
+`sha256:c4cf231e74cda685f1599f3d866b02b03c572e54b79ec8b062f32070b0ba4587`。
+未修改或重启 A3 Docker daemon。最终不可变引用：
+
+```text
+110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:16995677e10be892e92d164c7a6c8902f37ccb9c2c2d0d79180664006b55d0fb
+```
+
+远端 manifest 为 Docker schema 2、`linux/arm64`。A3 保留本地 Docker 镜像
+`qwen38-ray-runtime:ray2.48.0-v1`；18 GiB 临时 tar、A3/本地明文 token 文件和
+regctl 登录均已清理。
+
+## 发布时尚未执行的门禁
+
+- 镜像发布完成这一时点尚未创建或同步运行态 XR、PVC、缓存 Job、RayService、
+  Service 或 Pod；后续实际进展以 `qwen38-ray-tp2-execution-20260819.md` 为准。
+- TP2 Profile 在发布时已改用上述 digest、Ray 2.48，并把目标节点设为
+  `a3-server-00`/`Ascend910`。
+- 真正把 XR 切换到运行态前，必须同时检查 Kubernetes NPU requests 和 A3
+  `npu-smi` 物理进程。若 16 个 chip 全部有业务进程，或不足两个可用 chip，
+  立即停止，不创建 NPU worker。
+
+## 运行时拉取权限补充
+
+模型缓存 Job 首次访问私有 `model-artifacts` 仓库时返回 404。该 404 是
+Artifact Keeper 对无仓库权限请求的掩码，不代表制品不存在。为运行时身份
+`svc-qwen38-model-runtime` 增加了仅限 `model-artifacts` 的 `read` 权限；token
+仍只含 `read:artifacts`，没有写入和管理权限。修正后 manifest GET 返回 200，
+26/26 文件完成 SHA256 校验，运行时 token 不写入 Git。
