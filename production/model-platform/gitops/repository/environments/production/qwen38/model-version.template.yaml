@@ -37,3 +37,4 @@ spec:
   compatibility:
     runtimeProfiles:
       - qwen38-w8a8-ray-ascend-910b3-v1
+      - qwen38-w8a8-ray-ascend-910b3-tp2-v1

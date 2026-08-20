@@ -63,7 +63,8 @@
             "platform.example.com/effective-runtime-profile": {
               "enum": [
                 "qwen36-w8a8-ascend-a3-v1",
-                "qwen38-w8a8-ray-ascend-910b3-v1"
+                "qwen38-w8a8-ray-ascend-910b3-v1",
+                "qwen38-w8a8-ray-ascend-910b3-tp2-v1"
               ]
             },
             "platform.example.com/effective-tensor-parallel-size": {
@@ -96,7 +97,11 @@
           "enum": ["qwen3.6-27b-w8a8-20260806", "qwen3.8-27b-w8a8"]
         },
         "runtimeProfileRef": {
-          "enum": ["qwen36-w8a8-ascend-a3-v1", "qwen38-w8a8-ray-ascend-910b3-v1"]
+          "enum": [
+            "qwen36-w8a8-ascend-a3-v1",
+            "qwen38-w8a8-ray-ascend-910b3-v1",
+            "qwen38-w8a8-ray-ascend-910b3-tp2-v1"
+          ]
         },
         "desiredState": { "enum": ["Stopped", "Running"] },
         "placement": {
@@ -193,7 +198,7 @@
             "headMemory": { "type": "string", "pattern": "^[0-9]+(Mi|Gi)$" },
             "workerCPU": { "type": "string", "pattern": "^[0-9]+m?$" },
             "workerMemory": { "type": "string", "pattern": "^[0-9]+(Mi|Gi)$" },
-            "npuPerWorker": { "const": 8 },
+            "npuPerWorker": { "type": "integer", "enum": [2, 8] },
             "workerReplicas": { "type": "integer", "enum": [0, 1] }
           }
         },

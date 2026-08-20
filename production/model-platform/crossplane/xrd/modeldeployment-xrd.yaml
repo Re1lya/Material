@@ -49,6 +49,7 @@ spec:
                   enum:
                     - qwen36-w8a8-ascend-a3-v1
                     - qwen38-w8a8-ray-ascend-910b3-v1
+                    - qwen38-w8a8-ray-ascend-910b3-tp2-v1
                 desiredState:
                   type: string
                   enum:
@@ -164,7 +165,9 @@ spec:
                       pattern: "^[0-9]+(Mi|Gi)$"
                     npuPerWorker:
                       type: integer
-                      const: 8
+                      enum:
+                        - 2
+                        - 8
                     workerReplicas:
                       type: integer
                       enum:

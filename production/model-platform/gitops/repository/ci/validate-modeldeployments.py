@@ -10,6 +10,12 @@ from jsonschema import Draft202012Validator
 from ruamel.yaml import YAML
 
 
+QWEN38_RUNTIME_PROFILES = {
+    "qwen38-w8a8-ray-ascend-910b3-v1": 8,
+    "qwen38-w8a8-ray-ascend-910b3-tp2-v1": 2,
+}
+
+
 def load_yaml(path: pathlib.Path) -> dict:
     loader = YAML(typ="safe")
     with path.open(encoding="utf-8") as stream:
@@ -118,8 +124,12 @@ def validate_qwen38_release(
 
     prefix = f"{path}: qwen3.8 release"
     spec = deployment.get("spec", {})
-    if spec.get("runtimeProfileRef") != "qwen38-w8a8-ray-ascend-910b3-v1":
-        errors.append(f"{prefix}: runtimeProfileRef must be qwen38-w8a8-ray-ascend-910b3-v1")
+    runtime_ref = spec.get("runtimeProfileRef")
+    if runtime_ref not in QWEN38_RUNTIME_PROFILES:
+        errors.append(
+            f"{prefix}: runtimeProfileRef must be one of "
+            f"{', '.join(sorted(QWEN38_RUNTIME_PROFILES))}"
+        )
     composition = spec.get("compositionRef", {}).get("name")
     control_plane_only = composition == "modeldeployment-control-plane-v1alpha1"
     if composition not in {
@@ -199,8 +209,11 @@ def validate_qwen38_release(
                     f"{prefix}: ModelScope quantization.inputArtifact.path must be under qwen3.8-27b/bf16/"
                 )
 
-    if runtime.get("npuPerWorker") != 8:
-        errors.append(f"{prefix}: runtime.npuPerWorker must be 8")
+    expected_npu = QWEN38_RUNTIME_PROFILES.get(runtime_ref)
+    if expected_npu is not None and runtime.get("npuPerWorker") != expected_npu:
+        errors.append(
+            f"{prefix}: runtime.npuPerWorker must be {expected_npu} for {runtime_ref}"
+        )
     if runtime.get("workerReplicas") not in {0, 1}:
         errors.append(f"{prefix}: runtime.workerReplicas must be 0 or 1")
     if spec.get("desiredState") == "Stopped" and runtime.get("workerReplicas") != 0:
@@ -229,6 +242,92 @@ def validate_qwen38_release(
             errors.append(f"{prefix}: XR runtime.modelPath differs from RuntimeProfile catalog")
         if runtime.get("modelName") != profile_runtime.get("modelName"):
             errors.append(f"{prefix}: XR runtime.modelName differs from RuntimeProfile catalog")
+        if runtime.get("serveConfigV2") != profile_runtime.get("serveConfigV2"):
+            errors.append(f"{prefix}: XR runtime.serveConfigV2 differs from RuntimeProfile catalog")
+        expected_npu = QWEN38_RUNTIME_PROFILES.get(runtime_ref)
+        if expected_npu is not None:
+            profile_resources = profile_spec.get("resources", {})
+            for resource_type in ("requests", "limits"):
+                resource_value = profile_resources.get(resource_type, {}).get(
+                    "huawei.com/Ascend910"
+                )
+                if str(resource_value) != str(expected_npu):
+                    errors.append(
+                        f"{prefix}: RuntimeProfile resources.{resource_type}."
+                        f"huawei.com/Ascend910 must be {expected_npu}"
+                    )
+        if runtime_ref == "qwen38-w8a8-ray-ascend-910b3-tp2-v1":
+            validate_qwen38_tp2_serve_config(
+                prefix,
+                runtime.get("serveConfigV2"),
+                runtime.get("modelPath"),
+                errors,
+            )
+
+
+def validate_qwen38_tp2_serve_config(
+    prefix: str,
+    serve_config: object,
+    model_path: object,
+    errors: list[str],
+) -> None:
+    """Validate the Ray Serve LLM contract that replaces the Docker flags."""
+
+    if not isinstance(serve_config, str):
+        errors.append(f"{prefix}: TP2 serveConfigV2 must be a YAML string")
+        return
+    try:
+        config = YAML(typ="safe").load(serve_config)
+    except Exception as error:
+        errors.append(f"{prefix}: TP2 serveConfigV2 is invalid YAML: {error}")
+        return
+    applications = config.get("applications") if isinstance(config, dict) else None
+    application = applications[0] if isinstance(applications, list) and applications else None
+    llm_configs = application.get("args", {}).get("llm_configs") if isinstance(application, dict) else None
+    llm_config = llm_configs[0] if isinstance(llm_configs, list) and llm_configs else None
+    if not isinstance(application, dict) or not isinstance(llm_config, dict):
+        errors.append(f"{prefix}: TP2 serveConfigV2 must define one Ray Serve LLM config")
+        return
+
+    if application.get("import_path") != "ray.serve.llm:build_openai_app":
+        errors.append(f"{prefix}: TP2 serveConfigV2 must use ray.serve.llm:build_openai_app")
+    if llm_config.get("model_loading_config", {}).get("model_source") != model_path:
+        errors.append(f"{prefix}: TP2 model_source must match runtime.modelPath")
+
+    deployment = llm_config.get("deployment_config", {})
+    if deployment.get("num_replicas") != 1 or deployment.get("max_ongoing_requests") != 64:
+        errors.append(f"{prefix}: TP2 Ray Serve deployment must be 1 replica with 64 max ongoing requests")
+
+    placement = llm_config.get("placement_group_config", {})
+    if placement.get("strategy") != "STRICT_PACK" or placement.get("bundles") != [
+        {"huawei.com/Ascend910": 1},
+        {"huawei.com/Ascend910": 1},
+    ]:
+        errors.append(f"{prefix}: TP2 placement group must STRICT_PACK two Ascend910 bundles")
+
+    engine = llm_config.get("engine_kwargs", {})
+    expected_engine = {
+        "tensor_parallel_size": 2,
+        "data_parallel_size": 1,
+        "pipeline_parallel_size": 1,
+        "distributed_executor_backend": "ray",
+        "quantization": "ascend",
+        "max_model_len": 32768,
+        "max_num_seqs": 64,
+        "max_num_batched_tokens": 8192,
+        "gpu_memory_utilization": 0.9,
+        "enable_prefix_caching": True,
+        "trust_remote_code": True,
+        "speculative_config": {
+            "method": "qwen3_5_mtp",
+            "num_speculative_tokens": 3,
+            "enforce_eager": True,
+        },
+        "compilation_config": {"cudagraph_mode": "FULL_DECODE_ONLY"},
+    }
+    for key, expected in expected_engine.items():
+        if engine.get(key) != expected:
+            errors.append(f"{prefix}: TP2 engine_kwargs.{key} must equal {expected!r}")
 
 
 if __name__ == "__main__":

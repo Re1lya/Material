@@ -17,6 +17,7 @@ import kubernetesPlugin from '@backstage/plugin-kubernetes/alpha';
 import scaffolderPlugin from '@backstage/plugin-scaffolder/alpha';
 import { navModule } from './modules/nav';
 import { kccPretrainingPlugin } from './modules/kccPretraining';
+import { artifactManagementPlugin } from './modules/artifactManagement';
 
 const giteaAuthApiRef = createApiRef<OAuth2>({ id: 'auth.gitea' });
 
@@ -73,6 +74,7 @@ export default createApp({
     kubernetesPlugin,
     scaffolderPlugin,
     kccPretrainingPlugin,
+    artifactManagementPlugin,
     navModule,
     giteaAuthModule,
   ],

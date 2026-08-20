@@ -30,5 +30,6 @@ spec:
     architecture: qwen
     quantization: w8a8
   compatibility:
-    runtimeProfiles:
+      runtimeProfiles:
       - qwen38-w8a8-ray-ascend-910b3-v1
+      - qwen38-w8a8-ray-ascend-910b3-tp2-v1

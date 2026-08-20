@@ -1,0 +1,89 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelDeployment
+metadata:
+  name: qwen38-27b-tp2-capacity
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/managed-by: argocd
+    platform.example.com/requested-by: platform-team
+  annotations:
+    platform.example.com/request-mode: declarative-stopped
+    platform.example.com/requested-tensor-parallel-size: "2"
+    platform.example.com/requested-pipeline-parallel-size: "1"
+    platform.example.com/requested-replicas: "1"
+    platform.example.com/requested-priority: normal
+    platform.example.com/effective-runtime-profile: qwen38-w8a8-ray-ascend-910b3-tp2-v1
+    platform.example.com/effective-tensor-parallel-size: "0"
+    platform.example.com/effective-replicas: "0"
+    platform.example.com/effective-npu-per-replica: "0"
+spec:
+  projectRef: model-serving
+  modelVersionRef: qwen3.8-27b-w8a8
+  runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-tp2-v1
+  compositionRef:
+    name: modeldeployment-control-plane-v1alpha1
+  desiredState: Stopped
+  placement:
+    acceleratorPool: control-plane-only
+  access:
+    visibility: internal
+  artifact:
+    modelId: Qwen/Qwen3.8-27B
+    revision: <immutable-lowercase-modelscope-commit>
+    repository: model-artifacts
+    path: qwen3.8-27b/w8a8/<immutable-lowercase-modelscope-commit>/<immutable-quantization-id>
+    manifestDigest: sha256:<importer-manifest-digest>
+  runtime:
+    image: 110.120.0.3:30670/container-images/<runtime-image>@sha256:<runtime-image-digest>
+    rayVersion: "2.43.0"
+    modelPath: /models/Qwen3.8-27B-w8a8
+    modelName: qwen3.8-27b-w8a8
+    serveConfigV2: |
+      applications:
+      - name: default
+        route_prefix: /
+        import_path: ray.serve.llm:build_openai_app
+        args:
+          llm_configs:
+          - model_loading_config:
+              model_id: qwen3.8-27b-w8a8
+              model_source: /models/Qwen3.8-27B-w8a8
+            deployment_config:
+              num_replicas: 1
+              max_ongoing_requests: 64
+            placement_group_config:
+              bundles:
+              - huawei.com/Ascend910: 1
+              - huawei.com/Ascend910: 1
+              strategy: STRICT_PACK
+            engine_kwargs:
+              tensor_parallel_size: 2
+              data_parallel_size: 1
+              pipeline_parallel_size: 1
+              distributed_executor_backend: ray
+              quantization: ascend
+              max_model_len: 32768
+              max_num_seqs: 64
+              max_num_batched_tokens: 8192
+              gpu_memory_utilization: 0.9
+              enable_prefix_caching: true
+              trust_remote_code: true
+              speculative_config:
+                method: qwen3_5_mtp
+                num_speculative_tokens: 3
+                enforce_eager: true
+              compilation_config:
+                cudagraph_mode: FULL_DECODE_ONLY
+    headCPU: "2"
+    headMemory: 8Gi
+    workerCPU: "64"
+    workerMemory: 256Gi
+    npuPerWorker: 2
+    workerReplicas: 0
+  cache:
+    image: 110.120.0.3:30670/container-images/<cache-image>@sha256:<cache-image-digest>
+    baseURL: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+    readerSecret: artifact-keeper-model-runtime
+    storageClassName: model-cache-gpu-local
+    size: <artifact-size-plus-staging-headroom>

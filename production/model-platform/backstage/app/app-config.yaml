@@ -109,6 +109,9 @@ modelPlatform:
     allowedInitiators:
       - user:default/gitadmin
     allowedModelVersions:
-      - qwen3.6-27b-w8a8-20260806
+      - qwen3.8-27b-w8a8
     allowedRuntimeProfiles:
-      - qwen36-w8a8-ascend-a3-v1
+      - qwen38-w8a8-ray-ascend-910b3-v1
+      - qwen38-w8a8-ray-ascend-910b3-tp2-v1
+    artifactKeeperBaseUrl: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+    stoppedCompositionRef: modeldeployment-control-plane-v1alpha1

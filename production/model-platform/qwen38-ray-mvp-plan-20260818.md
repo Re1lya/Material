@@ -1,5 +1,10 @@
 # Qwen3.8-27B（ModelScope）+ Ray 可复用生产首发方案
 
+> TP=2/DP=1 的当前首发参数、Docker→Ray 映射、chip 语义和 32K 容量测试以
+> `qwen38-ray-tp2-deployment-and-capacity-plan-20260819.md` 及
+> `qwen38-w8a8-ray-ascend-910b3-tp2-v1.yaml` 为准；本文保留基础设施与
+> 数据流背景。本文中的 8-NPU 首发数值是历史基线，不是本次执行目标。
+
 > 状态：控制面/导入器第一阶段源码已准备，尚未执行生产下载、量化或部署；目标
 > 是 `Qwen/Qwen3.8-27B` 的 BF16 源制品经隔离的 msModelSlim 任务生成 W8A8
 > 正式制品。该模型和 ModelSlim 适配尚未通过实际预检，未确认前不得用 Qwen3.6

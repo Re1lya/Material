@@ -29,22 +29,35 @@ platform:
   Function and the released runtime-zero Composition. The new
   `crossplane/foundation/` control-plane-only Kustomization contains the
   provider-kubernetes ServiceAccount/RBAC/RuntimeConfig, XRD and reusable
-  Qwen3.8 Ray Composition source; the provider package/ProviderConfig remain
-  gated on an internal package mirror and generated-RBAC audit. Its single proof
-  instance owns a Service and a Deployment permanently reconciled to zero
-  replicas; it creates no model Pod or NPU allocation.
+  Qwen3.8 Ray Composition source. The provider-kubernetes package is now
+  installed from an Artifact Keeper immutable digest and the namespaced
+  `model-serving` ProviderConfig is validated; the provider only has the
+  reviewed target-namespace permissions. Its current proof instance owns only
+  a control-plane status object and creates no model Pod or NPU allocation.
 - `backstage/` contains the repository-owned Backstage application, constrained
   Gitea-PR template, immutable input locks, dedicated PostgreSQL/local-PV
   manifests, namespace-scoped read-only Kubernetes RBAC and the release
-  runbook. Production Backstage is now running as v0.2.9 from the locked
+  runbook. Production Backstage is now running as v0.2.11 from the locked
   Artifact Keeper digest; the manifests and release record are the source of
   truth for that deployed state.
+- `backstage/artifact-management-mvp-20260819.md` records the local-only MVP for
+  restricted Artifact Keeper repository/token management and the dedicated
+  Tekton chunked-publish/status lane. It is deliberately gated behind HTTPS,
+  namespace-local Secrets and an approved staging PVC.
+- `monitoring-status-20260819.md` records the current read-only production
+  monitoring inventory and the Prometheus/NPU exporter snapshot for
+  `a3-server-00` and the 910B3 `gpu-server-*` pool. It is an observation and
+  capacity-review aid, not an automatic NPU scheduler or deployment approval.
 - `qwen38-ray-mvp-plan-20260818.md` is the focused execution plan for the
   Qwen3.8-27B ModelScope source, the one-time compatibility smoke test on
   `gpu-server-00`, and Argo CD → Crossplane Composition → KubeRay
   platformization. The smoke uses the final release unit and is not a disposable
   POC; it supersedes the older Qwen3.6/A3-first execution order for this task
   and does not claim that Qwen3.8 or a RayService is deployed.
+- `qwen38-ray-tp2-deployment-and-capacity-plan-20260819.md` is the approved
+  TP=2/DP=1 Profile contract, Docker-to-Ray parameter mapping, chip semantics,
+  deployment gate and 32K capacity test record. It is a plan and evidence
+  boundary only; it does not authorize an Argo sync or NPU workload.
 - `gitops/repository/environments/production/qwen38/` holds the non-active
   catalog/XR templates. They remain outside the current Argo path until a
   real ModelScope revision and immutable Artifact Keeper/runtime/cache digests

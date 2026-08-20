@@ -7,7 +7,7 @@ import {
   createTemplateAction,
   scaffolderActionsExtensionPoint,
 } from '@backstage/plugin-scaffolder-node';
-import { stringify } from 'yaml';
+import { parse, stringify } from 'yaml';
 
 type DeploymentRequest = {
   deploymentName: string;
@@ -30,6 +30,53 @@ type GiteaConfig = {
   allowedInitiators: string[];
   allowedModelVersions: string[];
   allowedRuntimeProfiles: string[];
+  artifactKeeperBaseUrl: string;
+  stoppedCompositionRef: string;
+};
+
+type GiteaContentFile = {
+  type: string;
+  path: string;
+  encoding?: string;
+  content?: string;
+};
+
+type CatalogDocument = {
+  apiVersion?: string;
+  kind?: string;
+  metadata?: { name?: string };
+  spec?: Record<string, any>;
+};
+
+type DeploymentContract = {
+  artifact: {
+    modelId: string;
+    revision: string;
+    repository: string;
+    path: string;
+    manifestDigest: string;
+  };
+  runtime: {
+    image: string;
+    rayVersion: string;
+    modelPath: string;
+    modelName: string;
+    serveConfigV2: string;
+    headCPU: string;
+    headMemory: string;
+    workerCPU: string;
+    workerMemory: string;
+    npuPerWorker: number;
+    workerReplicas: number;
+  };
+  cache: {
+    image: string;
+    baseURL: string;
+    readerSecret: string;
+    storageClassName: string;
+    size: string;
+  };
+  compositionRef: { name: string };
 };
 
 type GiteaPullRequest = {
@@ -65,6 +112,10 @@ function readGiteaConfig(config: Config): GiteaConfig {
     allowedInitiators: section.getStringArray('allowedInitiators'),
     allowedModelVersions: section.getStringArray('allowedModelVersions'),
     allowedRuntimeProfiles: section.getStringArray('allowedRuntimeProfiles'),
+    artifactKeeperBaseUrl: section
+      .getString('artifactKeeperBaseUrl')
+      .replace(/\/$/, ''),
+    stoppedCompositionRef: section.getString('stoppedCompositionRef'),
   };
 }
 
@@ -107,6 +158,143 @@ async function giteaRequest<T>(options: {
     return { status: response.status };
   }
   return { status: response.status, value: (await response.json()) as T };
+}
+
+async function readCatalogDocument(
+  gitea: GiteaConfig,
+  repositoryPrefix: string,
+  ref: string,
+  name: string,
+  expectedKind: string,
+  signal?: AbortSignal,
+): Promise<CatalogDocument> {
+  const path = `${repositoryPrefix}/contents/environments/production/catalog/${encodeRepositoryPath(
+    `${name}.yaml`,
+  )}?ref=${encodeURIComponent(ref)}`;
+  const response = await giteaRequest<GiteaContentFile>({
+    config: gitea,
+    path,
+    acceptedStatuses: [200],
+    signal,
+  });
+  const file = response.value;
+  if (!file?.content || file.encoding !== 'base64') {
+    throw new Error(`Catalog file ${name}.yaml did not contain base64 content`);
+  }
+  let document: CatalogDocument | undefined;
+  try {
+    document = parse(Buffer.from(file.content, 'base64').toString('utf8')) as
+      | CatalogDocument
+      | undefined;
+  } catch {
+    throw new Error(`Catalog file ${name}.yaml is not valid YAML`);
+  }
+  if (
+    !document ||
+    document.kind !== expectedKind ||
+    document.metadata?.name !== name ||
+    !document.spec
+  ) {
+    throw new Error(`Catalog file ${name}.yaml does not match ${expectedKind}`);
+  }
+  return document;
+}
+
+async function loadDeploymentContract(
+  gitea: GiteaConfig,
+  repositoryPrefix: string,
+  modelVersionRef: string,
+  runtimeProfileRef: string,
+  signal?: AbortSignal,
+): Promise<DeploymentContract> {
+  const [modelVersion, runtimeProfile] = await Promise.all([
+    readCatalogDocument(
+      gitea,
+      repositoryPrefix,
+      gitea.baseBranch,
+      modelVersionRef,
+      'ModelVersion',
+      signal,
+    ),
+    readCatalogDocument(
+      gitea,
+      repositoryPrefix,
+      gitea.baseBranch,
+      runtimeProfileRef,
+      'ModelRuntimeProfile',
+      signal,
+    ),
+  ]);
+  const modelSpec = modelVersion.spec ?? {};
+  const profileSpec = runtimeProfile.spec ?? {};
+  const artifact = modelSpec.artifact as DeploymentContract['artifact'];
+  const profileRuntime = (profileSpec.runtime ?? {}) as Record<string, any>;
+  const profileResources = (profileSpec.resources ?? {}) as Record<string, any>;
+  const profileRequests = (profileResources.requests ?? {}) as Record<
+    string,
+    any
+  >;
+  const profileCache = (profileRuntime.cache ?? {}) as Record<string, any>;
+
+  const compatibleProfiles = (modelSpec.compatibility?.runtimeProfiles ??
+    []) as string[];
+  if (!compatibleProfiles.includes(runtimeProfileRef)) {
+    throw new Error(
+      `Runtime profile ${runtimeProfileRef} is not compatible with ${modelVersionRef}`,
+    );
+  }
+  if (
+    !artifact ||
+    typeof artifact.modelId !== 'string' ||
+    typeof artifact.revision !== 'string' ||
+    typeof artifact.repository !== 'string' ||
+    typeof artifact.path !== 'string' ||
+    typeof artifact.manifestDigest !== 'string'
+  ) {
+    throw new Error(
+      `ModelVersion ${modelVersionRef} has an incomplete artifact`,
+    );
+  }
+  const runtime = {
+    image: profileRuntime.image,
+    rayVersion: profileRuntime.rayVersion,
+    modelPath: profileRuntime.modelPath,
+    modelName: profileRuntime.modelName,
+    serveConfigV2: profileRuntime.serveConfigV2,
+    headCPU: profileRuntime.headCPU ?? '2',
+    headMemory: profileRuntime.headMemory ?? '8Gi',
+    workerCPU: profileRuntime.workerCPU ?? profileRequests.cpu,
+    workerMemory: profileRuntime.workerMemory ?? profileRequests.memory,
+    npuPerWorker: profileRuntime.npuPerWorker,
+    workerReplicas: profileRuntime.workerReplicas ?? 0,
+  };
+  if (
+    Object.values(runtime).some(value => value === undefined || value === null)
+  ) {
+    throw new Error(
+      `Runtime profile ${runtimeProfileRef} is missing a Ray serving contract`,
+    );
+  }
+  const cache = {
+    image: profileCache.image,
+    baseURL: gitea.artifactKeeperBaseUrl,
+    readerSecret: profileCache.readerSecret,
+    storageClassName: profileCache.storageClassName,
+    size: profileCache.size,
+  };
+  if (
+    Object.values(cache).some(value => value === undefined || value === null)
+  ) {
+    throw new Error(
+      `Runtime profile ${runtimeProfileRef} is missing its model cache contract`,
+    );
+  }
+  return {
+    artifact,
+    runtime,
+    cache,
+    compositionRef: { name: gitea.stoppedCompositionRef },
+  };
 }
 
 function createDeploymentRequestAction(config: Config) {
@@ -160,6 +348,14 @@ function createDeploymentRequestAction(config: Config) {
           'runtimeProfileRef is outside the approved runtime allow-list',
         );
       }
+
+      const contract = await loadDeploymentContract(
+        gitea,
+        repositoryPrefix,
+        input.modelVersionRef,
+        input.runtimeProfileRef,
+        ctx.signal,
+      );
 
       const manifestPath = `environments/production/modeldeployments/${input.deploymentName}.yaml`;
       const contentPath = `${repositoryPrefix}/contents/${encodeRepositoryPath(
@@ -218,6 +414,7 @@ function createDeploymentRequestAction(config: Config) {
           projectRef: input.projectRef,
           modelVersionRef: input.modelVersionRef,
           runtimeProfileRef: input.runtimeProfileRef,
+          compositionRef: contract.compositionRef,
           desiredState: 'Stopped',
           placement: {
             acceleratorPool: 'control-plane-only',
@@ -225,6 +422,9 @@ function createDeploymentRequestAction(config: Config) {
           access: {
             visibility: input.visibility,
           },
+          artifact: contract.artifact,
+          runtime: contract.runtime,
+          cache: contract.cache,
         },
       };
       const yaml = stringify(manifest, { lineWidth: 0 });

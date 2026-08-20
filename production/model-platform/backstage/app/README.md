@@ -1,9 +1,10 @@
 # Model Platform Backstage app
 
 This is the repository-owned minimum portal for the production model platform.
-It is based on Backstage 1.53.0 and intentionally contains only GitHub login,
-catalog, Scaffolder infrastructure with no write template, PostgreSQL search,
-Kubernetes read-only views and user settings.
+It is based on Backstage 1.53.0 and contains Gitea OIDC login, the catalog,
+the constrained stopped-ModelDeployment Scaffolder template, PostgreSQL search,
+Kubernetes read-only views and user settings. The custom action writes only a
+reviewable Gitea PR; it does not write Kubernetes or allocate NPU resources.
 
 Local validation uses Node 24 and the committed Yarn release:
 

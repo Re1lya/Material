@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -50,6 +50,21 @@ type RuntimeVariant = {
   modelName: string;
   healthPath: string;
   inferencePath: string;
+  npuPerWorker: number;
+  workerReplicas: number;
+  serving?: {
+    tensorParallelSize?: number;
+    dataParallelSize?: number;
+    pipelineParallelSize?: number;
+    maxModelLen?: number;
+    maxNumSeqs?: number;
+    maxNumBatchedTokens?: number;
+    gpuMemoryUtilization?: number;
+    prefixCaching?: boolean;
+    mtpTokens?: number;
+    compilationMode?: string;
+    maxOngoingRequests?: number;
+  };
 };
 
 type ModelRecipe = {
@@ -71,35 +86,67 @@ type ModelRecipe = {
 
 const modelCatalog: ModelRecipe[] = [
   {
-    id: 'qwen3.6-27b-w8a8-20260806',
-    title: 'Qwen3.6-27B W8A8',
+    id: 'qwen3.8-27b-w8a8',
+    title: 'Qwen3.8-27B W8A8',
     provider: 'Qwen',
     description:
-      'Verified internal artifact for Ascend A3 serving. The catalog snapshot contains the full 24-file safetensors model.',
-    modelId: 'platform-team/qwen3.6-27b-w8a8',
-    revision: '20260806.1',
+      'Verified ModelScope-to-Artifact-Keeper artifact for Ray/vLLM serving on the idle gpu-server-00 profile.',
+    modelId: 'Qwen/Qwen3.8-27B',
+    revision: 'e823e888ae179eb3be02c1a48899c4f828371376',
     repository: 'model-artifacts',
-    artifactPath: 'Qwen3.6-27B-w8a8',
-    fileCount: 24,
-    sizeBytes: 36446991473,
+    artifactPath:
+      'qwen3.8-27b/w8a8/e823e888ae179eb3be02c1a48899c4f828371376/msmodelslim-w8a8-a3-f2afa9e2',
+    fileCount: 26,
+    sizeBytes: 32152070926,
     format: 'Hugging Face / safetensors',
     quantization: 'W8A8',
     manifestDigest:
-      'sha256:9ecf94c8084062b613ca8eb4e76074c29fabc51644682e3d8708edc9737ea610',
+      'sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f',
     variants: [
       {
-        id: 'qwen36-w8a8-ascend-a3-v1',
-        title: 'W8A8 / ServingROM P-D / Ascend A3',
-        hardware: 'Ascend A3',
-        node: 'a3-server-00',
-        accelerator: 'Ascend910',
-        cardIds: ['10', '11', '12', '13', '14', '15'],
+        id: 'qwen38-w8a8-ray-ascend-910b3-v1',
+        title: 'W8A8 / RayService / Ascend 910B3',
+        hardware: 'Ascend 910B3',
+        node: 'gpu-server-00',
+        accelerator: '910B3',
+        cardIds: [],
         image:
-          '110.120.0.3:8889/infra/qwen36-pd-worker@sha256:0c9a4668e0c15f862fee733ab5c5b721e8f88985dd9cfa6f33404b976b15eadb',
-        modelPath: '/models/Qwen3.6-27B-w8a8',
-        modelName: 'qwen36-27b-w8a8',
-        healthPath: '/healthcheck',
+          '110.120.0.3:30670/container-images/vllm-ascend@sha256:a27a79c2021cdda071eb207c169a5dd44537d22df11ccd7b62b52de117ceac14',
+        modelPath: '/models/Qwen3.8-27B-w8a8',
+        modelName: 'qwen3.8-27b-w8a8',
+        healthPath: '/health',
         inferencePath: '/v1/chat/completions',
+        npuPerWorker: 8,
+        workerReplicas: 0,
+      },
+      {
+        id: 'qwen38-w8a8-ray-ascend-910b3-tp2-v1',
+        title: 'W8A8 / RayService TP2 / Ascend 910B3',
+        hardware: 'Ascend 910B3 · TP2',
+        node: 'gpu-server-00',
+        accelerator: '910B3',
+        cardIds: [],
+        image:
+          '110.120.0.3:30670/container-images/vllm-ascend@sha256:a27a79c2021cdda071eb207c169a5dd44537d22df11ccd7b62b52de117ceac14',
+        modelPath: '/models/Qwen3.8-27B-w8a8',
+        modelName: 'qwen3.8-27b-w8a8',
+        healthPath: '/health',
+        inferencePath: '/v1/chat/completions',
+        npuPerWorker: 2,
+        workerReplicas: 0,
+        serving: {
+          tensorParallelSize: 2,
+          dataParallelSize: 1,
+          pipelineParallelSize: 1,
+          maxModelLen: 32768,
+          maxNumSeqs: 64,
+          maxNumBatchedTokens: 8192,
+          gpuMemoryUtilization: 0.9,
+          prefixCaching: true,
+          mtpTokens: 3,
+          compilationMode: 'FULL_DECODE_ONLY',
+          maxOngoingRequests: 64,
+        },
       },
     ],
   },
@@ -282,6 +329,27 @@ function shortDigest(digest: string): string {
   return `${digest.slice(0, 18)}...${digest.slice(-8)}`;
 }
 
+type LiveDeployment = {
+  name?: string;
+  desiredState?: string;
+  modelVersionRef?: string;
+  runtimeProfileRef?: string;
+  compositionRef?: string;
+  phase?: string;
+  conditions?: Array<{
+    type?: string;
+    status?: string;
+    reason?: string;
+    message?: string;
+  }>;
+};
+
+type LiveDeploymentResponse = {
+  observedAt: string;
+  deployments: LiveDeployment[];
+  resources: Record<string, unknown[]>;
+};
+
 /**
  * Read-only projection of the committed ModelVersion/ModelRuntimeProfile
  * catalog. A deployment request leaves this page through the Backstage
@@ -290,25 +358,76 @@ function shortDigest(digest: string): string {
  */
 export const ModelDeploymentRecipesPage = () => {
   const classes = useStyles();
+  const [catalog, setCatalog] = useState<ModelRecipe[]>(modelCatalog);
+  const [catalogSource, setCatalogSource] = useState<'fallback' | 'gitea'>(
+    'fallback',
+  );
+  const [catalogError, setCatalogError] = useState<string>();
+  const [liveStatus, setLiveStatus] = useState<LiveDeploymentResponse>();
+  const [liveStatusError, setLiveStatusError] = useState<string>();
   const [query, setQuery] = useState('');
   const [selectedModelId, setSelectedModelId] = useState<string>();
   const [selectedVariantId, setSelectedVariantId] = useState(
-    'qwen36-w8a8-ascend-a3-v1',
+    'qwen38-w8a8-ray-ascend-910b3-v1',
   );
-  const [selectedCards, setSelectedCards] = useState([
-    '10',
-    '11',
-    '12',
-    '13',
-    '14',
-    '15',
-  ]);
-  const [deploymentName, setDeploymentName] = useState('qwen36-w8a8-demo');
+  const [selectedCards, setSelectedCards] = useState<string[]>([]);
+  const [deploymentName, setDeploymentName] = useState('qwen38-27b-demo');
   const [showPlan, setShowPlan] = useState(false);
 
-  const selectedModel = modelCatalog.find(
-    model => model.id === selectedModelId,
-  );
+  useEffect(() => {
+    let mounted = true;
+    if (typeof fetch !== 'function') {
+      return () => {
+        mounted = false;
+      };
+    }
+    fetch('/api/model-platform/catalog')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`catalog HTTP ${response.status}`);
+        }
+        return response.json() as Promise<{ models?: ModelRecipe[] }>;
+      })
+      .then(payload => {
+        if (mounted && payload.models && payload.models.length > 0) {
+          setCatalog(payload.models);
+          setCatalogSource('gitea');
+          setCatalogError(undefined);
+        }
+      })
+      .catch(error => {
+        if (mounted) {
+          setCatalogError(
+            error instanceof Error ? error.message : 'catalog unavailable',
+          );
+        }
+      });
+    fetch('/api/model-platform/deployments')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`status HTTP ${response.status}`);
+        }
+        return response.json() as Promise<LiveDeploymentResponse>;
+      })
+      .then(payload => {
+        if (mounted) {
+          setLiveStatus(payload);
+          setLiveStatusError(undefined);
+        }
+      })
+      .catch(error => {
+        if (mounted) {
+          setLiveStatusError(
+            error instanceof Error ? error.message : 'status unavailable',
+          );
+        }
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const selectedModel = catalog.find(model => model.id === selectedModelId);
   const selectedVariant = selectedModel?.variants.find(
     variant => variant.id === selectedVariantId,
   );
@@ -316,15 +435,20 @@ export const ModelDeploymentRecipesPage = () => {
   const filteredModels = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
-      return modelCatalog;
+      return catalog;
     }
-    return modelCatalog.filter(model =>
+    return catalog.filter(model =>
       [model.title, model.provider, model.modelId, model.quantization]
         .join(' ')
         .toLowerCase()
         .includes(normalizedQuery),
     );
-  }, [query]);
+  }, [catalog, query]);
+
+  const compatibleRecipeCount = catalog.reduce(
+    (total, model) => total + model.variants.length,
+    0,
+  );
 
   const validDeploymentName = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(
     deploymentName,
@@ -355,7 +479,11 @@ export const ModelDeploymentRecipesPage = () => {
           <Chip
             color="primary"
             icon={<CloudDoneIcon />}
-            label="Gitea ModelVersion catalog · read-only"
+            label={
+              catalogSource === 'gitea'
+                ? 'Gitea ModelVersion catalog · live'
+                : 'Gitea ModelVersion catalog · fallback'
+            }
             variant="outlined"
           />
           <Chip label="Deploy through reviewed PR" variant="outlined" />
@@ -394,7 +522,7 @@ export const ModelDeploymentRecipesPage = () => {
                   Verified models
                 </Typography>
                 <Typography className={classes.statValue}>
-                  {modelCatalog.length}
+                  {catalog.length}
                 </Typography>
                 <Typography variant="body2" className={classes.muted}>
                   From the current GitOps catalog snapshot
@@ -407,10 +535,7 @@ export const ModelDeploymentRecipesPage = () => {
                   Compatible recipes
                 </Typography>
                 <Typography className={classes.statValue}>
-                  {modelCatalog.reduce(
-                    (total, model) => total + model.variants.length,
-                    0,
-                  )}
+                  {compatibleRecipeCount}
                 </Typography>
                 <Typography variant="body2" className={classes.muted}>
                   Runtime profiles with verified hardware
@@ -563,6 +688,12 @@ export const ModelDeploymentRecipesPage = () => {
                 it, and Argo CD/Crossplane are the only deployment writers.
               </Typography>
             </Paper>
+            {catalogError && (
+              <Typography color="error" variant="caption">
+                Live catalog unavailable ({catalogError}); showing the pinned
+                release fallback.
+              </Typography>
+            )}
           </Box>
         </Content>
       </Page>
@@ -573,6 +704,7 @@ export const ModelDeploymentRecipesPage = () => {
     return renderCatalog();
   }
 
+  const serving = selectedVariant.serving;
   const recipePlan = `modelVersionRef: ${selectedModel.id}
 runtimeProfileRef: ${selectedVariant.id}
 namespace: model-serving
@@ -580,10 +712,45 @@ node: ${selectedVariant.node}
 cards: [${selectedCards.join(', ')}]
 accelerator: huawei.com/${selectedVariant.accelerator}
 modelPath: ${selectedVariant.modelPath}
-replicas: 0
-compositionRef: modeldeployment-runtime-zero-v1alpha1
+workerReplicas: ${selectedVariant.workerReplicas}
+npuPerWorker: ${selectedVariant.npuPerWorker}
+tensorParallelSize: ${serving?.tensorParallelSize ?? 'profile'}
+dataParallelSize: ${serving?.dataParallelSize ?? 'profile'}
+maxModelLen: ${serving?.maxModelLen ?? 'profile'}
+maxNumSeqs: ${serving?.maxNumSeqs ?? 'profile'}
+maxNumBatchedTokens: ${serving?.maxNumBatchedTokens ?? 'profile'}
+gpuMemoryUtilization: ${serving?.gpuMemoryUtilization ?? 'profile'}
+prefixCaching: ${serving?.prefixCaching ?? 'profile'}
+mtpTokens: ${serving?.mtpTokens ?? 'profile'}
+compilationMode: ${serving?.compilationMode ?? 'profile'}
+compositionRef: modeldeployment-control-plane-v1alpha1
 desiredState: Stopped
 mode: declarative-gitops`;
+  const requestFormData = encodeURIComponent(
+    JSON.stringify({
+      deploymentName,
+      projectRef: 'model-serving',
+      modelVersionRef: selectedModel.id,
+      runtimeProfileRef: selectedVariant.id,
+      visibility: 'internal',
+      requestedTensorParallelSize: Math.max(selectedVariant.npuPerWorker, 1),
+      requestedPipelineParallelSize: 1,
+      requestedReplicas: 1,
+      priority: 'normal',
+    }),
+  );
+  const requestHref = `/create/templates/default/request-model-deployment?formData=${requestFormData}`;
+  const liveDeployment = liveStatus?.deployments.find(
+    deployment =>
+      deployment.modelVersionRef === selectedModel.id ||
+      deployment.name === deploymentName,
+  );
+  const liveResourceCount = liveStatus
+    ? Object.values(liveStatus.resources).reduce(
+        (count, resources) => count + resources.length,
+        0,
+      )
+    : 0;
 
   return (
     <Page themeId="tool">
@@ -685,6 +852,27 @@ mode: declarative-gitops`;
                   </Typography>
                 </Box>
               </Box>
+              {serving && (
+                <Box className={classes.recipeRow}>
+                  <MemoryIcon className={classes.recipeIcon} />
+                  <Box>
+                    <Typography variant="subtitle2">
+                      Ray/vLLM engine parameters
+                    </Typography>
+                    <Typography variant="body2" className={classes.muted}>
+                      TP {serving.tensorParallelSize ?? '—'} / DP{' '}
+                      {serving.dataParallelSize ?? '—'} ·{' '}
+                      {(serving.maxModelLen ?? 0).toLocaleString()} context ·{' '}
+                      {serving.maxNumSeqs ?? '—'} seq ·{' '}
+                      {serving.maxNumBatchedTokens ?? '—'} batched tokens ·{' '}
+                      {serving.gpuMemoryUtilization ?? '—'} memory · Prefix Cache{' '}
+                      {serving.prefixCaching ? 'on' : 'off'} · MTP{' '}
+                      {serving.mtpTokens ?? '—'} ·{' '}
+                      {serving.compilationMode ?? '—'}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
             </InfoCard>
 
             <Box mt={2}>
@@ -728,28 +916,42 @@ mode: declarative-gitops`;
                 </Box>
                 <Box className={classes.fieldGroup}>
                   <Typography variant="subtitle2">Certified cards</Typography>
-                  <Typography variant="body2" className={classes.muted}>
-                    The current recipe is certified for all six physical IDs on{' '}
-                    {selectedVariant.node}. Card selection is preview-only.
-                  </Typography>
-                  <Box className={classes.cardPicker}>
-                    {selectedVariant.cardIds.map(cardId => {
-                      const selected = selectedCards.includes(cardId);
-                      return (
-                        <Button
-                          color={selected ? 'primary' : 'default'}
-                          key={cardId}
-                          onClick={() => toggleCard(cardId)}
-                          variant={selected ? 'contained' : 'outlined'}
-                        >
-                          NPU {cardId}
-                        </Button>
-                      );
-                    })}
-                  </Box>
+                  {selectedVariant.cardIds.length > 0 ? (
+                    <>
+                      <Typography variant="body2" className={classes.muted}>
+                        The current recipe is certified for the listed physical
+                        IDs on {selectedVariant.node}. Card selection is
+                        preview-only.
+                      </Typography>
+                      <Box className={classes.cardPicker}>
+                        {selectedVariant.cardIds.map(cardId => {
+                          const selected = selectedCards.includes(cardId);
+                          return (
+                            <Button
+                              color={selected ? 'primary' : 'default'}
+                              key={cardId}
+                              onClick={() => toggleCard(cardId)}
+                              variant={selected ? 'contained' : 'outlined'}
+                            >
+                              NPU {cardId}
+                            </Button>
+                          );
+                        })}
+                      </Box>
+                    </>
+                  ) : (
+                    <Typography variant="body2" className={classes.muted}>
+                      The runtime profile owns placement on{' '}
+                      {selectedVariant.node}
+                      and requests {selectedVariant.npuPerWorker} NPUs per Ray
+                      worker; individual physical IDs are intentionally not
+                      selected in Backstage.
+                    </Typography>
+                  )}
                   {!validCardSelection && (
                     <Typography color="error" variant="caption">
-                      Select all six certified cards for this runtime recipe.
+                      Select all {selectedVariant.cardIds.length} certified
+                      cards for this runtime recipe.
                     </Typography>
                   )}
                 </Box>
@@ -783,9 +985,9 @@ mode: declarative-gitops`;
                 <TextField
                   disabled
                   fullWidth
-                  helperText="Current runtime profile is Recreate, one replica"
+                  helperText="Current request is stopped; profile workers remain at zero until an approved sync"
                   label="Replica strategy"
-                  value="Recreate / 1 replica"
+                  value={`Recreate / ${selectedVariant.workerReplicas} workers`}
                   variant="outlined"
                 />
               </Box>
@@ -797,7 +999,8 @@ mode: declarative-gitops`;
                       Resolved resources
                     </Typography>
                     <Typography variant="body2" className={classes.muted}>
-                      64 CPU / 256 GiB / {selectedCards.length} NPU
+                      64 CPU / 256 GiB / {selectedVariant.npuPerWorker} NPU per
+                      Ray worker
                     </Typography>
                   </Box>
                 </Box>
@@ -826,7 +1029,7 @@ mode: declarative-gitops`;
                   disabled={!validDeploymentName || !validCardSelection}
                   fullWidth
                   component="a"
-                  href="/create/templates/default/request-model-deployment"
+                  href={requestHref}
                   startIcon={<PlayArrowIcon />}
                   variant="contained"
                 >
@@ -847,6 +1050,51 @@ mode: declarative-gitops`;
                 </Typography>
               )}
             </InfoCard>
+
+            <Box mt={2}>
+              <InfoCard title="Live control-plane status">
+                {liveDeployment && (
+                  <>
+                    <Box className={classes.recipeRow}>
+                      <CloudDoneIcon className={classes.recipeIcon} />
+                      <Box>
+                        <Typography variant="subtitle2">
+                          XR {liveDeployment.name}
+                        </Typography>
+                        <Typography variant="body2" className={classes.muted}>
+                          {liveDeployment.phase ?? 'Reconciled'} · desired state{' '}
+                          {liveDeployment.desiredState ?? 'unknown'} ·
+                          composition{' '}
+                          {liveDeployment.compositionRef ?? 'default'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Typography variant="body2" className={classes.muted}>
+                      Read-only snapshot at {liveStatus?.observedAt};{' '}
+                      {liveResourceCount} model-platform composed resources are
+                      visible. No page action writes Kubernetes.
+                    </Typography>
+                  </>
+                )}
+                {!liveDeployment && liveStatus && (
+                  <Typography variant="body2" className={classes.muted}>
+                    No live XR for this model yet. The request link below will
+                    create a stopped declaration; this page will discover its
+                    status after Argo CD sync.
+                  </Typography>
+                )}
+                {!liveDeployment && !liveStatus && (
+                  <Typography variant="body2" className={classes.muted}>
+                    Loading the read-only model-serving status…
+                  </Typography>
+                )}
+                {liveStatusError && (
+                  <Typography color="error" variant="caption">
+                    Live status unavailable ({liveStatusError}).
+                  </Typography>
+                )}
+              </InfoCard>
+            </Box>
 
             <Box mt={2}>
               <Paper className={classes.success} elevation={0} role="status">

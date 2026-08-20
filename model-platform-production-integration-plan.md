@@ -58,6 +58,13 @@
 - 现有 Ray Head 和 Qwen3.6 推理工作负载。
 - Artifact Keeper 核心服务。
 
+2026-08-19 的只读复核确认 `monitoring` 中 Prometheus/Grafana/Alertmanager 和
+Node Exporter 正常，`npu-exporter` DaemonSet 为 `9/9/9`，Prometheus 的 9 个 NPU
+target 全部 `up=1`。A3 的实时利用率快照显示仍有负载；`gpu-server-00` 等 910B3
+节点当时整体利用率为 0、进程数为 0，但这只是容量评审输入，不是自动调度保证。
+当前节点清单没有 A2 节点；外部 A2 必须单独以 exporter target/remote_write 接入。
+完整快照和查询见 `production/model-platform/monitoring-status-20260819.md`。
+
 原有 Backstage、Gitea、Tekton、Argo CD、Crossplane 的完整 POC 运行在独立 Kind 环境。不能假设这些组件已经部署到生产 K3s，实施前必须重新盘点。
 
 ### 2.2 Artifact Keeper 当前状态

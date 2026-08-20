@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: artifact-publish-runner
+  namespace: artifact-publish
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: artifact-publish-listener
+  namespace: artifact-publish
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: artifact-publish-listener
+  namespace: artifact-publish
+rules:
+  - apiGroups: ["triggers.tekton.dev"]
+    resources: ["eventlisteners", "interceptors", "triggerbindings", "triggertemplates", "triggers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns"]
+    verbs: ["create", "get", "list"]
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    resourceNames: ["artifact-publish-runner"]
+    verbs: ["impersonate"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: artifact-publish-listener
+  namespace: artifact-publish
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: artifact-publish-listener
+---
+# The built-in CEL interceptor is cluster-scoped. This read-only binding is
+# required for the EventListener to resolve it; it grants no pipeline or
+# workload write permission.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: artifact-publish-listener-cluster-read
+rules:
+  - apiGroups: ["triggers.tekton.dev"]
+    resources: ["clusterinterceptors", "clustertriggerbindings"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: artifact-publish-listener-cluster-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: artifact-publish-listener-cluster-read
+subjects:
+  - kind: ServiceAccount
+    name: artifact-publish-listener
+    namespace: artifact-publish

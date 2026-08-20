@@ -102,6 +102,44 @@ scoped read-only Secret named `artifact-keeper-image-pull` exists in
 `model-platform-ci`; the live Pipeline is constrained to `server-00`, whose
 authenticated Artifact Keeper pull path was verified before this migration.
 
+## Artifact Keeper publish MVP (local design, not applied)
+
+`artifact-publish/` is a separate, opt-in Tekton lane for Backstage-submitted
+artifact metadata. It does not modify `model-platform-ci`, does not create a
+Gitea repository, and does not schedule model/NPU workloads. Its Pipeline
+validates a `staging://` source, uploads through Artifact Keeper's resumable
+chunk API and verifies the returned SHA256. Backstage reads the resulting
+PipelineRuns and TaskRun logs with read-only RBAC.
+
+The directory is intentionally missing the staging PVC and all credential
+values. Before any apply, create two Secrets out of band in `artifact-publish`
+using the approved `ci-images-reader` and repository-scoped publisher
+credentials:
+
+```bash
+sudo k3s kubectl -n artifact-publish create secret docker-registry \
+  artifact-keeper-image-pull \
+  --docker-server=110.120.0.3:30670 \
+  --docker-username='ci-images-reader' \
+  --docker-password="$AK_PULL_TOKEN"
+
+sudo k3s kubectl -n artifact-publish create secret generic \
+  artifact-keeper-publisher \
+  --from-literal=token="$AK_PUBLISHER_TOKEN"
+```
+
+The shell variables above must be entered interactively or obtained from the
+approved secret manager; they must not be written to the repository or command
+history. The `artifact-publish` namespace must exist before the Backstage
+read-only Role/RoleBinding in `backstage/kubernetes/rbac.yaml` is applied.
+The `artifact-publish-staging` PVC is a separate capacity decision and is not
+created by this kustomization.
+
+The Backstage integration remains disabled until stable HTTPS and the explicit
+`artifactManagement` configuration gate are approved. See
+`backstage/artifact-management-mvp-20260819.md` for the apply order, rollback
+boundary and validation checklist.
+
 Production recheck on 2026-08-17 found two Ready EventListeners and nine
 historical terminal PipelineRuns. The Artifact Keeper migration validation
 `model-platform-config-ak-migration-20260817` completed with both validation

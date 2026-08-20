@@ -18,7 +18,7 @@ pinned to `modeldeployment-control-plane-v1alpha1`; the user-facing
 `compositionRef` is therefore not allowed to select a runtime composition during
 this stage.
 
-The three `*.template.yaml` files are examples for generating the real Gitea
+The `*.template.yaml` files are examples for generating the real Gitea
 objects. They are not valid production releases while they contain angle
 bracket values and are never selected by Argo or Tekton. After the CPU-only
 importer prints its immutable manifest, generate:
@@ -26,6 +26,7 @@ importer prints its immutable manifest, generate:
 ```text
 environments/production/catalog/qwen3.8-27b-w8a8.yaml
 environments/production/catalog/qwen38-w8a8-ray-ascend-910b3-v1.yaml
+environments/production/catalog/qwen38-w8a8-ray-ascend-910b3-tp2-v1.yaml
 environments/production/modeldeployments/qwen38-27b.yaml
 ```
 
@@ -33,9 +34,34 @@ The ModelVersion records the ModelScope source (or the explicitly marked
 `a3-preloaded` source when an already-quantized A3 snapshot is imported), the
 ModelSlim provenance and the final W8A8 Artifact Keeper path. The RuntimeProfile
 records the ARM64/Ray image, cache image, exact container model path
-`/models/Qwen3.8-27B-w8a8` and 8-NPU worker contract. The ModelDeployment repeats
-only the immutable values that Crossplane needs to render; Tekton rejects any
-mismatch with the catalog.
+`/models/Qwen3.8-27B-w8a8` and the worker contract. The existing `v1` profile keeps
+the original 8-chip Ray baseline. The reusable `tp2-v1` profile is the approved
+first validation profile: one worker requests two `huawei.com/Ascend910` units and
+its Ray Serve LLM config carries TP=2, DP=1, 32K context, 64 sequence admission,
+8192 max batched tokens, 0.90 memory utilization, Prefix Cache, three-token MTP and
+`FULL_DECODE_ONLY`. The ModelDeployment repeats only the immutable values that
+Crossplane needs to render; Tekton rejects any mismatch with the catalog.
+
+## Chip and scheduling meaning
+
+For `gpu-server-00`, the Kubernetes device-plugin resource
+`huawei.com/Ascend910: 1` is treated as one allocatable Ascend chip/device unit,
+the same scheduling unit that is commonly called one GPU in a CUDA cluster. TP=2
+therefore requests two units in one worker pod. The Kubernetes scheduler reserves
+the two units first; KubeRay then starts the Ray worker, and Ray Serve's placement
+group reserves two matching Ray resource bundles for the vLLM engine. The exact
+physical chip IDs are not put in Git or forced through `ASCEND_RT_VISIBLE_DEVICES`;
+the device plugin owns that mapping and a preflight must confirm the pair is valid.
+
+## Docker flags versus the Ray profile
+
+The successful A3 Docker record remains the hardware/engine reference. Its
+`vllm serve` flags are represented as `engine_kwargs` in the TP2 profile, while
+`deployment_config.max_ongoing_requests` represents the Ray Serve admission limit
+and `placement_group_config` represents the two-chip gang reservation. This is a
+RayService/KubeRay workload, not an `apps/v1 Deployment`: Argo submits the XR,
+Crossplane composes the RayService, KubeRay creates the RayCluster, and Ray schedules
+the vLLM engine actors. No TP2 worker is created while this document is being prepared.
 
 The imported release currently uses the A3 snapshot with ModelScope revision
 `e823e888ae179eb3be02c1a48899c4f828371376` and the following immutable Artifact

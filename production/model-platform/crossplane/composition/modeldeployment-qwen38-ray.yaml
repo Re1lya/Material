@@ -373,7 +373,8 @@ spec:
                             replicas: 0
                             minReplicas: 0
                             maxReplicas: 1
-                            rayStartParams: {}
+                            rayStartParams:
+                              resources: '{"huawei.com/Ascend910":8}'
                             template:
                               metadata:
                                 labels:
@@ -394,6 +395,16 @@ spec:
                                         value: qwen3.8-27b-w8a8
                                       - name: MODEL_MANIFEST_DIGEST
                                         value: ""
+                                      - name: RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES
+                                        value: "1"
+                                      - name: PYTORCH_NPU_ALLOC_CONF
+                                        value: expandable_segments:True
+                                      - name: HCCL_BUFFSIZE
+                                        value: "512"
+                                      - name: OMP_PROC_BIND
+                                        value: "false"
+                                      - name: OMP_NUM_THREADS
+                                        value: "1"
                                     resources:
                                       requests:
                                         cpu: "64"
@@ -480,6 +491,14 @@ spec:
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.runtime.npuPerWorker
                 toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits["huawei.com/Ascend910"]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtime.npuPerWorker
+                toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].rayStartParams.resources
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: '{"huawei.com/Ascend910":%s}'
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.runtime.workerReplicas
                 toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].replicas

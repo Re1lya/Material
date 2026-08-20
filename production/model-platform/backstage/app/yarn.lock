@@ -12161,6 +12161,7 @@ __metadata:
     "@backstage/plugin-search-backend-node": "npm:^1.4.6"
     "@backstage/plugin-user-settings-backend": "npm:^0.4.5"
     app: "link:../app"
+    express-promise-router: "npm:^4.1.0"
     node-gyp: "npm:^10.0.0"
     pg: "npm:^8.11.3"
     yaml: "npm:^2.9.0"

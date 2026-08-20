@@ -24,6 +24,20 @@ developer one place to:
 - follow links to Gitea and Artifact Keeper without receiving direct
   Kubernetes write permission.
 
+The current source-level recipe integration reads the allow-listed
+`ModelVersion`/`ModelRuntimeProfile` documents from Gitea through a backend
+read-only API, reads namespaced `ModelDeployment`/RayService/cache status from
+Kubernetes using the Backstage ServiceAccount, and sends the deployment button
+to the constrained Scaffolder template. The Scaffolder action resolves the
+selected catalog contract again on the backend before creating one stopped
+Gitea PR. It never accepts a browser-supplied image, host path, node name or
+Kubernetes manifest.
+
+The source-level Recipe release boundary and its Tekton/Argo safety checks are
+recorded in `../tekton-argocd-recipe-release-20260819.md`. Production still
+needs a new AMD64 Backstage image rollout before this live-catalog behavior is
+accepted as deployed.
+
 It is not required to provide HA, TechDocs, full-text search, chat, an internal
 artifact uploader, automatic Argo synchronization or direct NPU scheduling in
 the first release.
@@ -63,6 +77,12 @@ Artifact Keeper holds immutable artifacts, Kubernetes holds runtime state, and
 GitHub holds the source and PR review state for `ora-space/desktop`.
 
 ## Planned unified Gitea and Artifact Keeper onboarding (MVP)
+
+The first implementation is now present locally under
+`artifact-management-mvp-20260819.md`. It adds the restricted Artifact Keeper
+repository/token page and a Tekton publish-status path, but remains opt-in: the
+production Backstage config still leaves the section absent until HTTPS,
+namespace-local Secrets and a staging PVC are approved.
 
 The current production image does not yet create Artifact Keeper or Gitea
 repositories. It only creates the constrained ModelDeployment PR in the fixed
@@ -308,25 +328,23 @@ only after HTTPS push/pull and rollback tests pass.
 
 ## Backstage model-platform backend contract
 
-The small backend module should provide a read-only aggregate API such as:
+The small backend module provides the following read-only aggregate API for the
+recipe page (all data is filtered to the fixed platform contract):
 
-- `GET /api/model-platform/models` — Gitea catalog plus Artifact Keeper
-  availability/checksum metadata;
-- `GET /api/model-platform/artifact-repositories` — approved Artifact Keeper
-  repository metadata and usage, without artifact bytes or token values;
-- `POST /api/model-platform/artifact-repositories` — create one bounded local
-  repository after identity, format and quota validation;
-- `POST /api/model-platform/projects` — create one approved Gitea project and
-  its Artifact Keeper metadata binding; no arbitrary owner or admin settings;
-- `POST /api/model-platform/artifact-publish-runs` — start a Tekton upload
-  PipelineRun and return only its run reference;
+- `GET /api/model-platform/catalog` — allow-listed Gitea `ModelVersion` and
+  `ModelRuntimeProfile` documents, reduced to the recipe fields; no model bytes
+  or credentials;
 - `GET /api/model-platform/deployments` — selected ModelDeployment and
-  workload conditions from Kubernetes;
-- `GET /api/model-platform/ci/:repository/:revision` — links/status from
-  GitHub Checks or Tekton labels;
-- `POST /api/model-platform/deployment-requests` — validate an allow-listed
-  request and create exactly one Gitea branch and PR (the current Scaffolder
-  action is the implementation).
+  model-platform workload conditions from Kubernetes, including RayService,
+  cache Job/PVC and Service summaries;
+- the authenticated Scaffolder action
+  `model-platform:gitea-create-deployment-pr` — validates an allow-listed
+  request and creates exactly one stopped Gitea branch and PR. There is no
+  direct Kubernetes write route.
+
+Artifact repository provisioning, project creation, artifact publishing and
+CI status aggregation remain planned follow-up capabilities. They are not
+implicitly enabled by the recipe integration.
 
 The write action accepts model version, certified runtime profile and bounded
 TP/PP/replica/priority intent. It must reject arbitrary images, node
@@ -339,6 +357,11 @@ The first Software Templates are:
 1. register an existing component/repository;
 2. register a model version and return the `modelctl publish` command;
 3. request/update/stop a model deployment by creating a Gitea PR.
+
+The source-level Recipe connection and its no-NPU validation are recorded in
+`model-deployment-recipe-integration-20260819.md`. The deployed Pod remains on
+the previously released image until a separate Backstage-only rollout is
+approved.
 
 Template 3 stays hidden or disabled until the ModelDeployment XRD is Offered,
 the Composition renders successfully with no real XR, and the target Gitea
