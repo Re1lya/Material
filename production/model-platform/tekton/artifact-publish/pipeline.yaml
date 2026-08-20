@@ -1,0 +1,290 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: publish-artifact
+  namespace: artifact-publish
+  labels:
+    app.kubernetes.io/part-of: model-platform-artifact-publish
+    app.kubernetes.io/component: ci
+spec:
+  description: Validate a controlled staging reference and publish one immutable Artifact Keeper artifact by resumable chunks.
+  params:
+    - name: repository-key
+      type: string
+    - name: artifact-path
+      type: string
+    - name: source-ref
+      type: string
+    - name: total-size
+      type: string
+    - name: checksum-sha256
+      type: string
+    - name: idempotency-key
+      type: string
+    - name: artifact-keeper-base-url
+      type: string
+      default: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+    - name: chunk-size
+      type: string
+      default: "8388608"
+  workspaces:
+    - name: staging
+      description: Pre-approved source staging PVC; source-ref can only address a file below this workspace.
+  tasks:
+    - name: validate-input
+      params:
+        - name: repository-key
+          value: $(params.repository-key)
+        - name: artifact-path
+          value: $(params.artifact-path)
+        - name: source-ref
+          value: $(params.source-ref)
+        - name: total-size
+          value: $(params.total-size)
+        - name: checksum-sha256
+          value: $(params.checksum-sha256)
+        - name: idempotency-key
+          value: $(params.idempotency-key)
+      taskSpec:
+        params:
+          - name: repository-key
+            type: string
+          - name: artifact-path
+            type: string
+          - name: source-ref
+            type: string
+          - name: total-size
+            type: string
+          - name: checksum-sha256
+            type: string
+          - name: idempotency-key
+            type: string
+        steps:
+          - name: validate
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            script: |
+              #!/usr/bin/env python3
+              import os, re
+
+              key = os.environ['REPOSITORY_KEY']
+              path = os.environ['ARTIFACT_PATH']
+              source = os.environ['SOURCE_REF']
+              size = int(os.environ['TOTAL_SIZE'])
+              checksum = os.environ['CHECKSUM_SHA256']
+              idem = os.environ['IDEMPOTENCY_KEY']
+              if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', key):
+                  raise SystemExit('repository key is invalid')
+              if not key.startswith(('platform-', 'model-')):
+                  raise SystemExit('repository key is outside the publish boundary')
+              if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/@+-]{0,511}', path) or '..' in path:
+                  raise SystemExit('artifact path is invalid')
+              if not source.startswith('staging://') or '..' in source:
+                  raise SystemExit('source-ref must be a controlled staging:// reference')
+              if size < 1 or size > 536870912000:
+                  raise SystemExit('total size is outside the 500 GiB policy limit')
+              if not re.fullmatch(r'[a-f0-9]{64}', checksum):
+                  raise SystemExit('checksum must be lowercase SHA256')
+              if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:-]{0,127}', idem):
+                  raise SystemExit('idempotency key is invalid')
+              print('publish_input_validation=PASS')
+            env:
+              - name: REPOSITORY_KEY
+                value: $(params.repository-key)
+              - name: ARTIFACT_PATH
+                value: $(params.artifact-path)
+              - name: SOURCE_REF
+                value: $(params.source-ref)
+              - name: TOTAL_SIZE
+                value: $(params.total-size)
+              - name: CHECKSUM_SHA256
+                value: $(params.checksum-sha256)
+              - name: IDEMPOTENCY_KEY
+                value: $(params.idempotency-key)
+            computeResources:
+              requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 256Mi}
+              limits: {cpu: 500m, memory: 512Mi, ephemeral-storage: 1Gi}
+    - name: upload
+      runAfter: [validate-input]
+      params:
+        - name: repository-key
+          value: $(params.repository-key)
+        - name: artifact-path
+          value: $(params.artifact-path)
+        - name: source-ref
+          value: $(params.source-ref)
+        - name: total-size
+          value: $(params.total-size)
+        - name: checksum-sha256
+          value: $(params.checksum-sha256)
+        - name: artifact-keeper-base-url
+          value: $(params.artifact-keeper-base-url)
+        - name: chunk-size
+          value: $(params.chunk-size)
+      workspaces:
+        - name: staging
+          workspace: staging
+      taskSpec:
+        params:
+          - name: repository-key
+            type: string
+          - name: artifact-path
+            type: string
+          - name: source-ref
+            type: string
+          - name: total-size
+            type: string
+          - name: checksum-sha256
+            type: string
+          - name: artifact-keeper-base-url
+            type: string
+          - name: chunk-size
+            type: string
+        workspaces:
+          - name: staging
+        steps:
+          - name: upload-chunks
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: AK_BASE_URL
+                value: $(params.artifact-keeper-base-url)
+              - name: AK_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: artifact-keeper-publisher
+                    key: token
+              - name: REPOSITORY_KEY
+                value: $(params.repository-key)
+              - name: ARTIFACT_PATH
+                value: $(params.artifact-path)
+              - name: SOURCE_REF
+                value: $(params.source-ref)
+              - name: EXPECTED_SIZE
+                value: $(params.total-size)
+              - name: EXPECTED_SHA256
+                value: $(params.checksum-sha256)
+              - name: CHUNK_SIZE
+                value: $(params.chunk-size)
+            workingDir: $(workspaces.staging.path)
+            script: |
+              #!/usr/bin/env python3
+              import hashlib, json, os, pathlib, re, urllib.error, urllib.request
+
+              base = os.environ['AK_BASE_URL'].rstrip('/')
+              token = os.environ['AK_TOKEN']
+              repo = os.environ['REPOSITORY_KEY']
+              artifact = os.environ['ARTIFACT_PATH']
+              source = os.environ['SOURCE_REF']
+              expected_size = int(os.environ['EXPECTED_SIZE'])
+              expected_sha = os.environ['EXPECTED_SHA256']
+              chunk_size = int(os.environ['CHUNK_SIZE'])
+              relative = source.removeprefix('staging://')
+              root = pathlib.Path(os.getcwd()).resolve()
+              source_path = (root / relative).resolve()
+              if root not in source_path.parents or not source_path.is_file():
+                  raise SystemExit('source-ref does not resolve below the staging workspace')
+              if source_path.stat().st_size != expected_size:
+                  raise SystemExit('source size does not match the request')
+
+              def call(method, path, body=None, headers=None):
+                  data = None if body is None else (body if isinstance(body, bytes) else json.dumps(body).encode())
+                  request = urllib.request.Request(base + path, data=data, method=method)
+                  request.add_header('Authorization', 'Bearer ' + token)
+                  if body is not None:
+                      request.add_header('Content-Type', 'application/json')
+                  for key, value in (headers or {}).items():
+                      request.add_header(key, value)
+                  try:
+                      with urllib.request.urlopen(request, timeout=120) as response:
+                          return response.status, response.read()
+                  except urllib.error.HTTPError as error:
+                      raise SystemExit(f'Artifact Keeper {method} {path} failed HTTP {error.code}')
+
+              session_status, raw = call('POST', '/api/v1/uploads', {
+                  'repository_key': repo,
+                  'artifact_path': artifact,
+                  'total_size': expected_size,
+                  'checksum_sha256': expected_sha,
+                  'chunk_size': chunk_size,
+                  'content_type': 'application/octet-stream',
+              })
+              session = json.loads(raw)
+              session_id = session['session_id']
+              actual_chunk_size = int(session['chunk_size'])
+              if actual_chunk_size != chunk_size:
+                  chunk_size = actual_chunk_size
+              with source_path.open('rb') as handle:
+                  index = 0
+                  offset = 0
+                  while offset < expected_size:
+                      data = handle.read(chunk_size)
+                      if not data:
+                          raise SystemExit('source ended before expected size')
+                      end = offset + len(data) - 1
+                      call('PATCH', f'/api/v1/uploads/{session_id}', data, {
+                          'Content-Type': 'application/octet-stream',
+                          'Content-Length': str(len(data)),
+                          'Content-Range': f'bytes {offset}-{end}/{expected_size}',
+                      })
+                      index += 1
+                      offset = end + 1
+                      print(f'chunk_uploaded={index} bytes={offset}', flush=True)
+              status, raw = call('PUT', f'/api/v1/uploads/{session_id}/complete')
+              completed = json.loads(raw)
+              print(json.dumps({'artifact_id': completed.get('artifact_id'), 'path': completed.get('path'), 'size': completed.get('size'), 'checksum_sha256': completed.get('checksum_sha256')}))
+            computeResources:
+              requests: {cpu: 250m, memory: 512Mi, ephemeral-storage: 1Gi}
+              limits: {cpu: "1", memory: 1Gi, ephemeral-storage: 2Gi}
+    - name: verify
+      runAfter: [upload]
+      params:
+        - name: repository-key
+          value: $(params.repository-key)
+        - name: artifact-path
+          value: $(params.artifact-path)
+        - name: checksum-sha256
+          value: $(params.checksum-sha256)
+        - name: artifact-keeper-base-url
+          value: $(params.artifact-keeper-base-url)
+      taskSpec:
+        params:
+          - name: repository-key
+            type: string
+          - name: artifact-path
+            type: string
+          - name: checksum-sha256
+            type: string
+          - name: artifact-keeper-base-url
+            type: string
+        steps:
+          - name: verify-metadata
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: AK_BASE_URL
+                value: $(params.artifact-keeper-base-url)
+              - name: AK_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: artifact-keeper-publisher
+                    key: token
+              - name: REPOSITORY_KEY
+                value: $(params.repository-key)
+              - name: ARTIFACT_PATH
+                value: $(params.artifact-path)
+              - name: EXPECTED_SHA256
+                value: $(params.checksum-sha256)
+            script: |
+              #!/usr/bin/env python3
+              import json, os, urllib.parse, urllib.request
+              url = os.environ['AK_BASE_URL'].rstrip('/') + '/api/v1/repositories/' + urllib.parse.quote(os.environ['REPOSITORY_KEY'], safe='') + '/artifacts/' + urllib.parse.quote(os.environ['ARTIFACT_PATH'], safe='/')
+              request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['AK_TOKEN'], 'Accept': 'application/json'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  metadata = json.load(response)
+              if metadata.get('checksum_sha256') != os.environ['EXPECTED_SHA256']:
+                  raise SystemExit('Artifact Keeper metadata checksum mismatch')
+              print('artifact_metadata_verification=PASS')
+            computeResources:
+              requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 256Mi}
+              limits: {cpu: 500m, memory: 512Mi, ephemeral-storage: 1Gi}

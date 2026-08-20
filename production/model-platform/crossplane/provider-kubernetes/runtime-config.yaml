@@ -1,0 +1,53 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-kubernetes-runtime
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: provider-kubernetes
+spec:
+  serviceAccountTemplate:
+    metadata:
+      name: provider-kubernetes
+  deploymentTemplate:
+    spec:
+      replicas: 1
+      selector: {}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: model-platform
+            app.kubernetes.io/component: provider-kubernetes
+        spec:
+          nodeSelector:
+            kubernetes.io/os: linux
+            kubernetes.io/arch: amd64
+            kubernetes.io/hostname: server-00
+          imagePullSecrets:
+            - name: artifact-keeper-image-pull
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: package-runtime
+              # Crossplane resolves the package through the internal HTTPS
+              # route. K3s containerd pulls the runtime image through the
+              # node-registered Artifact Keeper NodePort because the node
+              # resolver cannot resolve *.svc.cluster.local.
+              image: 110.120.0.3:30670/container-images/provider-kubernetes@sha256:e0198c31a99eedcfc061c008da56fbffff967f54b211475cd19185408ed2e61d
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532

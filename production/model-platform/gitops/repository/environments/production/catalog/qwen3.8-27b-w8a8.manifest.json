@@ -1,0 +1,31 @@
+{
+  "files": [
+    {"path": ".gitattributes", "sha256": "ea531a2287d6df7b3d3760738c1d10289568afe669efd9fe34f54ffe5e76e937", "size": 2229},
+    {"path": "Qwen3.8-27B_best_practice.yaml", "sha256": "7053cd08546b8a00158e49ec890742259dd72f7915e1b278c408d055eb1dc2b5", "size": 1085},
+    {"path": "README.md", "sha256": "ca5fee06c31e9a71b558bfcf7aa40942df59a78f6a730c905c3dda08ca84792a", "size": 1043},
+    {"path": "chat_template.jinja", "sha256": "c3cf9e34abf4f9e36c2d72165aa9c132d3e2a725b6c2586aaa3a8af9d7a81041", "size": 8952},
+    {"path": "config.json", "sha256": "191e0af232104ed8b65258cf3fb2b842e288008baca7633c11b82a1ac7203aab", "size": 4312},
+    {"path": "configuration.json", "sha256": "8fa209ef18ac53dea0c47cf8d6f4e92c907565a4971bee413c1772e314a251fa", "size": 29},
+    {"path": "crc32.txt", "sha256": "b42dd291f5f98b05807e458f5b47849969a9b3326acbf0c97d28b05826740b83", "size": 238},
+    {"path": "generation_config.json", "sha256": "e70c136c1b78ddc1fb0905bac8e733a4dc448d4f852a5dd75143fffc70be550e", "size": 202},
+    {"path": "merges.txt", "sha256": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d", "size": 3353259},
+    {"path": "preprocessor_config.json", "sha256": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516", "size": 390},
+    {"path": "quant_model_description.json", "sha256": "d3725f719225567a6cd0fd3e340860082e36c3643dfe0f32d64e3172547bf793", "size": 150252},
+    {"path": "quant_model_weights-00001-of-00010.safetensors", "sha256": "500817339c96773da713ac0d99ca983122cb563e528593df3a8b330ed8648c11", "size": 3651301288},
+    {"path": "quant_model_weights-00002-of-00010.safetensors", "sha256": "f0db5b077ce04009320791e4d781e84ce081c4412437af8ed34c8695fdd5baa9", "size": 2867459912},
+    {"path": "quant_model_weights-00003-of-00010.safetensors", "sha256": "7d913af1f62f996e076a9a19a1a9e34c0ac3bbec2119a06b5bd23df1ae4e8c06", "size": 3690013416},
+    {"path": "quant_model_weights-00004-of-00010.safetensors", "sha256": "ce492366d1902004aaf2e1bfaddf758c6534e6fea00833d77c11c2c277f01392", "size": 3890561216},
+    {"path": "quant_model_weights-00005-of-00010.safetensors", "sha256": "6866cf8adcccc4cc6a00e74bc025f1a774fb52103b70f2674d0288272951a733", "size": 2542796896},
+    {"path": "quant_model_weights-00006-of-00010.safetensors", "sha256": "1166401c565f47119176b0bb93bbd9fe4f66850e7bc49aabfeba49a20d0c5175", "size": 2620261072},
+    {"path": "quant_model_weights-00007-of-00010.safetensors", "sha256": "1e22bff91476ac31fd41fa6c5b6772286cacb458fcb0b13cd0d401d15504cf42", "size": 2542796928},
+    {"path": "quant_model_weights-00008-of-00010.safetensors", "sha256": "b11d51a9214229b57daf5b076a85d0fc330e24d814c9e58e1fcc94707f80a74c", "size": 3790848864},
+    {"path": "quant_model_weights-00009-of-00010.safetensors", "sha256": "10311cdef6e5c917c29fc5adbbea5e440dbe30ff1614d56466f285ef2c22950b", "size": 3506684520},
+    {"path": "quant_model_weights-00010-of-00010.safetensors", "sha256": "54432100b68ff2f5cd362ec5fd5e798bfd259c2a67da75db00d42b310922b732", "size": 3026044064},
+    {"path": "quant_model_weights.safetensors.index.json", "sha256": "512d41c5403b1fe0a65861ffe70da9a84a1e93a534e132fd31a01fdc32844ae9", "size": 230367},
+    {"path": "tokenizer.json", "sha256": "0997f410c57a1f4e53b09e4be8f4a172d90edd9564368fb0847030937229b9f3", "size": 12809320},
+    {"path": "tokenizer_config.json", "sha256": "b11349aafa7cdc6a320767cf7ceb29ed82f7eda5d65e8e0819e76f0ce947bf27", "size": 17928},
+    {"path": "video_preprocessor_config.json", "sha256": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13", "size": 385},
+    {"path": "vocab.json", "sha256": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003", "size": 6722759}
+  ],
+  "schemaVersion": 1
+}

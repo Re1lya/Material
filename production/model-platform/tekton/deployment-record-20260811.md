@@ -1,5 +1,186 @@
 # Tekton production deployment record — 2026-08-11
 
+## Current production recheck — 2026-08-14
+
+This section supersedes the original acceptance snapshot where the facts have
+since advanced; the original installation evidence below is retained for
+traceability.
+
+- Tekton Operator, Pipelines, Triggers and both `model-platform-ci`
+  EventListeners are Ready on the production K3s cluster.
+- The ModelDeployment validator, Gitea PR status writer and GitHub listener are
+  deployed. The real Gitea close/reopen delivery path was confirmed, and the
+  latest validation PipelineRun `model-platform-config-validation-qhz2f`
+  succeeded.
+- Current run history contains 9 terminal PipelineRuns (6 `Succeeded`, 3
+  historical `Failed`) and 14 terminal TaskRuns (11 succeeded, 3 failures in
+  the old report-status Step). The failed runs reached clone/validation; they
+  are retained as evidence and were not deleted during this recheck.
+- `model-platform-ci/artifact-keeper-image-pull` is a namespace-local
+  `kubernetes.io/dockerconfigjson` Secret created out of band for the
+  Artifact Keeper `container-images` repository. The live CI image is now the
+  Artifact Keeper digest below; the previous 8889 digest remains the rollback
+  reference.
+- All CI paths remain NPU-free: no TaskRun requests an Ascend resource, creates
+  a model runtime, or synchronizes Argo CD.
+
+## Credential and migration preparation — 2026-08-17
+
+- A new repository-scoped read-only `ci-images-reader` token was entered
+  interactively and used to replace the existing
+  `model-platform-ci/artifact-keeper-image-pull` Secret. Only Secret type and
+  key names were inspected; the token value was not read back or recorded.
+- Local Material manifests point all four CI image steps at the identical
+  Artifact Keeper digest and add the pull Secret to Trigger-generated
+  PipelineRuns. The installed Tekton CRD does not support a Pipeline-level
+  `spec.taskRunTemplate`, so the source manifest intentionally keeps the
+  injection only where Tekton accepts it; manual Runs provide the same template
+  explicitly.
+- A temporary pull Pod on `server-00` then completed with
+  `artifact_keeper_pull=PASS`, used only `10m CPU/16Mi memory`, declared no
+  Ascend resource, and was deleted. The two existing Listener Pods remained
+  Running and the cluster had no Pending Pods before or after the test.
+
+## Event-based Pruner enablement and strict placement check — 2026-08-17
+
+The singleton `TektonPruner/pruner` was enabled with a namespace-scoped
+retention policy for `model-platform-ci`: terminal runs expire after 7 days,
+with a history limit of 10 successful and 10 failed runs. The old Job/CronJob
+Pruner is absent. No Results backend, model cache, image builder or NPU Task
+was enabled by this change.
+
+The first Operator reconciliation exposed a safety issue: the standalone
+Operator v0.81 `TektonPruner` resource did not propagate its requested
+`nodeSelector` or image override into the generated `TektonInstallerSet`, so
+the default Pruner Pods attempted to schedule on `gpu-server-00`/
+`gpu-server-05` and referenced GHCR. They were Pending/ContainerCreating and
+had no accelerator request. The generated Pruner resources were stopped and
+removed before becoming Ready; no existing CI, model or NPU workload was
+deleted, scaled or rolled.
+
+The controller and webhook manifests were then fetched through
+`ghcr.dockerproxy.net`, verified as the locked linux/amd64 digests, and copied
+to the existing internal registry:
+
+```text
+110.120.0.3:8889/platform/tekton-pruner-controller:v0.4.1
+  sha256:fdf683105a9ad0501cc855967a9ba8f7b5a1d38835d519f3075a2b8cb2fa506a
+110.120.0.3:8889/platform/tekton-pruner-webhook:v0.4.1
+  sha256:d286f3a294df96a0662008145e5904d808c22b6a3e770b151326116ec441f308
+```
+
+The generated InstallerSet was patched with a node selector for
+`kubernetes.io/hostname=server-00` and those immutable images. Final live
+evidence:
+
+```text
+TektonPruner/pruner Ready=True
+Pruner Pods: 2 Running, both server-00, both internal 8889 digest-pinned
+Pruner Pods on gpu-*     = 0
+cluster Pending Pods      = 0
+legacy Pruner CronJobs    = 0
+model-platform-ci: two EventListeners Ready; retained validation Run unchanged
+```
+
+This is a temporary registry exception because an Artifact Keeper writer
+credential was not available during the no-GHCR emergency-safe rollout. Before
+the next Operator upgrade, mirror these exact manifests to
+`110.120.0.3:30670/container-images`, configure the Operator's
+`IMAGE_PRUNER_CONTROLLER` and `IMAGE_PRUNER_WEBHOOK` environment variables,
+then repeat the node/image/Pending checks. Until then, reapplying or upgrading
+the Pruner must include the generated InstallerSet patch from
+`pruner-installer-patch.json`.
+
+## FastAPI deployment and CI/CD planning recheck — 2026-08-17
+
+This is a read-only production observation plus an implementation plan, not a
+FastAPI deployment record. No object was created, changed, restarted or
+deleted during this recheck.
+
+Observed facts:
+
+- no Deployment, StatefulSet, Service, Ingress or HTTPRoute name contains
+  `fastapi`, and no dedicated FastAPI namespace exists;
+- `server-00` is `linux/amd64` with 64 allocatable CPU; scheduled requests are
+  29.7 CPU (46%) and 53132Mi memory (6%), while the point-in-time Metrics API
+  sample was 4393m CPU and 76490Mi memory;
+- `/mnt/data` is 76% used with about 1.6TiB available;
+- `model-platform-ci` is deliberately small: quota 2 CPU/2Gi requests, 4
+  CPU/4Gi limits and 10 Pods. It currently has two Running EventListeners and
+  one completed Task Pod counted against quota;
+- the namespace also contains the paused track's 100Gi RWO
+  `ora-desktop-cache`; it is not available to FastAPI;
+- the only installed Pipeline remains `validate-model-platform-config`, and
+  the only EventListeners are `model-platform-config` and
+  `model-platform-github`;
+- Tekton Pruner is Ready, but its retention configuration names only
+  `model-platform-ci`;
+- Argo CD has only `model-platform-bootstrap`, currently Synced/Healthy, and
+  continues to use manual synchronization without prune or self-heal;
+- Artifact Keeper, Gitea, Argo CD, Backstage and the inspected Tekton control
+  Pods were Running with zero restarts.
+
+These facts reject two earlier planning assumptions: FastAPI must not be added
+to the existing small model-validation namespace, and a large persistent cache
+must not be allocated before measurements. The accepted design direction is:
+
+1. a separate `fastapi-ci` namespace with its own quota, default-deny policy,
+   signed repository-specific listener, tokenless test identity, trusted
+   publisher identity and one-run concurrency;
+2. exact-SHA fresh checkout, frozen lock-file installation, lint/type/unit
+   tests and optional bounded integration tests, with status written to the
+   exact commit by a separate final Task;
+3. no dependency-cache PVC initially; introduce a lock-hash-keyed bounded
+   package cache only if cold/warm measurements justify its disk and trust
+   cost;
+4. a trusted main/tag image lane that never mounts the host Docker/containerd
+   socket, publishes only to Artifact Keeper `container-images`, verifies the
+   remote AMD64 digest, emits an SBOM/scan report and opens a digest-only GitOps
+   PR;
+5. a separate `fastapi` runtime namespace, initially one bounded replica pinned
+   to validated `server-00`, using a read-only image pull Secret, non-root
+   restricted security, startup/readiness/liveness probes and no accelerator
+   resource or scheduling field;
+6. a dedicated least-privilege Argo AppProject/Application with manual sync,
+   prune and self-heal disabled. Tekton receives no Kubernetes deployment or
+   Argo credential;
+7. database migrations, cache PVC, a second replica/HPA, external routing and
+   automated promotion remain separate evidence-driven gates.
+
+The detailed release units, initial planning budgets, trust separation,
+rollback sequence and acceptance gates are maintained in `README.md` under
+“FastAPI service deployment and CI/CD track”. Before production manifests are
+created, the exact FastAPI repository, default branch, lock file, Python
+version, test commands, health endpoints and GitOps path must be confirmed.
+
+## Live CI image migration and validation — 2026-08-17
+
+- A server-side dry-run accepted the four image changes and the
+  `TriggerTemplate.spec.resourcetemplates[0].spec.taskRunTemplate.podTemplate.imagePullSecrets`
+  addition. No Deployment, Listener, Operator, PVC, Secret or NPU object was
+  changed.
+- Production `Pipeline/validate-model-platform-config` was patched so its
+  three validation Steps and Gitea status-finally Step use:
+
+  ```text
+  110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+  ```
+
+- `TriggerTemplate/model-platform-config-validation` retained its existing
+  `server-00`/amd64 selector and restricted security context while gaining the
+  Artifact Keeper pull Secret.
+- Manual validation Run
+  `model-platform-config-ak-migration-20260817` checked commit
+  `1295588d5a5a53262e47140c5f4a0de1b45c544b`. The validation Task and final
+  Gitea status Task both succeeded; the final log contained
+  `gitea_commit_status=success`, and the final Pod imageID matched the Artifact
+  Keeper digest. The Run requested no Ascend resource and ran only on
+  `server-00`.
+- The first completed validation Pod was deleted after success to release the
+  namespace quota; it was the new Run's Pod only. This exposed a retention risk:
+  the `model-platform-ci` quota counts completed Pods, so concurrent Runs can
+  block the final status Task until completed Pods are pruned.
+
 ## Outcome
 
 The first production Tekton control plane and Gitea-triggered CI loop are
@@ -26,11 +207,12 @@ models, create PVCs, or request NPU resources.
 | Tekton Operator | `v0.81.0` | two Deployments in `tekton-operator` |
 | Tekton Pipelines | `v1.15.0` | `TektonPipeline/pipeline` |
 | Tekton Triggers | `v0.37.0` | `TektonTrigger/trigger` |
-| CI tools | `v0.1.0` | internal image pinned by digest |
+| CI tools | `v0.2.0` | Artifact Keeper image pinned by digest |
+| Event-based Pruner | Operator `v0.81.0` / Pruner `v0.4.1` | singleton `TektonPruner/pruner`, internal 8889 temporary image mirror |
 
-`TektonPipeline/pipeline` and `TektonTrigger/trigger` both report
-`Ready=True`. Remote resolvers remain scaled to zero. Results, Pruner,
-Chains, Dashboard and Pipelines-as-Code were not installed.
+`TektonPipeline/pipeline`, `TektonTrigger/trigger` and `TektonPruner/pruner`
+report `Ready=True`. Remote resolvers remain scaled to zero. Results, Chains,
+Dashboard and Pipelines-as-Code were not installed.
 
 ## Namespace and scheduling boundaries
 
@@ -182,7 +364,8 @@ NPU resources. Normal expansion is an in-place update, not a rebuild:
 3. add an image build Task only after builder isolation and registry policy are
    approved;
 4. keep Argo CD synchronization as a distinct approval/release step;
-5. add Results/Pruner only after persistence and retention are designed;
+5. add Tekton Results only after persistence and retention are designed;
+   event-based Pruner retention is already enabled for `model-platform-ci`;
 6. perform model cache and inference Tasks only during an approved NPU window.
 
 The existing single K3s control plane and single controller replicas can be

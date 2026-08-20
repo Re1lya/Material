@@ -1,0 +1,15 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: qwen3-6-27b-w8a8-20260806
+  description: Qwen3.6-27B W8A8 model; 24 files verified by size and SHA256
+  links:
+    - url: http://110.120.0.3:30670/health
+      title: Artifact Keeper health
+spec:
+  type: model-version
+  lifecycle: production
+  owner: group:default/platform-team
+  system: model-platform
+  dependencyOf:
+    - component:default/model-serving-control-plane

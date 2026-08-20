@@ -7,12 +7,17 @@ metadata:
     app.kubernetes.io/part-of: model-platform
     app.kubernetes.io/component: ci
 spec:
-  description: Clone one reviewed commit and validate the constrained GitOps bootstrap path.
+  description: Clone one trusted Gitea or GitHub commit and validate the constrained GitOps path.
   params:
     - name: repository-url
       type: string
-      default: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
     - name: revision
+      type: string
+    - name: source-provider
+      type: string
+    - name: source-root
+      type: string
+    - name: clone-credentials-secret
       type: string
   workspaces:
     - name: source
@@ -23,6 +28,12 @@ spec:
           value: $(params.repository-url)
         - name: revision
           value: $(params.revision)
+        - name: source-provider
+          value: $(params.source-provider)
+        - name: source-root
+          value: $(params.source-root)
+        - name: clone-credentials-secret
+          value: $(params.clone-credentials-secret)
       workspaces:
         - name: source
           workspace: source
@@ -32,15 +43,17 @@ spec:
             type: string
           - name: revision
             type: string
+          - name: source-provider
+            type: string
+          - name: source-root
+            type: string
+          - name: clone-credentials-secret
+            type: string
         workspaces:
           - name: source
-        volumes:
-          - name: gitea-credentials
-            secret:
-              secretName: gitea-ci-reader
         steps:
           - name: validate
-            image: 110.120.0.3:8889/platform/model-platform-ci-tools:v0.1.0@sha256:3a00ce72a200713e82768821d2caffa6644f47725ba34793b2f4859d71565785
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
             imagePullPolicy: IfNotPresent
             workingDir: $(workspaces.source.path)
             env:
@@ -48,16 +61,22 @@ spec:
                 value: $(params.repository-url)
               - name: REVISION
                 value: $(params.revision)
+              - name: SOURCE_PROVIDER
+                value: $(params.source-provider)
+              - name: SOURCE_ROOT
+                value: $(params.source-root)
               - name: GITEA_USERNAME
                 valueFrom:
                   secretKeyRef:
-                    name: gitea-ci-reader
+                    name: $(params.clone-credentials-secret)
                     key: username
+                    optional: true
               - name: GITEA_TOKEN
                 valueFrom:
                   secretKeyRef:
-                    name: gitea-ci-reader
+                    name: $(params.clone-credentials-secret)
                     key: token
+                    optional: true
             computeResources:
               requests:
                 cpu: 250m
@@ -79,11 +98,18 @@ spec:
               #!/bin/sh
               set -eu
 
-              expected_url='http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git'
-              if [ "${REPOSITORY_URL}" != "${expected_url}" ]; then
-                echo 'repository URL is outside the CI trust boundary' >&2
-                exit 1
-              fi
+              case "${SOURCE_PROVIDER}:${REPOSITORY_URL}:${SOURCE_ROOT}" in
+                'gitea:http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git:.')
+                  use_gitea_credentials=true
+                  ;;
+                'github:https://github.com/Re1lya/Material.git:production/model-platform/gitops/repository')
+                  use_gitea_credentials=false
+                  ;;
+                *)
+                  echo 'repository source is outside the CI trust boundary' >&2
+                  exit 1
+                  ;;
+              esac
 
               case "${REVISION}" in
                 *[!0-9a-f]*|'')
@@ -96,15 +122,15 @@ spec:
                 exit 1
               fi
 
-              if [ "${#GITEA_TOKEN}" -lt 20 ]; then
-                echo 'Gitea token is missing or too short' >&2
-                exit 1
-              fi
-
               askpass="$(workspaces.source.path)/git-askpass.sh"
               checkout="$(workspaces.source.path)/repository"
               rm -rf "${checkout}"
-              cat > "${askpass}" <<'EOF'
+              if [ "${use_gitea_credentials}" = true ]; then
+                if [ "${#GITEA_TOKEN}" -lt 20 ]; then
+                  echo 'Gitea token is missing or too short' >&2
+                  exit 1
+                fi
+                cat > "${askpass}" <<'EOF'
               #!/bin/sh
               case "$1" in
                 *Username*) printf '%s' "$GITEA_USERNAME" ;;
@@ -112,8 +138,11 @@ spec:
                 *) exit 1 ;;
               esac
               EOF
-              chmod 0700 "${askpass}"
-              export GIT_ASKPASS="${askpass}"
+                chmod 0700 "${askpass}"
+                export GIT_ASKPASS="${askpass}"
+              else
+                unset GIT_ASKPASS
+              fi
               export GIT_TERMINAL_PROMPT=0
 
               git clone --no-checkout "${REPOSITORY_URL}" "${checkout}"
@@ -126,10 +155,16 @@ spec:
                 exit 1
               fi
 
+              source_root="${checkout}/${SOURCE_ROOT}"
+              if [ ! -d "${source_root}" ]; then
+                echo 'expected source root is missing from the checked-out commit' >&2
+                exit 1
+              fi
+
               rendered_file="$(mktemp)"
               trap 'rm -f "${rendered_file}"' EXIT
               kubectl kustomize \
-                "${checkout}/environments/production/bootstrap" \
+                "${source_root}/environments/production/bootstrap" \
                 > "${rendered_file}"
 
               kind_count="$(grep -c '^kind:' "${rendered_file}")"
@@ -143,3 +178,168 @@ spec:
               grep -qx '  namespace: model-platform-system' "${rendered_file}"
               echo 'bootstrap_validation=PASS'
               sha256sum "${rendered_file}"
+          - name: validate-catalog
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            workingDir: $(workspaces.source.path)/repository
+            env:
+              - name: SOURCE_ROOT
+                value: $(params.source-root)
+            script: |
+              #!/bin/sh
+              set -eu
+              cd "${SOURCE_ROOT}"
+              python3 ./ci/validate-catalog.py \
+                --catalog-dir ./environments/production/catalog \
+                --schema-dir ./ci/schema
+            computeResources:
+              requests:
+                cpu: 250m
+                memory: 256Mi
+              limits:
+                cpu: "1"
+                memory: 1Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+          - name: validate-modeldeployments
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            workingDir: $(workspaces.source.path)/repository
+            env:
+              - name: SOURCE_ROOT
+                value: $(params.source-root)
+            script: |
+              #!/bin/sh
+              set -eu
+              cd "${SOURCE_ROOT}"
+              python3 ./ci/validate-modeldeployments.py \
+                --requests-dir ./environments/production/modeldeployments \
+                --catalog-dir ./environments/production/catalog \
+                --schema ./ci/schema/modeldeployment.schema.json
+            computeResources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+  finally:
+    - name: report-gitea-commit-status
+      when:
+        - input: $(params.source-provider)
+          operator: in
+          values:
+            - gitea
+      params:
+        - name: revision
+          value: $(params.revision)
+        - name: aggregate-status
+          value: $(tasks.status)
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+          - name: aggregate-status
+            type: string
+        steps:
+          - name: report
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: REVISION
+                value: $(params.revision)
+              - name: AGGREGATE_STATUS
+                value: $(params.aggregate-status)
+              - name: GITEA_STATUS_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-ci-status-writer
+                    key: token
+            script: |
+              #!/usr/bin/env python3
+              import json
+              import os
+              import urllib.error
+              import urllib.request
+
+              aggregate = os.environ["AGGREGATE_STATUS"]
+              state = "success" if aggregate == "Succeeded" else "failure"
+              description = (
+                  "Model platform policy validation passed"
+                  if state == "success"
+                  else f"Model platform policy validation did not pass ({aggregate})"
+              )
+              revision = os.environ["REVISION"]
+              if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
+                  raise SystemExit("refusing to report a malformed revision")
+
+              request = urllib.request.Request(
+                  "http://gitea-http.gitea.svc.cluster.local:3000/"
+                  f"api/v1/repos/gitadmin/model-platform-config/statuses/{revision}",
+                  method="POST",
+                  data=json.dumps(
+                       {
+                           "state": state,
+                           "context": "tekton/model-platform-policy",
+                           "description": description,
+                           "target_url": (
+                               "http://110.120.0.3:30081/"
+                               "gitadmin/model-platform-config/commit/"
+                               + revision
+                           ),
+                       }
+                  ).encode("utf-8"),
+                  headers={
+                      "Accept": "application/json",
+                      "Authorization": f"token {os.environ['GITEA_STATUS_TOKEN']}",
+                      "Content-Type": "application/json",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      if response.status != 201:
+                          raise SystemExit(
+                              f"Gitea commit status returned HTTP {response.status}"
+                          )
+              except urllib.error.HTTPError as error:
+                  # Never print the response body; it can echo sensitive input.
+                  raise SystemExit(
+                      f"Gitea commit status returned HTTP {error.code}"
+                  ) from None
+
+              print(f"gitea_commit_status={state}")
+            computeResources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault

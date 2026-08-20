@@ -1,0 +1,24 @@
+# Merge this file only after Backstage is behind stable HTTPS and the
+# namespace-local provisioner Secret/EventListener have been created. It is
+# intentionally not referenced by app-config.yaml, so an older production
+# release cannot fail startup because a new Secret is not present.
+modelPlatform:
+  artifactManagement:
+    enabled: true
+    artifactKeeperBaseUrl: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+    provisionToken: ${ARTIFACT_KEEPER_PROVISION_TOKEN}
+    allowedInitiators:
+      - user:default/gitadmin
+    allowedRepositoryPrefixes:
+      - platform-
+      - model-
+    allowedFormats:
+      - generic
+      - huggingface
+      - docker
+    maxQuotaBytes: 536870912000
+    tokenMaxTtlDays: 30
+    # Must remain false for an HTTP NodePort. Enable only behind HTTPS.
+    allowOneTimeTokenReveal: false
+    publishEventListenerUrl: http://el-artifact-publish.artifact-publish.svc.cluster.local:8080
+    publishNamespace: artifact-publish

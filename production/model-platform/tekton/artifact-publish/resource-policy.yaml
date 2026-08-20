@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: artifact-publish
+  namespace: artifact-publish
+spec:
+  hard:
+    pods: "4"
+    requests.cpu: "2"
+    limits.cpu: "4"
+    requests.memory: 4Gi
+    limits.memory: 8Gi
+    requests.ephemeral-storage: 16Gi
+    limits.ephemeral-storage: 32Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: artifact-publish-defaults
+  namespace: artifact-publish
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+        ephemeral-storage: 256Mi
+      default:
+        cpu: 1
+        memory: 1Gi
+        ephemeral-storage: 2Gi

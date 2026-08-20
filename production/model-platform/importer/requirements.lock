@@ -1,0 +1,3 @@
+# The version is pinned; the final image still must be mirrored to Artifact
+# Keeper and referenced by digest before it is used by a PipelineRun or Job.
+modelscope==1.38.1

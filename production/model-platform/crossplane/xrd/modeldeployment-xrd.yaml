@@ -7,6 +7,9 @@ metadata:
     app.kubernetes.io/component: deployment-api
 spec:
   scope: Namespaced
+  defaultCompositionRef:
+    name: modeldeployment-runtime-zero-v1alpha1
+  defaultCompositionUpdatePolicy: Manual
   group: platform.example.com
   names:
     kind: ModelDeployment
@@ -24,7 +27,6 @@ spec:
           properties:
             spec:
               type: object
-              additionalProperties: false
               required:
                 - projectRef
                 - modelVersionRef
@@ -35,22 +37,24 @@ spec:
               properties:
                 projectRef:
                   type: string
-                  minLength: 1
-                  maxLength: 63
-                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  enum:
+                    - model-serving
                 modelVersionRef:
                   type: string
-                  minLength: 1
-                  maxLength: 253
+                  enum:
+                    - qwen3.6-27b-w8a8-20260806
+                    - qwen3.8-27b-w8a8
                 runtimeProfileRef:
                   type: string
-                  minLength: 1
-                  maxLength: 253
+                  enum:
+                    - qwen36-w8a8-ascend-a3-v1
+                    - qwen38-w8a8-ray-ascend-910b3-v1
+                    - qwen38-w8a8-ray-ascend-910b3-tp2-v1
                 desiredState:
                   type: string
                   enum:
-                    - Running
                     - Stopped
+                    - Running
                 placement:
                   type: object
                   required:
@@ -58,8 +62,30 @@ spec:
                   properties:
                     acceleratorPool:
                       type: string
-                      minLength: 1
-                      maxLength: 63
+                      enum:
+                        - control-plane-only
+                        - ascend-a3
+                        - ascend-910b3
+                    nodeSelector:
+                      type: object
+                      required:
+                        - kubernetes.io/arch
+                        - kubernetes.io/hostname
+                        - node.kubernetes.io/npu.chip.name
+                      properties:
+                        kubernetes.io/arch:
+                          type: string
+                          const: arm64
+                        kubernetes.io/hostname:
+                          type: string
+                          enum:
+                            - gpu-server-00
+                            - a3-server-00
+                        node.kubernetes.io/npu.chip.name:
+                          type: string
+                          enum:
+                            - 910B3
+                            - Ascend910
                 access:
                   type: object
                   required:
@@ -70,6 +96,118 @@ spec:
                       enum:
                         - internal
                         - private
+                artifact:
+                  type: object
+                  required:
+                    - modelId
+                    - revision
+                    - repository
+                    - path
+                    - manifestDigest
+                  properties:
+                    modelId:
+                      type: string
+                      pattern: "^[^/\\s]+/[^/\\s]+$"
+                    revision:
+                      type: string
+                      pattern: "^[0-9a-f]{8,64}$"
+                    repository:
+                      type: string
+                      const: model-artifacts
+                    path:
+                      type: string
+                      pattern: "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+                    manifestDigest:
+                      type: string
+                      pattern: "^sha256:[0-9a-f]{64}$"
+                runtime:
+                  type: object
+                  required:
+                    - image
+                    - rayVersion
+                    - modelPath
+                    - modelName
+                    - serveConfigV2
+                    - headCPU
+                    - headMemory
+                    - workerCPU
+                    - workerMemory
+                    - npuPerWorker
+                    - workerReplicas
+                  properties:
+                    image:
+                      type: string
+                      pattern: "^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$"
+                    rayVersion:
+                      type: string
+                      pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+                    modelPath:
+                      type: string
+                      pattern: "^/models/[A-Za-z0-9._/-]+$"
+                    modelName:
+                      type: string
+                      pattern: "^[a-z0-9][a-z0-9.-]*$"
+                    serveConfigV2:
+                      type: string
+                      minLength: 1
+                      maxLength: 20000
+                    headCPU:
+                      type: string
+                      pattern: "^[0-9]+m?$"
+                    headMemory:
+                      type: string
+                      pattern: "^[0-9]+(Mi|Gi)$"
+                    workerCPU:
+                      type: string
+                      pattern: "^[0-9]+m?$"
+                    workerMemory:
+                      type: string
+                      pattern: "^[0-9]+(Mi|Gi)$"
+                    npuPerWorker:
+                      type: integer
+                      enum:
+                        - 2
+                        - 8
+                    workerReplicas:
+                      type: integer
+                      enum:
+                        - 0
+                        - 1
+                cache:
+                  type: object
+                  required:
+                    - image
+                    - baseURL
+                    - readerSecret
+                    - storageClassName
+                    - size
+                  properties:
+                    image:
+                      type: string
+                      pattern: "^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$"
+                    baseURL:
+                      type: string
+                      pattern: "^https?://[A-Za-z0-9.-]+(:[0-9]+)?$"
+                    readerSecret:
+                      type: string
+                      const: artifact-keeper-model-runtime
+                    storageClassName:
+                      type: string
+                      pattern: "^model-cache-[a-z0-9-]+$"
+                    size:
+                      type: string
+                      pattern: "^[1-9][0-9]*(Gi|Ti)$"
+                compositionRef:
+                  type: object
+                  required:
+                    - name
+                  properties:
+                    name:
+                      type: string
+                      enum:
+                        - modeldeployment-control-plane-v1alpha1
+                        - modeldeployment-runtime-zero-v1alpha1
+                        - modeldeployment-qwen38-ray-v1alpha1
             status:
               type: object
               properties:

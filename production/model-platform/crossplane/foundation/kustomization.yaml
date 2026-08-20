@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Control-plane-only foundation. This deliberately does not include a Provider
+# package or ProviderConfig: those require an internal Artifact Keeper mirror,
+# immutable package digest and a generated-RBAC audit before installation.
+resources:
+  - ../provider-kubernetes/provider-rbac.yaml
+  - ../provider-kubernetes/runtime-config.yaml
+  - ../xrd/modeldeployment-xrd.yaml
+  - ../composition/modeldeployment-control-plane.yaml
+  - ../composition/modeldeployment-qwen38-ray.yaml

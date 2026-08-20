@@ -1,0 +1,25 @@
+# Tekton Operator event-based Pruner.
+#
+# The current Operator v0.81 standalone TektonPruner reconciler accepts the
+# retention policy below, but does not propagate spec.config.nodeSelector or
+# an image override into the generated TektonInstallerSet. The production
+# release therefore applies this CR, then patches the generated InstallerSet
+# as documented in README.md. Never apply this file blindly after an Operator
+# upgrade without repeating that node/image verification.
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonPruner
+metadata:
+  name: pruner
+spec:
+  disabled: false
+  targetNamespace: tekton-pipelines
+  global-config:
+    enforcedConfigLevel: namespace
+    namespaces:
+      model-platform-ci:
+        ttlSecondsAfterFinished: 604800
+        successfulHistoryLimit: 10
+        failedHistoryLimit: 10
+  config:
+    nodeSelector:
+      kubernetes.io/hostname: server-00

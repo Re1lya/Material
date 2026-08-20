@@ -6,7 +6,18 @@
 >
 > 目标环境：`server-00` 所在 K3s 集群
 >
-> 第一认证运行时：Qwen3.6-27B W8A8 + Ascend A3 + 现有 vLLM/ServingROM
+> 历史认证运行时：Qwen3.6-27B W8A8 + Ascend A3 + 现有 vLLM/ServingROM
+
+> **2026-08-18 执行收敛**：本次上线目标改为
+> `ModelScope -> Artifact Keeper -> 现有 KubeRay -> gpu-server-00` 上的
+> Qwen3.8-27B。请先阅读
+> [`production/model-platform/qwen38-ray-mvp-plan-20260818.md`](production/model-platform/qwen38-ray-mvp-plan-20260818.md)。
+> 该文档把工作压缩为一次零 NPU 缓存/校验、stopped XR/Composition 冒烟和一次
+> RayService 冒烟；通过后将同一份快照直接纳入 Gitea/Tekton/Argo/Crossplane
+> GitOps。本文其余章节是早期完整平台设计和
+> Qwen3.6/A3 历史基线，不应覆盖上述执行顺序。冒烟必须直接使用最终的制品、
+> 缓存、RayService、策略和 Argo 发布单元；不允许先做一套临时 POC、再另起
+> 工程化实现。
 
 ## 1. 执行摘要
 
@@ -46,6 +57,13 @@
 - Prometheus、Grafana 等监控组件。
 - 现有 Ray Head 和 Qwen3.6 推理工作负载。
 - Artifact Keeper 核心服务。
+
+2026-08-19 的只读复核确认 `monitoring` 中 Prometheus/Grafana/Alertmanager 和
+Node Exporter 正常，`npu-exporter` DaemonSet 为 `9/9/9`，Prometheus 的 9 个 NPU
+target 全部 `up=1`。A3 的实时利用率快照显示仍有负载；`gpu-server-00` 等 910B3
+节点当时整体利用率为 0、进程数为 0，但这只是容量评审输入，不是自动调度保证。
+当前节点清单没有 A2 节点；外部 A2 必须单独以 exporter target/remote_write 接入。
+完整快照和查询见 `production/model-platform/monitoring-status-20260819.md`。
 
 原有 Backstage、Gitea、Tekton、Argo CD、Crossplane 的完整 POC 运行在独立 Kind 环境。不能假设这些组件已经部署到生产 K3s，实施前必须重新盘点。
 
@@ -806,10 +824,31 @@ http://<deployment-name>.model-serving.internal/v1
 3. Crossplane 和必要 Provider。
 4. Argo CD。
 5. Tekton Pipelines 和 Triggers。
-6. Backstage。
-7. Gateway 路由。
+6. 稳定 DNS/TLS 和 Gateway 路由。
+7. Backstage 只读 MVP。
 
-每个组件使用独立 Helm release，避免一个总 Chart 同时接管已有资源。
+每个组件使用独立发布单元（Helm release 或经审核的 Kustomize 清单），避免一个
+总 Chart 同时接管已有资源。
+
+Backstage 在本阶段只提供 GitHub 登录、目录、只读状态和已有系统链接。它使用
+独立 PostgreSQL，Kubernetes ServiceAccount 只能读取允许 namespace 中的非 Secret
+对象，不能直接创建工作负载。
+
+2026-08-13 的实施收敛把阶段 1 到 3 进一步拆成一个可先验收的安全子闭环：
+
+1. Crossplane XRD 强制使用 ConfigMap-only Composition，阶段一/二保持零 XR；
+2. Backstage 只提供一个固定仓库、固定目录、allow-list 模型/运行时的建 PR 动作；
+3. 生成内容固定为 `desiredState: Stopped` 和
+   `acceleratorPool: control-plane-only`；
+4. Tekton 对 exact PR head SHA 做 schema、目录引用和字段白名单校验，并把
+   `tekton/model-platform-policy` 状态写回 Gitea；
+5. 人工评审合并后，独立 Argo CD Project 只允许 `model-serving` namespace 的
+   `ModelDeployment`，且继续手工 Sync、无 prune、无 self-heal；
+6. 第一条 XR 只能组合一个状态 ConfigMap，明确记录 runtime/cache/NPU 为禁用。
+
+这不是最终推理运行能力，而是先证明门户、审批、CI、GitOps 和 Crossplane 的控制链
+不会误触发模型缓存、Ray 或 NPU。阶段四以后再演进同一个 API/Composition，不重建
+Gitea、Argo CD、Tekton、Backstage 或 Crossplane。
 
 ### 阶段 2：模型目录与上传
 
@@ -825,7 +864,10 @@ http://<deployment-name>.model-serving.internal/v1
 - 将当前 Qwen Deployment 提炼为 ModelRuntimeProfile。
 - 定义固定认证资源规格。
 - 实现 ModelDeployment XRD 和 Composition。
-- 实现 Backstage 申请与审批页面。
+- 在 XRD Offered 且 Composition 无 XR 渲染通过后，实现 Backstage 申请页面；
+  页面只在 Gitea 创建分支和 PR，审批仍由仓库评审与 Argo CD 人工 Sync 完成。
+- 第一轮生产验收仅允许 `Stopped/control-plane-only`；Tekton 和 XRD 双重拒绝
+  `Running`、物理节点/卡号、任意镜像和任意 Kubernetes 字段。
 - 展示 Device Plugin 和 NPU Exporter 信息。
 
 验收：管理员可以批准明确节点和资源，普通用户不能填写物理卡号或任意镜像。

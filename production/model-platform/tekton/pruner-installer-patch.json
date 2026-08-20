@@ -1,0 +1,26 @@
+[
+  {
+    "op": "add",
+    "path": "/spec/manifests/0/spec/template/spec/nodeSelector",
+    "value": {
+      "kubernetes.io/hostname": "server-00"
+    }
+  },
+  {
+    "op": "add",
+    "path": "/spec/manifests/2/spec/template/spec/nodeSelector",
+    "value": {
+      "kubernetes.io/hostname": "server-00"
+    }
+  },
+  {
+    "op": "replace",
+    "path": "/spec/manifests/0/spec/template/spec/containers/0/image",
+    "value": "110.120.0.3:8889/platform/tekton-pruner-controller:v0.4.1@sha256:fdf683105a9ad0501cc855967a9ba8f7b5a1d38835d519f3075a2b8cb2fa506a"
+  },
+  {
+    "op": "replace",
+    "path": "/spec/manifests/2/spec/template/spec/containers/0/image",
+    "value": "110.120.0.3:8889/platform/tekton-pruner-webhook:v0.4.1@sha256:d286f3a294df96a0662008145e5904d808c22b6a3e770b151326116ec441f308"
+  }
+]

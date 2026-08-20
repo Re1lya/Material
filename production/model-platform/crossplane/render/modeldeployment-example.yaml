@@ -1,0 +1,17 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelDeployment
+metadata:
+  name: render-only-example
+  namespace: model-serving
+  labels:
+    owner: platform-team
+    project: model-serving
+spec:
+  projectRef: model-serving
+  modelVersionRef: qwen3.6-27b-w8a8-20260806
+  runtimeProfileRef: qwen36-w8a8-ascend-a3-v1
+  desiredState: Stopped
+  placement:
+    acceleratorPool: ascend-a3
+  access:
+    visibility: internal

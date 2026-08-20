@@ -1,0 +1,23 @@
+# REVIEWED PACKAGE TEMPLATE. Do not apply this file until the generated
+# Provider RBAC audit and separate Provider/ProviderConfig approval pass.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-kubernetes
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: provider-kubernetes
+spec:
+  # Crossplane resolves packages over the internal HTTPS registry route. This
+  # immutable digest was verified against the v1.0.0 upstream Linux/AMD64
+  # child manifest and the mirrored multi-architecture index.
+  package: artifact-keeper-registry.artifact-keeper.svc.cluster.local/container-images/provider-kubernetes@sha256:e0198c31a99eedcfc061c008da56fbffff967f54b211475cd19185408ed2e61d
+  packagePullPolicy: IfNotPresent
+  packagePullSecrets:
+    - name: artifact-keeper-crossplane-pull
+  revisionActivationPolicy: Automatic
+  revisionHistoryLimit: 1
+  runtimeConfigRef:
+    apiVersion: pkg.crossplane.io/v1beta1
+    kind: DeploymentRuntimeConfig
+    name: provider-kubernetes-runtime

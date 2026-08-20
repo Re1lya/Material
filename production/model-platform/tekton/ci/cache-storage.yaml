@@ -1,0 +1,52 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ora-desktop-cache-local
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: false
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ora-desktop-cache-server-00
+spec:
+  capacity:
+    storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ora-desktop-cache-local
+  claimRef:
+    namespace: model-platform-ci
+    name: ora-desktop-cache
+  local:
+    path: /mnt/data/model-platform/ci-cache
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - server-00
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ora-desktop-cache
+  namespace: model-platform-ci
+  labels:
+    app.kubernetes.io/name: ora-desktop-cache
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: ci-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: ora-desktop-cache-local
+  volumeName: ora-desktop-cache-server-00

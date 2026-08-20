@@ -12,3 +12,23 @@ spec:
     upstreamIndexDigest: sha256:cea30c75198e8cee8e9a4fcb003b158750d345ca91831876de38989c11cbf94c
     linuxAMD64Digest: sha256:84d0751cfbdabe2a31a990a4824766ed552893a675c321b7067488d28dccfd26
     internalImage: 110.120.0.3:8889/platform/crossplane:v2.3.4
+  functionPatchAndTransform:
+    version: v0.8.2
+    upstreamImage: xpkg.crossplane.io/crossplane-contrib/function-patch-and-transform:v0.8.2
+    upstreamIndexDigest: sha256:c05a9add149bfa6fd0e6fc485e669d60a5d50c2f816b8303af4d5a89586795d0
+    linuxAMD64Digest: sha256:070fd3bdb56ec93f825e2f8fcda902bbdaef2e7831e164be5311144867f51dd8
+    internalImage: artifact-keeper-registry.artifact-keeper.svc.cluster.local/container-images/function-patch-and-transform@sha256:070fd3bdb56ec93f825e2f8fcda902bbdaef2e7831e164be5311144867f51dd8
+  providerKubernetes:
+    version: v1.0.0
+    upstreamPackage: xpkg.crossplane.io/crossplane-contrib/provider-kubernetes:v1.0.0
+    upstreamIndexDigest: sha256:fd54bbc7f87744eaef61cd52647fe6f641d9d5c323619de5527bfb8e1ab7a6ea
+    linuxAMD64PackageDigest: sha256:e0198c31a99eedcfc061c008da56fbffff967f54b211475cd19185408ed2e61d
+    mirror:
+      targetTag: 110.120.0.3:30670/container-images/provider-kubernetes:v1.0.0
+      internalPackageTemplate: artifact-keeper-registry.artifact-keeper.svc.cluster.local/container-images/provider-kubernetes@sha256:<linux-amd64-package-digest>
+      transport: build-host-only; explicit TRANSPORT_PACKAGE_REF
+    targetAPI: kubernetes.m.crossplane.io/v1alpha1
+    internalPackage: artifact-keeper-registry.artifact-keeper.svc.cluster.local/container-images/provider-kubernetes@sha256:e0198c31a99eedcfc061c008da56fbffff967f54b211475cd19185408ed2e61d
+    packageDigest: sha256:e0198c31a99eedcfc061c008da56fbffff967f54b211475cd19185408ed2e61d
+    controllerArchitecture: linux-amd64
+    status: mirrored-and-verified

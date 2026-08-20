@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://platform.example.com/schemas/modeldeployment",
+  "title": "ModelDeployment release contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "platform.example.com/v1alpha1" },
+    "kind": { "const": "ModelDeployment" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "namespace", "labels"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 63,
+          "pattern": "^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$"
+        },
+        "namespace": { "const": "model-serving" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "app.kubernetes.io/part-of",
+            "app.kubernetes.io/managed-by",
+            "platform.example.com/requested-by"
+          ],
+          "properties": {
+            "app.kubernetes.io/part-of": { "const": "model-platform" },
+            "app.kubernetes.io/managed-by": { "const": "argocd" },
+            "platform.example.com/requested-by": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 63,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            }
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "platform.example.com/request-mode": {
+              "const": "declarative-stopped"
+            },
+            "platform.example.com/requested-tensor-parallel-size": {
+              "type": "string",
+              "pattern": "^(?:[1-9]|1[0-6])$"
+            },
+            "platform.example.com/requested-pipeline-parallel-size": {
+              "type": "string",
+              "pattern": "^[1-4]$"
+            },
+            "platform.example.com/requested-replicas": {
+              "type": "string",
+              "pattern": "^[0-4]$"
+            },
+            "platform.example.com/requested-priority": {
+              "enum": ["low", "normal", "high"]
+            },
+            "platform.example.com/effective-runtime-profile": {
+              "enum": [
+                "qwen36-w8a8-ascend-a3-v1",
+                "qwen38-w8a8-ray-ascend-910b3-v1",
+                "qwen38-w8a8-ray-ascend-910b3-tp2-v1"
+              ]
+            },
+            "platform.example.com/effective-tensor-parallel-size": {
+              "const": "0"
+            },
+            "platform.example.com/effective-replicas": {
+              "const": "0"
+            },
+            "platform.example.com/effective-npu-per-replica": {
+              "const": "0"
+            }
+          }
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projectRef",
+        "modelVersionRef",
+        "runtimeProfileRef",
+        "desiredState",
+        "placement",
+        "access"
+      ],
+      "properties": {
+        "projectRef": { "const": "model-serving" },
+        "modelVersionRef": {
+          "enum": ["qwen3.6-27b-w8a8-20260806", "qwen3.8-27b-w8a8"]
+        },
+        "runtimeProfileRef": {
+          "enum": [
+            "qwen36-w8a8-ascend-a3-v1",
+            "qwen38-w8a8-ray-ascend-910b3-v1",
+            "qwen38-w8a8-ray-ascend-910b3-tp2-v1"
+          ]
+        },
+        "desiredState": { "enum": ["Stopped", "Running"] },
+        "placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["acceleratorPool"],
+          "properties": {
+            "acceleratorPool": {
+              "enum": ["control-plane-only", "ascend-a3", "ascend-910b3"]
+            },
+            "nodeSelector": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kubernetes.io/arch",
+                "kubernetes.io/hostname",
+                "node.kubernetes.io/npu.chip.name"
+              ],
+              "properties": {
+                "kubernetes.io/arch": { "const": "arm64" },
+                "kubernetes.io/hostname": {
+                  "enum": ["gpu-server-00", "a3-server-00"]
+                },
+                "node.kubernetes.io/npu.chip.name": {
+                  "enum": ["910B3", "Ascend910"]
+                }
+              }
+            }
+          }
+        },
+        "access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["visibility"],
+          "properties": {
+            "visibility": { "enum": ["internal", "private"] }
+          }
+        },
+        "compositionRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "enum": [
+                "modeldeployment-control-plane-v1alpha1",
+                "modeldeployment-runtime-zero-v1alpha1",
+                "modeldeployment-qwen38-ray-v1alpha1"
+              ]
+            }
+          }
+        },
+        "artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "modelId",
+            "revision",
+            "repository",
+            "path",
+            "manifestDigest"
+          ],
+          "properties": {
+            "modelId": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
+            "revision": { "type": "string", "pattern": "^[0-9a-f]{8,64}$" },
+            "repository": { "const": "model-artifacts" },
+            "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$" },
+            "manifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "image",
+            "rayVersion",
+            "modelPath",
+            "modelName",
+            "serveConfigV2",
+            "headCPU",
+            "headMemory",
+            "workerCPU",
+            "workerMemory",
+            "npuPerWorker",
+            "workerReplicas"
+          ],
+          "properties": {
+            "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$" },
+            "rayVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "modelPath": { "type": "string", "pattern": "^/models/[A-Za-z0-9._/-]+$" },
+            "modelName": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+            "serveConfigV2": { "type": "string", "minLength": 1, "maxLength": 20000 },
+            "headCPU": { "type": "string", "pattern": "^[0-9]+m?$" },
+            "headMemory": { "type": "string", "pattern": "^[0-9]+(Mi|Gi)$" },
+            "workerCPU": { "type": "string", "pattern": "^[0-9]+m?$" },
+            "workerMemory": { "type": "string", "pattern": "^[0-9]+(Mi|Gi)$" },
+            "npuPerWorker": { "type": "integer", "enum": [2, 8] },
+            "workerReplicas": { "type": "integer", "enum": [0, 1] }
+          }
+        },
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image", "baseURL", "readerSecret", "storageClassName", "size"],
+          "properties": {
+            "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$" },
+            "baseURL": { "type": "string", "pattern": "^https?://[A-Za-z0-9.-]+(:[0-9]+)?$" },
+            "readerSecret": { "const": "artifact-keeper-model-runtime" },
+            "storageClassName": { "type": "string", "pattern": "^model-cache-[a-z0-9-]+$" },
+            "size": { "type": "string", "pattern": "^[1-9][0-9]*(Gi|Ti)$" }
+          }
+        }
+      }
+    }
+  }
+}

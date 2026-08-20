@@ -1,0 +1,125 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: artifact-publish-backstage
+  namespace: artifact-publish
+spec:
+  params:
+    - name: repository-key
+      value: $(body.repository_key)
+    - name: artifact-path
+      value: $(body.artifact_path)
+    - name: source-ref
+      value: $(body.source_ref)
+    - name: total-size
+      value: $(body.total_size)
+    - name: checksum-sha256
+      value: $(body.checksum_sha256)
+    - name: idempotency-key
+      value: $(body.idempotency_key)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: artifact-publish
+  namespace: artifact-publish
+spec:
+  params:
+    - name: repository-key
+    - name: artifact-path
+    - name: source-ref
+    - name: total-size
+    - name: checksum-sha256
+    - name: idempotency-key
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: artifact-publish-
+        namespace: artifact-publish
+        labels:
+          app.kubernetes.io/part-of: model-platform-artifact-publish
+          app.kubernetes.io/component: ci
+          ci.model-platform.io/source: backstage
+          ci.model-platform.io/idempotency-key: $(tt.params.idempotency-key)
+      spec:
+        pipelineRef:
+          name: publish-artifact
+        params:
+          - name: repository-key
+            value: $(tt.params.repository-key)
+          - name: artifact-path
+            value: $(tt.params.artifact-path)
+          - name: source-ref
+            value: $(tt.params.source-ref)
+          - name: total-size
+            value: $(tt.params.total-size)
+          - name: checksum-sha256
+            value: $(tt.params.checksum-sha256)
+          - name: idempotency-key
+            value: $(tt.params.idempotency-key)
+        taskRunTemplate:
+          serviceAccountName: artifact-publish-runner
+          podTemplate:
+            imagePullSecrets:
+              - name: artifact-keeper-image-pull
+            nodeSelector:
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: server-00
+            securityContext:
+              fsGroup: 65532
+              fsGroupChangePolicy: OnRootMismatch
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+        timeouts:
+          pipeline: 24h
+        workspaces:
+          - name: staging
+            persistentVolumeClaim:
+              claimName: artifact-publish-staging
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: artifact-publish
+  namespace: artifact-publish
+spec:
+  serviceAccountName: artifact-publish-listener
+  resources:
+    kubernetesResource:
+      spec:
+        template:
+          spec:
+            nodeSelector:
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: server-00
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+  triggers:
+    - name: backstage-publish
+      interceptors:
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >-
+                body.repository_key.matches('^(platform|model)-[a-z0-9-]+$') &&
+                body.artifact_path.matches('^[A-Za-z0-9][A-Za-z0-9._/@+-]{0,511}$') &&
+                body.source_ref.startsWith('staging://') &&
+                body.checksum_sha256.matches('^[a-f0-9]{64}$') &&
+                body.total_size > 0 && body.total_size <= 536870912000
+      bindings:
+        - ref: artifact-publish-backstage
+      template:
+        ref: artifact-publish

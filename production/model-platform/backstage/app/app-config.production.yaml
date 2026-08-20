@@ -1,0 +1,8 @@
+# Production overrides are deliberately small. Secrets are supplied only via
+# the backstage-secrets Kubernetes Secret and are referenced from app-config.yaml.
+app:
+  baseUrl: ${BACKSTAGE_BASE_URL}
+
+backend:
+  baseUrl: ${BACKSTAGE_BASE_URL}
+  listen: ':7007'

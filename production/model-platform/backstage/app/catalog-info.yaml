@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: model-platform
+  description: Internal model-platform developer portal
+  annotations:
+    github.com/project-slug: Re1lya/Material
+spec:
+  type: website
+  owner: group:default/platform-team
+  lifecycle: production
+  system: model-platform

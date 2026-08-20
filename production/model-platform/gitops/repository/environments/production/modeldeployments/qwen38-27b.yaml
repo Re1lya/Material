@@ -1,0 +1,58 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelDeployment
+metadata:
+  name: qwen38-27b
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/managed-by: argocd
+    platform.example.com/requested-by: platform-team
+  annotations:
+    platform.example.com/request-mode: declarative-stopped
+    platform.example.com/requested-tensor-parallel-size: "8"
+    platform.example.com/requested-pipeline-parallel-size: "1"
+    platform.example.com/requested-replicas: "1"
+    platform.example.com/requested-priority: normal
+    platform.example.com/effective-runtime-profile: qwen38-w8a8-ray-ascend-910b3-v1
+    platform.example.com/effective-tensor-parallel-size: "0"
+    platform.example.com/effective-replicas: "0"
+    platform.example.com/effective-npu-per-replica: "0"
+spec:
+  projectRef: model-serving
+  modelVersionRef: qwen3.8-27b-w8a8
+  runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-v1
+  compositionRef:
+    name: modeldeployment-control-plane-v1alpha1
+  desiredState: Stopped
+  placement:
+    acceleratorPool: control-plane-only
+  access:
+    visibility: internal
+  artifact:
+    modelId: Qwen/Qwen3.8-27B
+    revision: e823e888ae179eb3be02c1a48899c4f828371376
+    repository: model-artifacts
+    path: qwen3.8-27b/w8a8/e823e888ae179eb3be02c1a48899c4f828371376/msmodelslim-w8a8-a3-f2afa9e2
+    manifestDigest: sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f
+  runtime:
+    image: 110.120.0.3:30670/container-images/vllm-ascend@sha256:a27a79c2021cdda071eb207c169a5dd44537d22df11ccd7b62b52de117ceac14
+    rayVersion: "2.43.0"
+    modelPath: /models/Qwen3.8-27B-w8a8
+    modelName: qwen3.8-27b-w8a8
+    serveConfigV2: |
+      applications:
+      - name: default
+        route_prefix: /
+        import_path: qwen_serve:app
+    headCPU: "2"
+    headMemory: 8Gi
+    workerCPU: "64"
+    workerMemory: 256Gi
+    npuPerWorker: 8
+    workerReplicas: 0
+  cache:
+    image: 110.120.0.3:30670/container-images/model-cache@sha256:2c38a8bb8be05414a5afebdd88fde3c2032098d0d1edb3f3e005f0adb6d78e13
+    baseURL: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+    readerSecret: artifact-keeper-model-runtime
+    storageClassName: model-cache-gpu-local
+    size: 40Gi

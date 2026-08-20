@@ -1,0 +1,82 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelRuntimeProfile
+metadata:
+  name: qwen38-w8a8-ray-ascend-910b3-tp2-v1
+  labels:
+    owner: platform-team
+    project: model-serving
+spec:
+  supportedModel:
+    architecture: qwen
+    quantization: w8a8
+    weights: safetensors
+  workload:
+    kind: RayService
+    strategy: Recreate
+    replicas: 1
+  runtime:
+    image: 110.120.0.3:30670/container-images/<runtime-image>@sha256:<runtime-image-digest>
+    modelPath: /models/Qwen3.8-27B-w8a8
+    modelName: qwen3.8-27b-w8a8
+    rayVersion: "2.43.0"
+    serveConfigV2: |
+      applications:
+      - name: default
+        route_prefix: /
+        import_path: ray.serve.llm:build_openai_app
+        args:
+          llm_configs:
+          - model_loading_config:
+              model_id: qwen3.8-27b-w8a8
+              model_source: /models/Qwen3.8-27B-w8a8
+            deployment_config:
+              num_replicas: 1
+              max_ongoing_requests: 64
+            placement_group_config:
+              bundles:
+              - huawei.com/Ascend910: 1
+              - huawei.com/Ascend910: 1
+              strategy: STRICT_PACK
+            engine_kwargs:
+              tensor_parallel_size: 2
+              data_parallel_size: 1
+              pipeline_parallel_size: 1
+              distributed_executor_backend: ray
+              quantization: ascend
+              max_model_len: 32768
+              max_num_seqs: 64
+              max_num_batched_tokens: 8192
+              gpu_memory_utilization: 0.9
+              enable_prefix_caching: true
+              trust_remote_code: true
+              speculative_config:
+                method: qwen3_5_mtp
+                num_speculative_tokens: 3
+                enforce_eager: true
+              compilation_config:
+                cudagraph_mode: FULL_DECODE_ONLY
+    npuPerWorker: 2
+    workerReplicas: 0
+    cache:
+      image: 110.120.0.3:30670/container-images/<cache-image>@sha256:<cache-image-digest>
+      storageClassName: model-cache-gpu-local
+      size: <artifact-size-plus-staging-headroom>
+      readerSecret: artifact-keeper-model-runtime
+  resources:
+    requests:
+      cpu: "64"
+      memory: 256Gi
+      huawei.com/Ascend910: "2"
+    limits:
+      cpu: "64"
+      memory: 256Gi
+      huawei.com/Ascend910: "2"
+    sharedMemory: 64Gi
+  placement:
+    nodeSelector:
+      kubernetes.io/arch: arm64
+      kubernetes.io/hostname: gpu-server-00
+      node.kubernetes.io/npu.chip.name: 910B3
+  probes:
+    healthPath: /health
+    inferencePath: /v1/chat/completions

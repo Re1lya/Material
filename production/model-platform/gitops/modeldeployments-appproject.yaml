@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: model-platform-control-plane
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  description: Manual synchronization of control-plane-only ModelDeployment requests
+  sourceRepos:
+    - http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: model-serving
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: platform.example.com
+      kind: ModelDeployment
+  orphanedResources:
+    warn: true

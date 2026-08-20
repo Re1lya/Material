@@ -1,0 +1,11 @@
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: model-serving
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: provider-kubernetes
+spec:
+  credentials:
+    source: InjectedIdentity

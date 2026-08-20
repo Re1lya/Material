@@ -1,0 +1,51 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelRuntimeProfile
+metadata:
+  name: qwen38-w8a8-ray-ascend-910b3-v1
+  labels:
+    owner: platform-team
+    project: model-serving
+spec:
+  supportedModel:
+    architecture: qwen
+    quantization: w8a8
+    weights: safetensors
+  workload:
+    kind: RayService
+    strategy: Recreate
+    replicas: 1
+  runtime:
+    image: 110.120.0.3:30670/container-images/<runtime-image>@sha256:<runtime-image-digest>
+    modelPath: /models/Qwen3.8-27B-w8a8
+    modelName: qwen3.8-27b-w8a8
+    rayVersion: "2.43.0"
+    serveConfigV2: |
+      applications:
+      - name: default
+        route_prefix: /
+        import_path: qwen_serve:app
+    npuPerWorker: 8
+    workerReplicas: 0
+    cache:
+      image: 110.120.0.3:30670/container-images/model-cache@sha256:<cache-image-digest>
+      storageClassName: model-cache-gpu-local
+      size: <artifact-size-plus-staging-headroom>
+      readerSecret: artifact-keeper-model-runtime
+  resources:
+    requests:
+      cpu: "64"
+      memory: 256Gi
+      huawei.com/Ascend910: "8"
+    limits:
+      cpu: "64"
+      memory: 256Gi
+      huawei.com/Ascend910: "8"
+    sharedMemory: 64Gi
+  placement:
+    nodeSelector:
+      kubernetes.io/arch: arm64
+      kubernetes.io/hostname: gpu-server-00
+      node.kubernetes.io/npu.chip.name: 910B3
+  probes:
+    healthPath: /health
+    inferencePath: /v1/chat/completions
