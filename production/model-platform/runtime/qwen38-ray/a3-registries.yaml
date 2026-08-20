@@ -1,0 +1,14 @@
+mirrors:
+  "110.120.0.3:8889":
+    endpoint:
+      - "http://110.120.0.3:8889"
+  "110.120.0.3:30670":
+    endpoint:
+      - "http://110.120.0.3:30670"
+configs:
+  "110.120.0.3:8889":
+    tls:
+      insecure_skip_verify: true
+  "110.120.0.3:30670":
+    tls:
+      insecure_skip_verify: true

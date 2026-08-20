@@ -1,0 +1,39 @@
+# Patterns to ignore when building packages.
+# This supports shell glob matching, relative path matching, and
+# negation (prefixed with !). Only one pattern per line.
+
+# helm-docs template (not part of the chart)
+README.md.gotmpl
+
+# helm-docs config
+.helmdocsrc
+
+# Version control
+.git/
+.gitignore
+
+# GitHub
+.github/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temp and build files
+*.tmp
+*.bak
+*.orig
+
+# Internal build-infra and CI-only values overlays.
+# These are not customer configuration and must not ship inside the packaged
+# chart. They are still consumed by CI/internal tooling via `helm template -f`,
+# which .helmignore does not affect. Customer example overlays
+# (values-production.yaml, values-staging.yaml) are intentionally NOT ignored.
+values-registry-cache.yaml
+values-mesh-main.yaml
+values-mesh-peer.yaml
+values-smoke.yaml

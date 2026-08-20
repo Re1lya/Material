@@ -1,0 +1,36 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: model-cache-gpu-local
+  labels:
+    app.kubernetes.io/part-of: model-platform
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: model-cache-a3-qwen38-27b-w8a8
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    platform.example.com/cache-node: a3-server-00
+    platform.example.com/model-version: qwen3.8-27b-w8a8
+spec:
+  capacity:
+    storage: 40Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: model-cache-gpu-local
+  local:
+    path: /home/model-platform/cache/qwen38-27b-w8a8
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - a3-server-00

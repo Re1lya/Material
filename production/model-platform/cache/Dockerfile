@@ -5,6 +5,8 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
+USER root
+
 COPY model-cache-fetch.py /opt/model-cache/model-cache-fetch.py
 RUN chmod 0555 /opt/model-cache/model-cache-fetch.py \
     && mkdir -p /cache \

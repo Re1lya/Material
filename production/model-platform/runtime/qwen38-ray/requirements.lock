@@ -1,0 +1,13 @@
+# Keep the vendor-provided Ray, vLLM, vLLM-Ascend, torch, torch-npu,
+# transformers and NumPy packages unchanged. These are only the dependencies
+# missing from the Qwen3.8 A3 image for Ray 2.48.0's `llm` extra.
+aiohttp-cors==0.8.1
+colorful==0.5.8
+jsonref==1.1.0
+opencensus==0.11.4
+opentelemetry-exporter-prometheus==0.65b0
+py-spy==0.4.1
+pyarrow==20.0.0
+smart_open==7.3.0.post1
+virtualenv==20.35.4
+

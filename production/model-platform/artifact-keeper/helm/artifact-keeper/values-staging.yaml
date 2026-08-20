@@ -1,0 +1,72 @@
+# =============================================================================
+# EXAMPLE CONFIGURATION - Getting Started Template
+# =============================================================================
+# This file is provided as a starting point for deployments. It should be
+# reviewed and modified to match your specific infrastructure requirements,
+# security policies, and operational needs before use in production.
+# =============================================================================
+
+# Staging environment overlay
+
+backend:
+  replicaCount: 2
+  image:
+    tag: dev
+  env:
+    RUST_LOG: "info,artifact_keeper=info"
+    ENVIRONMENT: "staging"
+    ADMIN_PASSWORD: ""  # Set via secrets
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+web:
+  replicaCount: 2
+  image:
+    tag: dev
+
+# Edge replication: disabled by default until the artifact-keeper-edge image
+# ships on ghcr.io. See the note in values.yaml. Re-enable once published.
+edge:
+  enabled: false
+  replicaCount: 1
+
+postgres:
+  enabled: true
+  auth:
+    password: ""  # Override via --set or external secret
+
+opensearch:
+  enabled: true
+  replicaCount: 1
+  disableSecurityPlugin: true
+  allowInvalidCerts: true
+  javaOpts: "-Xms1g -Xmx1g"
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 2Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+ingress:
+  host: staging.artifactkeeper.com
+  tls:
+    enabled: true
+
+secrets:
+  jwtSecret: ""  # Override via --set or external secret
+
+networkPolicy:
+  enabled: true
+
+serviceMonitor:
+  enabled: true

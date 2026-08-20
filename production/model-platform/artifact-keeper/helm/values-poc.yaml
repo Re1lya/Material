@@ -1,0 +1,95 @@
+  global:
+    imagePullPolicy: IfNotPresent
+    storageClass: standard
+
+  backend:
+    replicaCount: 1
+    image:
+      repository: 110.120.0.3:8889/artifact-keeper/artifact-keeper-backend
+      tag: "1.6.0"
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+        ephemeral-storage: 256Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+        ephemeral-storage: 1Gi
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: standard
+    scanWorkspace:
+      enabled: false
+
+  web:
+    replicaCount: 1
+    image:
+      repository: 110.120.0.3:8889/artifact-keeper/artifact-keeper-web
+      tag: "1.5.8"
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+        ephemeral-storage: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+        ephemeral-storage: 512Mi
+
+  postgres:
+    image:
+      repository: 110.120.0.3:8889/library/postgres
+      tag: "16-alpine"
+    persistence:
+      size: 10Gi
+      storageClass: standard
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+        ephemeral-storage: 128Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+        ephemeral-storage: 512Mi
+
+  opensearch:
+    image:
+      repository: 110.120.0.3:8889/opensearchproject/opensearch
+      tag: "2.19.1"
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: standard
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+        ephemeral-storage: 128Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+        ephemeral-storage: 512Mi
+
+  trivy:
+    enabled: false
+
+  scannerAdapter:
+    enabled: false
+
+  dependencyTrack:
+    enabled: false
+
+  ingress:
+    enabled: false
+
+  networkPolicy:
+    enabled: false
+
+  serviceMonitor:
+    enabled: false
+

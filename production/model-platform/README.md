@@ -15,6 +15,9 @@ platform:
   W8A8 Artifact Keeper `manifest.json` sidecar and is not yet built or released.
 - `gitea/` contains the independent production Gitea storage and Helm values;
   credentials are deliberately provisioned outside Git.
+- `artifact-keeper/` contains the synchronized Artifact Keeper Helm chart
+  source and the current non-secret POC values snapshot; the synchronization
+  record and source provenance are in `artifact-keeper/README.md`.
 - `argocd/` contains the production Argo CD Helm values, the locked-down
   default project, and the deployment acceptance record.
 - `gitops/` contains the isolated namespace, least-privilege AppProjects,

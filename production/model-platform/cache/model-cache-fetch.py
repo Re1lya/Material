@@ -129,7 +129,14 @@ def main() -> int:
         )
 
     safe_digest = expected_digest.replace(":", "-")
-    target = cache_root / model_id / safe_digest
+    target_relative = os.environ.get("CACHE_TARGET_RELATIVE", "").strip()
+    if target_relative:
+        relative_target = pathlib.PurePosixPath(target_relative)
+        if relative_target.is_absolute() or ".." in relative_target.parts:
+            raise RuntimeError("CACHE_TARGET_RELATIVE must stay inside CACHE_ROOT")
+        target = cache_root.joinpath(*relative_target.parts)
+    else:
+        target = cache_root / model_id / safe_digest
     lock_path = cache_root / ".locks" / f"{model_id}-{safe_digest}.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -163,9 +170,7 @@ def main() -> int:
                 print(f"[{index}/{len(manifest['files'])}] {entry['path']}", flush=True)
                 download(url, token, staging / relative, entry)
 
-            target.parent.mkdir(parents=True, exist_ok=True)
-            staging.replace(target)
-            ready.write_text(
+            (staging / "READY").write_text(
                 json.dumps(
                     {
                         "manifestDigest": expected_digest,
@@ -177,6 +182,8 @@ def main() -> int:
                 + "\n",
                 encoding="utf-8",
             )
+            target.parent.mkdir(parents=True, exist_ok=True)
+            staging.replace(target)
             print(f"cache ready: {target}")
             return 0
         except Exception:

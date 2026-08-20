@@ -1,0 +1,12 @@
+# Live containerd host entry used to avoid restarting k3s-agent while an
+# existing A3 workload is active. The matching registries.yaml is the durable
+# source and will regenerate this entry on the next approved agent restart.
+server = "https://110.120.0.3:30670/v2"
+capabilities = ["pull", "resolve", "push"]
+skip_verify = true
+
+[host]
+
+[host."http://110.120.0.3:30670/v2"]
+  capabilities = ["pull", "resolve"]
+  skip_verify = true
