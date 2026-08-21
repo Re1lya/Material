@@ -144,4 +144,54 @@ handler，也没有对应的 v3 containerd drop-in。因此模型容器尚未启
 
 恢复部署时须先修复并验证 A3 的 `ascend` containerd runtime handler，再处理 Volcano
 调度兼容；随后确认 NPU 双视角空闲，解除 XR 的 pause annotation，并通过同一 GitOps
-请求切回 Running。不得直接手工创建 Ray worker，也不得触碰物理 0、1 上的既有任务。
+请求切回 Running。不得直接手工创建 Ray worker，也不得触碰其他既有任务。
+
+## 2026-08-21：Ascend runtime 探针通过
+
+本次只验证此前的 containerd runtime 阻塞，明确使用 `default-scheduler`，没有经过
+RayService、PodGroup 或 Volcano。启动前的双视角检查显示：A3 物理 0–15 均没有计算
+进程；Kubernetes 已有 `ds/dsv4-tp8-worker-metadata-gs0-ab-59566d84f6-j66cb`
+占用 `Ascend910-8` 至 `Ascend910-15`。探针因此固定申请未被 Kubernetes 分配的
+`Ascend910-7`，没有接触既有工作负载的 8–15。
+
+第一次使用 Artifact Keeper Qwen 运行时镜像时发生约 2 分 20 秒的重新拉取，超过探针
+短时窗口后被清理，不作为最终验收依据。第二次使用 A3 已缓存的 ARM64 Ascend 镜像、
+`imagePullPolicy: Never` 创建同名最小探针，关键声明为：
+
+```yaml
+schedulerName: default-scheduler
+runtimeClassName: ascend
+annotations:
+  huawei.com/Ascend910: Ascend910-7
+resources:
+  requests:
+    huawei.com/Ascend910: "1"
+  limits:
+    huawei.com/Ascend910: "1"
+```
+
+实际结果为 Pod 绑定 `a3-server-00`，容器 `Created/Started`，最终
+`Succeeded/Completed`、退出码 0；`huawei.com/Ascend910` 与
+`huawei.com/AscendReal` annotation 都是 `Ascend910-7`。这证明
+`RuntimeClass/ascend`、CRI sandbox、容器创建和单 NPU Allocate 链路当前可用，原
+`no runtime for "ascend" is configured` 阻塞已经解决。
+
+进一步只读核对 `crictl info`，有效 CRI runtime 中已有：
+
+```text
+runtime name: ascend
+runtime type: io.containerd.runc.v2
+BinaryName: /usr/local/Ascend/Ascend-Docker-Runtime/ascend-docker-runtime
+SystemdCgroup: true
+```
+
+持久模板 `/home/k3s/agent/etc/containerd/config-v3.toml.tmpl` 与生成配置
+`/home/k3s/agent/etc/containerd/config.toml` 均已注册该 handler，修改时间分别为
+2026-08-21 16:57:05 和 16:57:21（A3 本地时间）。此前非特权 `grep` 没有输出是因为
+目录读取权限不足且 stderr 被丢弃，不能据此判断 handler 缺失。
+
+验收后探针 Pod 已删除。Kubernetes 的 A3 NPU 分配恢复为原有 8 个（仅既有
+8–15 工作负载），物理 0–7 均无运行进程。通过 control plane 读取 A3 kubelet 容器
+日志时出现过 `10250` TLS handshake timeout，但 Pod 状态、退出码、事件、CRI runtime
+和设备 annotation 证据完整；该日志访问问题与 runtime 验证分开记录。Volcano 本轮
+没有测试，也没有修复，仍是恢复 RayService 前的独立门禁。
