@@ -427,7 +427,7 @@ spec:
                             minReplicas: 0
                             maxReplicas: 1
                             rayStartParams:
-                              resources: '{"NPU":8}'
+                              resources: "'{\"NPU\":8}'"
                               num-gpus: "8"
                             template:
                               metadata:
@@ -497,10 +497,17 @@ spec:
                                         mountPath: /models/Qwen3.8-27B-w8a8
                                         subPath: model
                                         readOnly: true
+                                      - name: ascend-driver
+                                        mountPath: /usr/local/Ascend/driver
+                                        readOnly: true
                                 volumes:
                                   - name: model-cache
                                     persistentVolumeClaim:
                                       claimName: qwen38-cache
+                                  - name: ascend-driver
+                                    hostPath:
+                                      path: /usr/local/Ascend/driver
+                                      type: Directory
             patches:
               - type: FromCompositeFieldPath
                 fromFieldPath: metadata.name
@@ -600,7 +607,7 @@ spec:
                   - type: string
                     string:
                       type: Format
-                      fmt: '{"NPU":%s}'
+                      fmt: "'{\"NPU\":%s}'"
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.runtime.npuPerWorker
                 toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].rayStartParams.num-gpus

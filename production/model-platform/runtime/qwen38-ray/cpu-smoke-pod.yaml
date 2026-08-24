@@ -16,7 +16,7 @@ spec:
     kubernetes.io/hostname: a3-server-00
   containers:
     - name: validate
-      image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:16995677e10be892e92d164c7a6c8902f37ccb9c2c2d0d79180664006b55d0fb
+      image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942
       imagePullPolicy: IfNotPresent
       env:
         - name: VLLM_PLUGINS

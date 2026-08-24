@@ -44,7 +44,7 @@ spec:
     path: qwen3.8-27b/w8a8/e823e888ae179eb3be02c1a48899c4f828371376/msmodelslim-w8a8-a3-f2afa9e2
     manifestDigest: sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f
   runtime:
-    image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:16995677e10be892e92d164c7a6c8902f37ccb9c2c2d0d79180664006b55d0fb
+    image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942
     rayVersion: "2.48.0"
     modelPath: /models/Qwen3.8-27B-w8a8
     modelName: qwen3.8-27b-w8a8
@@ -76,6 +76,7 @@ spec:
               gpu_memory_utilization: 0.9
               enable_prefix_caching: true
               trust_remote_code: true
+              safetensors_load_strategy: eager
               speculative_config:
                 method: qwen3_5_mtp
                 num_speculative_tokens: 3

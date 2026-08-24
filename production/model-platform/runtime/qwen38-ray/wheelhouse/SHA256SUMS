@@ -11,9 +11,9 @@ fd9192b7b70c573d7f214eb1ae35e00d359f6f5e4b27c7e21e30de1fc6204645  cryptography-5
 4b0ce306c966eb73bc3a7b6abad017c556dadd92c44701562cd528ac7fde4d5b  distlib-0.4.3-py2.py3-none-any.whl
 7f0ca4bcc0e181c60dbbd8aa9ab5b120ebb99e4e064e83636340056f833a1f09  filelock-3.32.3-py3-none-any.whl
 96f423a119f4777a4a056b66ce11527366a8bb92f54e541ade21f2374433f6d4  frozenlist-1.8.0-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
-cdf9c67e7ca2402d86ccbfde5f2503fc83e3cc3f58cc78456ae96cad24a6d2de  google_api_core-2.34.0-py3-none-any.whl
+e9a8f62d363dc8424a8497f4c2a47d6bcda6c16514c935629c257ab5d10210e7  google_api_core-2.25.2-py3-none-any.whl
 8ec438808f813ad034535000261eed1067475d229d05bbf4216e78c3f2362e53  google_auth-2.56.3-py3-none-any.whl
-28a1934bcd33b9c9da66ac301a0a4227e3367f095a17d0375cb98f0a09d93b79  googleapis_common_protos-1.75.1-py3-none-any.whl
+b8bfcca8c25a2bb253e0e0b0adaf8c00773e5e6af6fd92397576680b807e0fd8  googleapis_common_protos-1.70.0-py3-none-any.whl
 815e7be7a7806d54abb586dc943addc79e8b2ee16915059658cbeff4b1b43bf4  idna-3.19-py3-none-any.whl
 590dc7773df6c21cbf948b5dac07a72a251db28b0238ceecce0a2abfa8ec30a9  jsonref-1.1.0-py3-none-any.whl
 eb0ce7b2a32d09892b3dd6cc44877a0d02a33241fafca5f25c8b6b62374f8b75  multidict-6.7.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
@@ -26,8 +26,8 @@ df081c4c6bcfdb1211e3e86140376792643128a25f8d72d1d27675936e7e96ad  opentelemetry_
 5ed065d443751de711da036041a7a214122efc4a4de393b3f4137ba5576540e7  platformdirs-4.11.3-py3-none-any.whl
 fa93d06737aa02bacd05794768508bb97d2fbee28cb3bca04eaae92f0ca953d6  prometheus_client-0.26.0-py3-none-any.whl
 5dbc581d2814337da56222fab8dc5f161cd798a434e49bac27930aaef798e144  propcache-0.5.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl
-dc76880b8ee951cca002098574376cf71e055f9f16d9ba6570fb8a06f726d281  proto_plus-1.28.3-py3-none-any.whl
-11d6b0ec246892d85215b0a13ca6e0233cf5284b68f0ac02646427f4ff88a799  protobuf-7.35.1-cp310-abi3-manylinux2014_aarch64.whl
+13285478c2dcf2abb829db158e1047e2f1e8d63a077d94263c2b88b043c75a66  proto_plus-1.26.1-py3-none-any.whl
+a8866b2cff111f0f863c1b3b9e7572dc7eaea23a7fae27f6fc613304046483e6  protobuf-5.29.6-cp38-abi3-manylinux2014_aarch64.whl
 ee776b9d512a011d1ad3907ed53ae32ce2f3d9ff3e1782236554e22103b5c084  py_spy-0.4.1-py2.py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 4ba3cf4182828be7a896cbd232aa8dd6a31bd1f9e32776cc3796c012855e1199  pyarrow-20.0.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 deda9277cfd454080ec40b207fb6df82206a3a2688735233cdcd8d3d565f088b  pyasn1-0.6.4-py3-none-any.whl

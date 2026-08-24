@@ -10,6 +10,10 @@ import shutil
 
 
 EXPECTED = {
+    "google-api-core": "2.25.2",
+    "googleapis-common-protos": "1.70.0",
+    "proto-plus": "1.26.1",
+    "protobuf": "5.29.6",
     "ray": "2.48.0",
     "pyarrow": "20.0.0",
 }
@@ -60,7 +64,8 @@ def main() -> None:
     print(
         f"qwen38_ray_runtime_{args.mode}=PASS "
         f"python={platform.python_version()} "
-        f"ray={versions['ray']} pyarrow={versions['pyarrow']} "
+        f"ray={versions['ray']} protobuf={versions['protobuf']} "
+        f"pyarrow={versions['pyarrow']} "
         f"vllm={vllm_version}"
     )
 

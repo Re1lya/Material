@@ -84,3 +84,65 @@ Artifact Keeper 对无仓库权限请求的掩码，不代表制品不存在。�
 `svc-qwen38-model-runtime` 增加了仅限 `model-artifacts` 的 `read` 权限；token
 仍只含 `read:artifacts`，没有写入和管理权限。修正后 manifest GET 返回 200，
 26/26 文件完成 SHA256 校验，运行时 token 不写入 Git。
+
+## 2026-08-24：Ray Serve protobuf 兼容修订 v2
+
+首次实际创建 RayService 时，RayCluster head/worker 已正常加入集群，但 Serve 在模型
+Actor 创建前失败：`FieldDescriptor` 不再包含 `label`。运行镜像实测为 Ray 2.48.0、
+protobuf 7.35.1；Ray 2.48 的配置反序列化仍使用该旧 API，因此错误发生在 Serve 控制
+面，尚未进入模型加载或 DevMM 阶段。
+
+修订镜像不改 CANN、torch、torch-npu、vLLM、vLLM-Ascend 或模型，只锁定以下互相
+兼容的控制面依赖：
+
+| 包 | 版本 |
+|---|---|
+| protobuf | `5.29.6` |
+| proto-plus | `1.26.1` |
+| googleapis-common-protos | `1.70.0` |
+| google-api-core | `2.25.2` |
+
+`5.29.6` 同时满足当前 vLLM 的 `protobuf>=5.29.6` 约束。断网构建门禁通过，
+`FieldDescriptor.label` 实测恢复；只读挂载主机 driver、但不暴露 NPU 的完整
+`ray.serve.llm`/vLLM-Ascend 导入门禁也通过。新不可变引用为：
+
+```text
+110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:5deedaef878bfada687238124fa8d7add52f153882b16c987e0b7694b48d7751
+```
+
+发布使用既有 Qwen publisher service account 新签发的单仓库、一天有效一次性 token；
+发布与 digest 校验后立即撤销。Git 中只保存锁文件和 wheel SHA256，不保存 wheel 或
+凭据。按用户要求，新 digest 仅写入待同步的 Profile/ModelDeployment 和 smoke manifest，
+没有同步运行态 XR，也没有启动新版模型。
+
+## 2026-08-24：Ray 2.48 / 厂商 vLLM 0.23 运行兼容修订 v3
+
+v2 完成模型加载后，实际请求依次暴露 Ray Serve LLM adapter 与厂商 vLLM 0.23 的
+接口漂移：`VLLM_USE_V1`、`make_async`、chat renderer、`AsyncEngineArgs`、同步
+tokenizer/model config、`SamplingParams.best_of` 及请求队列指标字段均不兼容。
+这些问题属于 Python 控制/适配层，不是驱动、HCCL、TP 或模型权重故障。
+
+`runtime/qwen38-ray/apply_ray_vllm_compat.py` 将本次实测补丁固化为构建期精确替换；
+若 Ray 源文件发生漂移，构建会直接失败。补丁不升级或替换 vLLM、vLLM-Ascend、
+torch-npu、CANN 和驱动。v3 离线构建及不暴露 NPU 的 runtime import 门禁均通过：
+
+```text
+qwen38_ray_runtime_build=PASS
+qwen38_ray_runtime_runtime=PASS
+```
+
+Artifact Keeper 不可变引用为：
+
+```text
+110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942
+```
+
+manifest 为 `linux/arm64`。发布仍使用已有 publisher service account 的一次性
+`*` token，管理员只负责签发和撤销；上传、摘要检查完成后 token 已撤销，regctl
+登录、明文 token 和 18GiB 临时 tar 均已清理。v1、v2、v3 tag 均保留且共享层；
+v2→v3 实际新增 5 个压缩层、约 57.6MiB，并非复制一份 18GiB 镜像。
+
+发布后只读容量检查：Artifact Keeper 制品目录物理占用约 102GiB；
+`model-artifacts` 为 63.9/430GiB，`container-images` 为 61.5/50GiB。后者已超过
+配置配额但 OCI 路径本次没有硬拒绝写入；继续发布新镜像前应先评审扩容或带引用检查
+的版本保留策略，本文不授权删除旧 tag。

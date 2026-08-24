@@ -11,17 +11,29 @@ Ascend stack unchanged:
 
 The upstream image imports `ray.serve` but does not contain the complete Ray
 `llm` extra. `requirements.lock` contains only the missing top-level packages.
+It also pins the mutually compatible `protobuf 5.29.6`, `proto-plus 1.26.1`,
+`googleapis-common-protos 1.70.0` and `google-api-core 2.25.2` set: protobuf 7
+removes `FieldDescriptor.label`, which Ray Serve 2.48 still uses while parsing
+the RayService deployment configuration.
 The ARM64 wheels are downloaded on the approved jumper, checked against
 `wheelhouse/SHA256SUMS`, transferred to the isolated A3 build context and
 installed with `--no-index`. Wheel binaries are intentionally excluded from
-Git; the final image and its immutable digest are published to Artifact Keeper.
+Git.
+
+`apply_ray_vllm_compat.py` then applies the narrow compatibility shim validated
+on A3. It adapts Ray 2.48's Serve LLM adapter to the vendor vLLM 0.23 API
+(engine arguments, tokenizer/chat formatting, sampling parameters and request
+metrics) without replacing vLLM, vLLM-Ascend, torch-npu, CANN or the driver.
+The build fails if the expected Ray source has drifted, so the shim cannot be
+silently applied to an unreviewed version.
+The final image and its immutable digest are published to Artifact Keeper.
 
 Build on an ARM64 A3 host with the already validated source image:
 
 ```bash
 docker build \
   --build-arg BASE_IMAGE=quay.io/ascend/vllm-ascend:qwen3.8-a3 \
-  --tag qwen38-ray-runtime:ray2.48.0-v1 \
+  --tag qwen38-ray-runtime:ray2.48.0-v3 \
   .
 ```
 

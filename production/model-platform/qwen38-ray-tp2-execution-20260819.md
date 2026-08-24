@@ -195,3 +195,71 @@ SystemdCgroup: true
 日志时出现过 `10250` TLS handshake timeout，但 Pod 状态、退出码、事件、CRI runtime
 和设备 annotation 证据完整；该日志访问问题与 runtime 验证分开记录。Volcano 本轮
 没有测试，也没有修复，仍是恢复 RayService 前的独立门禁。
+
+## 2026-08-24：前八张 TP2 启动前置验证与暂停点
+
+本轮按“前八张”语义为 TP=2 worker 分配 chip 0、1，不是申请全部八张。启动前双视角
+确认 0–7 无计算进程；测试过程中后八张 8–15 出现既有 `ds` Ray 推理进程，本轮未修改、
+停止或占用该任务。
+
+临时绕过 Volcano 后，XR → Crossplane → provider-kubernetes → RayService → KubeRay
+成功创建一个 head 和一个两 NPU worker；worker 的实际设备 annotation 为
+`Ascend910-0,Ascend910-1`。这次暴露并修复了两个平台定义问题：
+
+1. `rayStartParams.resources` 必须在最终 shell 命令中保留 JSON 外层单引号，否则 Ray
+   收到 `{NPU:2}` 并因 JSON 无效退出；Composition 已修正 quoting。
+2. worker 与 head 一样需要只读挂载 `/usr/local/Ascend/driver`，否则 Ray 启动时无法
+   加载 `libascend_hal.so`；Composition 已补齐 worker hostPath/mount。
+
+随后 Ray Serve 在模型 Actor 启动前因 protobuf 7.35.1 移除了
+`FieldDescriptor.label` 而 `DEPLOY_FAILED`，0、1 未出现模型 NPU 进程，也未进入
+safetensors/DevMM 阶段。兼容修订镜像已离线构建、完成无 NPU 门禁并发布到 Artifact
+Keeper，digest 见运行时发布记录。
+
+根据用户要求，发布后停在正式部署之前：XR 已恢复 `desiredState: Stopped`、
+`workerReplicas: 0` 和原静态设备值 8、9，并添加 `crossplane.io/paused=true`；本次
+RayService provider Object、RayService、RayCluster 和 Ray Pod 已清理。KubeRay Operator
+已恢复 `--batch-scheduler=volcano`，既有 `ds` 与 `ray-demo` head Pod UID、Ready 和
+restartCount 均未变化。下一次只有在用户明确确认后，才更新/同步运行态 XR、解除 pause
+并再次申请 chip 0、1；启动前仍须重新执行 Kubernetes request 与 `npu-smi` 双视角空闲检查。
+
+停止收敛后的只读复查发现，另一个直接 Docker 容器
+`qwen38-eager-front-tp2` 于 11:41:47（A3 本地时间）启动，并在 chip 0、1 各创建一个
+`VLLMWorker_TP`。其镜像、容器名和 `--safetensors-load-strategy eager` 命令均不同于
+本轮 RayService，启动时间也晚于 Ray 资源清理；因此判定为外部任务，本轮没有停止或
+修改它。下一次 Ray 启动不能默认 0、1 可用，必须重新选择空闲设备并取得确认。
+
+## 2026-08-24：后八张中的 chip 8/9 RayService 端到端验证
+
+本轮启动前确认物理 chip 8–15 均无计算进程；0–7 上四个既有 Docker TP2 服务不做
+任何操作。XR 仍以一个 worker、`TP=2/DP=1` 申请两颗 NPU，通过已有静态设备约束由
+device-plugin 实际分配 `Ascend910-8,Ascend910-9`。临时绕过 Volcano 后，完整链路为：
+
+```text
+ModelDeployment XR -> Crossplane Composition -> provider-kubernetes
+  -> RayService -> KubeRay RayCluster -> Ascend device-plugin
+  -> Ray Serve LLM -> vLLM-Ascend TP2
+```
+
+运行参数为 32K 上下文、`max_num_seqs=64`、`max_num_batched_tokens=8192`、
+`gpu_memory_utilization=0.90`、Prefix Cache 开启、Qwen3.5 MTP 3 token、
+`FULL_DECODE_ONLY`。Safetensors 三组结果：默认 `auto` 在 EXT4 上走 lazy/mmap 并停在
+`0/10`；强制 `prefetch` 完成文件预取后仍不能进入分片加载；显式 `eager` 则主模型
+10/10 约 10.3 秒、MTP draft 10/10 约 6.7 秒，最终 Ray 应用、LLMDeployment、两份
+Router 和 proxy 全部 `HEALTHY/RUNNING`。每个 TP rank 权重约 16.28GiB，运行时每颗
+目标 chip HBM 约 55.9GiB，日志估算 32K 理论并发约 19.46；这不是压测结果。
+
+首次 OpenAI chat 请求继续暴露 Ray 2.48 与厂商 vLLM 0.23 的 Python API 漂移。
+逐项完成兼容后，最小请求返回 HTTP 200，模型实际生成“Ray部署成功”。适配内容已经
+固化进 v3 镜像构建脚本，不能依赖本次容器内热补丁；v3 digest 见运行时发布记录。
+
+验收后 XR 已恢复 `Stopped`、worker=0 并添加 `crossplane.io/paused=true`；组合 Object、
+RayService、RayCluster 和本次 Ray Pod 已删除。chip 8–15 均无运行进程，8/9 HBM 回到
+约 3GiB 驱动基线。KubeRay Operator 已恢复 `--batch-scheduler=volcano`；既有 `ds`、
+`ray-demo` head Pod 的 UID、Ready 和 restartCount 均未变化。此次只完成启动与单请求
+端到端门禁，尚未进行 32K 极限并发或吞吐压测。
+
+清理期间 provider 的最终删除存在一次竞态：组合 Object 已不存在后，最后一次 provider
+reconcile 又短暂留下一个 worker=0 的 CPU-only Ray head；它未申请 NPU。再次删除该
+RayService 并等待 30 秒后，`model-serving` 中 RayService、RayCluster、Pod 均为空，
+XR 仍为 `paused=true / Stopped / worker=0`，Volcano 参数保持恢复状态。

@@ -11,6 +11,7 @@ USER root
 COPY requirements.lock /opt/qwen38-ray/requirements.lock
 COPY wheelhouse/ /opt/qwen38-ray/wheelhouse/
 COPY validate_runtime.py /opt/qwen38-ray/validate_runtime.py
+COPY apply_ray_vllm_compat.py /opt/qwen38-ray/apply_ray_vllm_compat.py
 
 RUN cd /opt/qwen38-ray/wheelhouse \
     && sha256sum --check SHA256SUMS \
@@ -19,6 +20,8 @@ RUN cd /opt/qwen38-ray/wheelhouse \
          --no-index \
          --find-links=/opt/qwen38-ray/wheelhouse \
          --requirement=/opt/qwen38-ray/requirements.lock \
+    && /usr/local/python3.12.13/bin/python3 \
+         /opt/qwen38-ray/apply_ray_vllm_compat.py \
     && /usr/local/python3.12.13/bin/python3 \
          /opt/qwen38-ray/validate_runtime.py --mode build \
     && rm -rf /opt/qwen38-ray/wheelhouse
