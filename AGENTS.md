@@ -1,8 +1,9 @@
 # Model platform agent handoff
 
 This file is the mandatory starting point for any Agent continuing work in
-this repository. It describes actual production state as of 2026-08-17 and the
-rules for safely continuing the deployment.
+this repository. The current production snapshot is dated 2026-08-27; read
+`production/model-platform/HANDOFF-20260827.md` first, then use this file for
+the rules for safely continuing the deployment.
 
 ## Mandatory operating rules
 
@@ -997,33 +998,35 @@ source control; it is not evidence that production was changed.
 
 ## Read these files in order
 
-1. `model-platform-production-integration-plan.md` — target architecture,
+1. `production/model-platform/HANDOFF-20260827.md` — current production
+   snapshot, repository state, known warnings and exact continuation order.
+2. `model-platform-production-integration-plan.md` — target architecture,
    platform objects, upload/cache/deployment flow and staged rollout plan.
-2. `production/model-platform/progress-20260810.md` — consolidated actual
+3. `production/model-platform/progress-20260810.md` — consolidated actual
    production state and remaining risks.
-3. `production/model-platform/README.md` — repository layout and safety gates.
-4. `production/model-platform/gitea/deployment-record-20260810.md` — Git service
+4. `production/model-platform/README.md` — repository layout and safety gates.
+5. `production/model-platform/gitea/deployment-record-20260810.md` — Git service
    deployment and persistence.
-5. `production/model-platform/argocd/deployment-record-20260810.md` and
+6. `production/model-platform/argocd/deployment-record-20260810.md` and
    `production/model-platform/gitops/deployment-record-20260810.md` — Argo CD
    and the current manual, non-pruning GitOps loop.
-6. `production/model-platform/tekton/deployment-record-20260811.md` — current
+7. `production/model-platform/tekton/deployment-record-20260811.md` — current
    Gitea-to-Tekton CI loop and its tokenless security model.
-7. `production/model-platform/crossplane/deployment-record-20260811.md` and
+8. `production/model-platform/crossplane/deployment-record-20260811.md` and
    `production/model-platform/crossplane/runtime-zero-deployment-record-20260814.md`
    — Crossplane Core bootstrap, internal HTTPS package path, Function,
    Composition and the zero-replica runtime proof.
-8. `production/model-platform/catalog/` and
+9. `production/model-platform/catalog/` and
    `production/model-platform/cache/` — prepared model metadata, runtime profile
    and cache implementation; these files are not proof that runtime deployment
    has occurred.
-9. `production/model-platform/qwen38-ray-mvp-plan-20260818.md` — the focused
+10. `production/model-platform/qwen38-ray-mvp-plan-20260818.md` — the focused
    ModelScope -> Artifact Keeper -> KubeRay/Argo execution path for the
    user-reactivated Qwen3.8-27B test; it is a plan, not deployment evidence.
-10. `production/model-platform/backstage/README.md` — minimum usable portal,
+11. `production/model-platform/backstage/README.md` — minimum usable portal,
    identity, TLS, catalog, CI/CD connection, request-by-PR boundary and phased
    acceptance plan. It is a plan, not deployment evidence.
-11. `production/model-platform/backstage/release-runbook.md` — exact staged
+12. `production/model-platform/backstage/release-runbook.md` — exact staged
     user-run commands for the Crossplane, Backstage, Tekton PR-status and
     manual Argo control-plane closure.
 
@@ -1038,17 +1041,17 @@ The production target is the K3s cluster on `server-00`, Kubernetes
 
 | Module | Production state |
 |---|---|
-| Artifact Keeper | Running in `artifact-keeper`; 480Gi artifact PV + 20Gi PostgreSQL PV; Qwen model 24/24 files checksum-verified |
+| Artifact Keeper | Running in `artifact-keeper`; backend `1.6.4` (Helm revision 4), 480Gi artifact PV + 20Gi PostgreSQL PV; Qwen model 24/24 files checksum-verified; K12 data-pipeline Docker publisher is root-only on `server-00` and scoped to Artifact Keeper `container-images`; initial AMD64 image `0.2.0-2fd605c` remains forbidden because it loads upstream Ray/NPU-capable definitions. The safe no-job/no-Ray/no-NPU image `k12-data-pipeline-dagster:0.3.0-control-plane@sha256:c5f80cd6f09becb3493745416f2020ebc3f667f904ff5c8e477be5f524b1e5ba` is published and verified AMD64, but has no Kubernetes consumer. Its non-preempting, zero-Ascend-quota foundation passed rendering/client dry-run and still needs separate production prerequisites/apply approval |
 | Gitea | Running in `gitea`; private config repository and persistent PostgreSQL are verified |
-| Argo CD | Running in `argocd`; one minimal manually synchronized Application; no prune/self-heal |
+| Argo CD | Running in `argocd`; `model-platform-bootstrap` and `model-platform-deployment-requests` are Synced/Healthy; both remain manually synchronized with no prune/self-heal |
 | Tekton | Operator, Pipelines, Triggers, both EventListeners and event-based `TektonPruner/pruner` Running; Gitea PR status path and GitHub listener deployed; CI tools now run from the Artifact Keeper digest on server-00; migration Run `model-platform-config-ak-migration-20260817` succeeded with Gitea status write; Pruner Pods are server-00-only with `gpu-*` count 0; previous 8889 digest retained for rollback |
-| Crossplane | Core 2.3.4 Helm revision 2 and RBAC Manager Running; Function Patch and Transform v0.8.2 Installed/Healthy; control-plane foundation now applied (provider ServiceAccount/namespace Role+RoleBinding, no-NPU DeploymentRuntimeConfig, Qwen3.8 XRD and Composition); provider package/ProviderConfig remain gated and not installed |
+| Crossplane | Core 2.3.4, RBAC Manager, Function Patch and Transform and provider-kubernetes are Running; control-plane foundation, Qwen3.8 XRD/Composition and stopped model intent exist; do not mutate the current model/NPU runtime while working on the data-pipeline track |
 | ModelDeployment API | v2 namespaced XRD Established/Offered; runtime-zero Composition installed; one stopped XR Synced/Ready |
 | ModelVersion / RuntimeProfile | YAML catalog materials exist but are not yet backed by completed production APIs/controllers |
 | Model cache | Fetcher and Job material exist; no production cache Job has run |
 | Qwen runtime | No new production inference deployment has been created by this project. The reusable CPU-only BF16 importer, isolated ModelSlim W8A8 quantization contract, cache manifest-sidecar logic, provider-kubernetes/RBAC/Composition source and Qwen3.8 contract are prepared locally; the ModelScope candidate repository/revision, quantizer evidence, Artifact Keeper publisher/read credentials and final image/StorageClass evidence are not confirmed. |
 | KubeRay / KCC pretraining | Existing KubeRay Operator v1.6.0 is `1/1 Ready` in `ray-mangement`; `ray.io/v1` RayCluster/RayCronJob/RayJob/RayService CRDs exist. KCC integration is explicitly deferred until its host scripts, paths, state/logs and kubeconfig dependency are migrated into K3s. Do not deploy another KubeRay Operator; a future platform `PretrainingJob` business Operator must reuse the existing one. |
-| Backstage | Running in `backstage`; service/RBAC/OIDC/Catalog/events, constrained Gitea PR action and real exact-head policy status accepted; mock scheduling form rolled out; production runs v0.2.11 `linux/amd64` from Artifact Keeper at `sha256:5e779eaceeb6ab81b6a69547b5ad7f2f91fda291dfc09153ce4c7e5a81d3b698`; `artifact-keeper-backstage-pull` read-only Secret; Deployment and PostgreSQL Ready; NodePort 30070 health/form routes verified; no new ModelDeployment; effective model replicas remain 0; stable HTTPS and Ray dynamic scheduling remain future work. The KCC pretraining panel is mock/read-only and its training actions remain disabled. |
+| Backstage | Running in `backstage`; production is v0.2.14 `linux/amd64` from Artifact Keeper at `sha256:b0b234f998e580b5cb8e5a632bc2dad9a76f54a5ac45477d91f2ad7384ba5eff`; Deployment/PostgreSQL Ready and NodePort 30070 is the current access path. The local `/data-pipeline` page/API and later Artifact/Recipe edits are not deployed. Do not report them as production until a new image and rollout are verified. |
 
 Crossplane Core and RBAC Manager declare 200m CPU and 512Mi memory requests in
 total and use no PVC. The Composition Function adds 100m CPU and 128Mi memory

@@ -4,7 +4,7 @@
 
 Backstage is deployed in production in namespace `backstage` and the portal,
 OIDC login, Catalog, read-only Kubernetes view and constrained Gitea PR action
-have been accepted. The active image is v0.2.11 at the immutable internal
+have been accepted. The active image is v0.2.13 at the immutable internal
 AMD64 digest recorded in `versions.lock.yaml`. The image is pulled from
 Artifact Keeper with the namespace-local repository-scoped read-only Secret
 `artifact-keeper-backstage-pull`. The deployment form records bounded
@@ -34,13 +34,23 @@ Gitea PR. It never accepts a browser-supplied image, host path, node name or
 Kubernetes manifest.
 
 The source-level Recipe release boundary and its Tekton/Argo safety checks are
-recorded in `../tekton-argocd-recipe-release-20260819.md`. Production still
-needs a new AMD64 Backstage image rollout before this live-catalog behavior is
-accepted as deployed.
+recorded in `../tekton-argocd-recipe-release-20260819.md`. The v0.2.13 AMD64
+image rollout completed on 2026-08-25. The Kubernetes delivery evidence is
+recorded in `release-runbook.md`; browser sign-in and the recipe-page flow
+remain a separate functional acceptance step.
+
+The recipe UI now uses a two-step “Choose a model to deploy → Deploy a model”
+flow while preserving the same stopped-request contract. Its v0.2.13 release
+evidence is documented in `model-deployment-recipe-integration-20260819.md`.
 
 It is not required to provide HA, TechDocs, full-text search, chat, an internal
 artifact uploader, automatic Argo synchronization or direct NPU scheduling in
 the first release.
+
+The planned transition from the current manual Git/Argo gates to scoped,
+policy-gated automation is recorded in
+model-deployment-automation-plan-20260825.md. It is a design only: no
+automatic merge or Argo synchronization is enabled by that document.
 
 ## Responsibility boundary
 

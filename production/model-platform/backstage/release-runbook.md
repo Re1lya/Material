@@ -96,6 +96,78 @@ route returns HTTP 200, and `/kcc-pretraining` returns HTTP 200. The release
 boundary was Backstage Deployment only; the panel's training actions remain
 disabled and cannot create Ray, NPU or model workloads.
 
+### Backstage v0.2.12 recipe integration rollout — 2026-08-25
+
+The reviewed recipe-integration source was built as an AMD64 image and published
+to Artifact Keeper `container-images`:
+
+- image: `110.120.0.3:30670/container-images/model-platform-backstage:v0.2.12`;
+- immutable digest: `sha256:9b317375125200c76e0957d57755fab1e5c32bae6c3677e7b86ce27b329dd9d9`;
+- architecture: `linux/amd64`.
+
+On `server-00`, the release manifest checksum matched the reviewed local file.
+The server-side dry-run reported an unchanged ServiceAccount and Service, and a
+configured Backstage Deployment only. The rollout completed successfully:
+Deployment generation/observedGeneration `11/11`, Ready `1/1`, replacement Pod
+`1/1 Running`, and the NodePort portal returned HTTP 200. No error/fatal/failed
+messages appeared in the Backstage logs during the post-rollout check; the
+cluster had zero Pending Pods. The Backstage container continues to request
+only CPU and memory (`500m` / `1Gi`) and declares no accelerator resource.
+
+This is a technical release acceptance, not browser-flow acceptance: OIDC login
+and the live `/model-recipes` catalog/request flow must still be checked in a
+browser. The deployment cannot create Ray, model or NPU workloads directly;
+the stopped-GitOps-request and manual Argo gates remain in force.
+
+### Backstage v0.2.13 two-step recipe UI rollout — 2026-08-25
+
+The revised “Choose a model to deploy → Deploy a model” recipe UI was built
+and published to Artifact Keeper `container-images`:
+
+- image: `110.120.0.3:30670/container-images/model-platform-backstage:v0.2.13`;
+- immutable digest: `sha256:a15b8ed3b01acb356a4cf651bb914565c87cacb76b28a403ad14b347b2aa6306`;
+- architecture: `linux/amd64`.
+
+The source bundle SHA256 was verified on `server-00` before build. Docker's
+authenticated inspection confirmed the same remote RepoDigest and architecture.
+Kubernetes diff and server-side dry-run showed an unchanged ServiceAccount and
+Service, with only the Backstage Deployment image changing from v0.2.12. The
+scoped apply completed successfully: replacement Pod `1/1 Running`, rollout
+`1/1`, NodePort `/healthcheck` HTTP 200, no recent error/fatal/exception log,
+and zero cluster Pending Pods. The Deployment remains amd64/server-00 only,
+requests `500m` CPU and `1Gi` memory, and has no NPU request or limit.
+
+This release changes only the portal UI. The button still creates a bounded,
+stopped GitOps request (`requestedReplicas: 0`); it cannot allocate NPU, create
+Ray workloads, or enable Argo automatic synchronization.
+
+### Backstage v0.2.14 left-aligned recipe visual refresh — 2026-08-25
+
+The confirmed visual refresh was built and published to Artifact Keeper
+`container-images`:
+
+- image: `110.120.0.3:30670/container-images/model-platform-backstage:v0.2.14`;
+- immutable digest: `sha256:b0b234f998e580b5cb8e5a632bc2dad9a76f54a5ac45477d91f2ad7384ba5eff`;
+- architecture: `linux/amd64`.
+
+The page now uses the available Backstage content width with a left-aligned
+model catalog, a Backstage-coloured animated recipe hero, hoverable model cards,
+clickable reviewed recipe cards, and a sticky request summary on wider screens.
+It retains the two-step request semantics and the current catalog data source;
+it does not introduce a new runtime profile, model, deployment API, or scheduler
+action. A static visual preview is retained at
+`prototypes/model-recipes-current-preview.html` for source review only.
+
+The source bundle checksum matched on `server-00`. Docker authenticated
+inspection and manifest inspection confirmed the published AMD64 digest. The
+server-side dry-run/diff reported only the Backstage Deployment image changing
+from v0.2.13. The scoped apply left the ServiceAccount and Service unchanged;
+generation/observedGeneration is `13/13`, the replacement Pod is `1/1 Running`,
+the NodePort health route returned HTTP 200, recent logs had no error/fatal/
+exception match, and the cluster had zero Pending Pods. Backstage remains pinned
+to `server-00`, requests `500m` CPU and `1Gi` memory, and declares no NPU
+resource. No Ray, ModelDeployment, PVC, Job, or existing workload was changed.
+
 ### Create-page template chooser fix — released 2026-08-17
 
 On 2026-08-17 the source was updated so the model template explicitly uses the

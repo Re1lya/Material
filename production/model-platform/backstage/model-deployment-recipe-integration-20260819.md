@@ -2,10 +2,22 @@
 
 > 日期：2026-08-19
 >
-> 本次只修改仓库源码和文档并做本地构建/测试；没有发布新 Backstage 镜像，
-> 没有创建或修改 ModelDeployment、PVC、Job、RayService、Service、Pod 或 NPU 请求。
+> 源码接入与本地构建/测试完成后，已于 2026-08-25 发布 Backstage v0.2.12。
+> 发布只滚动更新了 `backstage` Deployment 镜像；没有创建或修改
+> ModelDeployment、PVC、Job、RayService、Service 或 NPU 请求。
+
+> 2026-08-25 后续 UI 更新：`/model-recipes` 已整理为两步体验
+> “Choose a model to deploy → Deploy a model”。该更新通过页面单元测试、TypeScript
+> 和 Backend build，并已作为 Backstage v0.2.13 发布；发布仍只滚动更新了
+> Backstage Deployment。
 
 ## 接入结果
+
+最新源码中的目录页只展示已注册且可部署的 Artifact Keeper 制品，并按模型、提供者或
+量化方式搜索；选择模型后进入独立的配置视图。配置视图默认选中可 serving 的 TP2
+RuntimeProfile，展示不可变制品路径、已验证的运行时契约和停止态资源摘要。切换
+Serving recipe 会同时重置该 recipe 对应的物理卡位预览，避免不同 profile 的选择串用。
+请求按钮仍只创建 `requestedReplicas: 0` 的停止态 PR，因此这次 UI 重整不会分配 NPU。
 
 `/model-recipes` 已从固定 mock 目录调整为“真实目录优先、发布版本兜底”的只读页面：
 
@@ -70,8 +82,9 @@ Material UI 的既有 `findDOMNode` 弃用警告；它不影响结果，也不�
 
 ## 发布边界
 
-当前生产 Pod 仍运行已发布的 Backstage v0.2.11 digest。源码接入完成后，后续若要
-让生产页面读取这些 API，需要单独执行 Backstage AMD64 镜像构建、Artifact Keeper
-不可变 digest 校验、server-00 仅限 Deployment 的 dry-run/滚动发布和页面验收。
-该发布不会触碰 NPU，但仍应保持人工审批、Argo `prune/self-heal` 关闭，并在发布前
-确认 Backstage ServiceAccount 的只读 RBAC 未扩大。
+生产已运行 Backstage v0.2.13：
+`110.120.0.3:30670/container-images/model-platform-backstage:v0.2.13@sha256:a15b8ed3b01acb356a4cf651bb914565c87cacb76b28a403ad14b347b2aa6306`。
+发布前的 server-side dry-run 显示 ServiceAccount、Service 不变，仅 Deployment
+配置；滚动更新后 Pod `1/1 Ready`、门户 HTTP 200、无新增 Pending Pod，且容器没有
+NPU 资源声明。浏览器登录和 `/model-recipes` 真实页面流仍需单独验收。Argo
+`prune/self-heal` 继续关闭，Backstage ServiceAccount 的只读 RBAC 未扩大。
