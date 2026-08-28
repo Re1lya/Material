@@ -61,6 +61,8 @@ catalog:
       target: ./catalog/entities.yaml
     - type: file
       target: ./catalog/templates/model-deployment.yaml
+    - type: file
+      target: ./catalog/templates/model-deployment-start.yaml
 
 kubernetes:
   frontend:

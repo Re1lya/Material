@@ -1,0 +1,54 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: start-model-inference
+  namespace: default
+  title: Start inference (Stopped -> Running)
+  description: >
+    Two-step model deployment, step 2. Opens a constrained Running update for
+    an existing stopped ModelDeployment. The request only merges when the
+    Tekton capacity gate approves it inside an approved running window; stop
+    requests always take priority.
+  tags:
+    - model-platform
+    - running
+    - two-step
+spec:
+  owner: group:default/platform-team
+  type: model-inference-start
+  parameters:
+    - title: Start inference
+      required:
+        - deploymentName
+      properties:
+        deploymentName:
+          title: Deployment name
+          type: string
+          description: Existing stopped ModelDeployment request name
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          maxLength: 40
+        startReason:
+          title: Start reason
+          type: string
+          description: Recorded in the Git request for audit purposes
+          maxLength: 512
+  steps:
+    - id: start
+      name: Open running request
+      action: model-platform:gitea-start-inference-pr
+      input:
+        deploymentName: ${{ parameters.deploymentName }}
+        startReason: ${{ parameters.startReason }}
+  output:
+    links:
+      - title: Open running request pull request
+        icon: github
+        url: ${{ steps.start.output.pullRequestUrl }}
+    text:
+      - title: Safety state
+        content: >
+          Start ID `${{ steps.start.output.startRequestId }}` recorded for
+          `${{ parameters.deploymentName }}`. The PR stays open until the
+          Tekton capacity gate validates the approved running window, target
+          devices and cached artifacts. Effective runtime stays at zero NPU
+          until that gate merges inside the window.
