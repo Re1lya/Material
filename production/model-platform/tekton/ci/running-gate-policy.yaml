@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-platform-running-gate-policy
+  namespace: model-platform-ci
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: running-gate
+data:
+  # Single-tenant allow-list of Backstage identities allowed to trigger Start.
+  allowlisted-requested-by: "gitadmin"
+  # The approved running window is closed by default. Flip to "true" only for
+  # a controlled NPU acceptance window; flip back to "false" afterwards.
+  window-open: "false"
+  window-note: >-
+    closed outside approved NPU acceptance windows; open only via a reviewed
+    edit during a controlled window
+  # Certified runtime contract for the single approved inference release unit.
+  expected-profile: "qwen38-w8a8-ray-ascend-910b3-tp2-v1"
+  expected-runtime-image: "110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942"
+  expected-manifest-digest: "sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f"
+  expected-cache-revision: "f2afa9e2-r1"
+  expected-composition-ref: "modeldeployment-qwen38-ray-v1alpha1"
+  expected-npu-per-worker: "2"
+  expected-tensor-parallel-size: "2"
+  expected-data-parallel-size: "1"
+  expected-pipeline-parallel-size: "1"
+  # Target placement and physical devices for the TP2 release unit.
+  target-node: "a3-server-00"
+  target-node-labels: "kubernetes.io/arch=arm64,kubernetes.io/hostname=a3-server-00,node.kubernetes.io/npu.chip.name=Ascend910,accelerator-type=module-a3-16"
+  target-devices: "Ascend910-8,Ascend910-9"
+  target-device-ids: "8,9"

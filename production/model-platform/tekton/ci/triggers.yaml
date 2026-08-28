@@ -19,6 +19,8 @@ spec:
       value: gitea-ci-reader
     - name: pull-request-number
       value: "0"
+    - name: pull-request-head-ref
+      value: ""
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
@@ -41,6 +43,8 @@ spec:
       value: gitea-ci-reader
     - name: pull-request-number
       value: $(body.pull_request.number)
+    - name: pull-request-head-ref
+      value: $(body.pull_request.head.ref)
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
@@ -85,6 +89,8 @@ spec:
       value: github-public-clone
     - name: pull-request-number
       value: "0"
+    - name: pull-request-head-ref
+      value: ""
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
@@ -100,6 +106,7 @@ spec:
     - name: event-kind
     - name: clone-credentials-secret
     - name: pull-request-number
+    - name: pull-request-head-ref
   resourcetemplates:
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
@@ -129,6 +136,8 @@ spec:
             value: $(tt.params.event-kind)
           - name: pull-request-number
             value: $(tt.params.pull-request-number)
+          - name: pull-request-head-ref
+            value: $(tt.params.pull-request-head-ref)
         taskRunTemplate:
           serviceAccountName: model-platform-ci-runner
           podTemplate:
@@ -143,6 +152,9 @@ spec:
               runAsNonRoot: true
               seccompProfile:
                 type: RuntimeDefault
+        taskRunSpecs:
+          - pipelineTaskName: capacity-gate-running
+            serviceAccountName: model-capacity-reader
         timeouts:
           pipeline: 10m
         workspaces:

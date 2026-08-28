@@ -25,6 +25,9 @@ spec:
     - name: pull-request-number
       type: string
       default: "0"
+    - name: pull-request-head-ref
+      type: string
+      default: ""
   workspaces:
     - name: source
   tasks:
@@ -264,11 +267,15 @@ spec:
           value: $(params.revision)
         - name: pull-request-number
           value: $(params.pull-request-number)
+        - name: pull-request-head-ref
+          value: $(params.pull-request-head-ref)
       taskSpec:
         params:
           - name: revision
             type: string
           - name: pull-request-number
+            type: string
+          - name: pull-request-head-ref
             type: string
         steps:
           - name: merge
@@ -279,6 +286,8 @@ spec:
                 value: $(params.revision)
               - name: PULL_REQUEST_NUMBER
                 value: $(params.pull-request-number)
+              - name: PULL_REQUEST_HEAD_REF
+                value: $(params.pull-request-head-ref)
               - name: GITEA_MERGE_TOKEN
                 valueFrom:
                   secretKeyRef:
@@ -301,6 +310,18 @@ spec:
               revision = os.environ["REVISION"]
               pull_number = os.environ["PULL_REQUEST_NUMBER"]
               token = os.environ["GITEA_MERGE_TOKEN"]
+              head_ref = os.environ["PULL_REQUEST_HEAD_REF"]
+
+              if not head_ref.startswith("backstage/modeldeployment-"):
+                  print(
+                      "not a Backstage generated request branch; auto-merge not applicable"
+                  )
+                  raise SystemExit(0)
+              if head_ref.startswith("backstage/modeldeployment-running-"):
+                  print(
+                      "running requests are handled by auto-merge-running-request; skipping"
+                  )
+                  raise SystemExit(0)
 
               if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
                   raise SystemExit("refusing to merge a malformed revision")
@@ -400,6 +421,516 @@ spec:
                   },
               )
               print(f"auto_merged_pull_request={pull_number}")
+            computeResources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+    - name: capacity-gate-running
+      runAfter:
+        - clone-and-validate
+      when:
+        - input: $(params.source-provider)
+          operator: in
+          values:
+            - gitea
+        - input: $(params.event-kind)
+          operator: in
+          values:
+            - pull-request
+      params:
+        - name: revision
+          value: $(params.revision)
+        - name: pull-request-number
+          value: $(params.pull-request-number)
+        - name: pull-request-head-ref
+          value: $(params.pull-request-head-ref)
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+          - name: pull-request-number
+            type: string
+          - name: pull-request-head-ref
+            type: string
+        volumes:
+          - name: running-gate-policy
+            configMap:
+              name: model-platform-running-gate-policy
+        steps:
+          - name: gate
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: PULL_REQUEST_HEAD_REF
+                value: $(params.pull-request-head-ref)
+            volumeMounts:
+              - name: running-gate-policy
+                mountPath: /var/run/running-gate-policy
+                readOnly: true
+            script: |
+              #!/usr/bin/env python3
+              import json
+              import os
+              import ssl
+              import urllib.error
+              import urllib.parse
+              import urllib.request
+
+              POLICY_DIR = "/var/run/running-gate-policy"
+              head_ref = os.environ.get("PULL_REQUEST_HEAD_REF", "")
+              if not head_ref.startswith("backstage/modeldeployment-running-"):
+                  print("capacity_gate=SKIPPED non-running request branch")
+                  raise SystemExit(0)
+
+              deployment = head_ref[len("backstage/modeldeployment-running-"):]
+              if not deployment or len(deployment) > 40 or not all(
+                  ch.isalnum() or ch == "-" for ch in deployment
+              ):
+                  raise SystemExit("branch does not encode a valid deployment name")
+
+              def policy(name):
+                  with open(os.path.join(POLICY_DIR, name), encoding="utf-8") as handle:
+                      return handle.read().strip()
+
+              if policy("window-open").lower() != "true":
+                  raise SystemExit(
+                      "capacity_gate=FAIL approved running window is closed"
+                  )
+              expected_npu = policy("expected-npu-per-worker")
+              target_node = policy("target-node")
+              target_devices = policy("target-devices")
+              device_ids = [d.strip() for d in policy("target-device-ids").split(",") if d.strip()]
+              expected_labels = {}
+              for item in policy("target-node-labels").split(","):
+                  key, _, value = item.strip().partition("=")
+                  expected_labels[key] = value
+
+              token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+              with open(token_path, encoding="utf-8") as handle:
+                  sa_token = handle.read().strip()
+              ca_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              context = ssl.create_default_context(cafile=ca_path)
+              api = "https://kubernetes.default.svc"
+
+              def k8s(path):
+                  request = urllib.request.Request(
+                      api + path,
+                      headers={
+                          "Authorization": f"Bearer {sa_token}",
+                          "Accept": "application/json",
+                      },
+                      method="GET",
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=30, context=context) as response:
+                          return json.loads(response.read())
+                  except urllib.error.HTTPError as error:
+                      raise SystemExit(
+                          f"kubernetes GET {path} returned HTTP {error.code}"
+                      ) from None
+
+              for name, value in expected_labels.items():
+                  actual = k8s(f"/api/v1/nodes/{target_node}")["metadata"]["labels"].get(name)
+                  if actual != value:
+                      raise SystemExit(
+                          f"capacity_gate=FAIL node label {name}={actual} does not match profile {value}"
+                      )
+
+              xr = k8s(
+                  "/apis/platform.example.com/v1alpha1/namespaces/model-serving/"
+                  f"modeldeployments/{deployment}"
+              )
+              if xr["spec"]["desiredState"] != "Stopped":
+                  raise SystemExit("capacity_gate=FAIL target XR is not Stopped")
+              conditions = {
+                  condition["type"]: condition["status"]
+                  for condition in xr["status"].get("conditions", [])
+              }
+              if conditions.get("Synced") != "True" or conditions.get("Ready") != "True":
+                  raise SystemExit("capacity_gate=FAIL target XR is not Synced/Ready")
+              cache_revision = xr["spec"]["cache"]["revision"]
+              cache_job = k8s(
+                  "/apis/batch/v1/namespaces/model-serving/jobs/"
+                  f"{deployment}-cache-{cache_revision}"
+              )
+              job_conditions = {
+                  condition["type"]: condition["status"]
+                  for condition in cache_job["status"].get("conditions", [])
+              }
+              if job_conditions.get("Complete") != "True":
+                  raise SystemExit(
+                      f"capacity_gate=FAIL cache job {deployment}-cache-{cache_revision} is not Complete"
+                  )
+
+              pods = k8s("/api/v1/pods")["items"]
+              conflicting = []
+              for pod in pods:
+                  if pod["spec"].get("nodeName") != target_node:
+                      continue
+                  if pod["metadata"]["namespace"] == "model-platform-ci":
+                      continue
+                  for container in pod["spec"]["containers"] + pod["spec"].get("initContainers", []):
+                      for key in container.get("resources", {}).get("requests", {}):
+                          if "ascend" in key.lower() or "npu" in key.lower():
+                              conflicting.append(
+                                  f"{pod['metadata']['namespace']}/{pod['metadata']['name']} requests {key}"
+                              )
+              if conflicting:
+                  raise SystemExit(
+                      "capacity_gate=FAIL conflicting accelerator requests: "
+                      + "; ".join(conflicting)
+                  )
+
+              def prometheus_query(query):
+                  proxy = (
+                      "/api/v1/namespaces/monitoring/services/"
+                      "http:promotel-kube-prometheus-s-prometheus:9090/proxy"
+                      f"/api/v1/query?query={urllib.parse.quote(query)}"
+                  )
+                  request = urllib.request.Request(
+                      api + proxy,
+                      headers={
+                          "Authorization": f"Bearer {sa_token}",
+                          "Accept": "application/json",
+                      },
+                      method="GET",
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=30, context=context) as response:
+                          return json.loads(response.read())["data"]["result"]
+                  except urllib.error.HTTPError as error:
+                      raise SystemExit(
+                          f"prometheus proxy query returned HTTP {error.code}"
+                      ) from None
+
+              id_regex = "|".join(f"^{_id}$" for _id in device_ids)
+              queries = {
+                  "health": 'npu_chip_info_health_status{node_name="%s",id=~"%s"}'
+                  % (target_node, id_regex),
+                  "processes": 'npu_chip_info_process_info_num{node_name="%s",id=~"%s"}'
+                  % (target_node, id_regex),
+              }
+              observations = {name: prometheus_query(query) for name, query in queries.items()}
+              for name, series in observations.items():
+                  if not series:
+                      raise SystemExit(
+                          f"capacity_gate=FAIL no physical NPU telemetry for devices {target_devices}"
+                      )
+                  for entry in series:
+                      value = entry["value"][1]
+                      chip = entry["metric"].get("id", "?")
+                      if name == "health" and value != "1":
+                          raise SystemExit(
+                              f"capacity_gate=FAIL device {chip} health status is {value}"
+                          )
+                      if name == "processes" and value != "0":
+                          raise SystemExit(
+                              f"capacity_gate=FAIL device {chip} already runs {value} process(es)"
+                          )
+
+              print(
+                  f"capacity_gate=PASS node={target_node} devices={target_devices} "
+                  f"npuperworker={expected_npu} deployment={deployment}"
+              )
+            computeResources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+    - name: auto-merge-running-request
+      runAfter:
+        - capacity-gate-running
+      when:
+        - input: $(params.source-provider)
+          operator: in
+          values:
+            - gitea
+        - input: $(params.event-kind)
+          operator: in
+          values:
+            - pull-request
+      params:
+        - name: revision
+          value: $(params.revision)
+        - name: pull-request-number
+          value: $(params.pull-request-number)
+        - name: pull-request-head-ref
+          value: $(params.pull-request-head-ref)
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+          - name: pull-request-number
+            type: string
+          - name: pull-request-head-ref
+            type: string
+        volumes:
+          - name: running-gate-policy
+            configMap:
+              name: model-platform-running-gate-policy
+        steps:
+          - name: merge
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: REVISION
+                value: $(params.revision)
+              - name: PULL_REQUEST_NUMBER
+                value: $(params.pull-request-number)
+              - name: PULL_REQUEST_HEAD_REF
+                value: $(params.pull-request-head-ref)
+              - name: GITEA_MERGE_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-model-deployment-merger
+                    key: token
+            volumeMounts:
+              - name: running-gate-policy
+                mountPath: /var/run/running-gate-policy
+                readOnly: true
+            script: |
+              #!/usr/bin/env python3
+              import base64
+              import copy
+              import json
+              import os
+              import re
+              import urllib.error
+              import urllib.parse
+              import urllib.request
+
+              from ruamel.yaml import YAML
+
+              POLICY_DIR = "/var/run/running-gate-policy"
+              api = "http://gitea-http.gitea.svc.cluster.local:3000/api/v1"
+              repository = "/repos/gitadmin/model-platform-config"
+              revision = os.environ["REVISION"]
+              pull_number = os.environ["PULL_REQUEST_NUMBER"]
+              token = os.environ["GITEA_MERGE_TOKEN"]
+              head_ref = os.environ.get("PULL_REQUEST_HEAD_REF", "")
+
+              if not head_ref.startswith("backstage/modeldeployment-running-"):
+                  print("running auto-merge not applicable; skipping")
+                  raise SystemExit(0)
+              if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
+                  raise SystemExit("refusing to merge a malformed revision")
+              if not pull_number.isdigit() or int(pull_number) < 1:
+                  raise SystemExit("pull-request-number must be a positive integer")
+              if len(token) < 20:
+                  raise SystemExit("merge token is missing or too short")
+
+              def policy(name):
+                  with open(os.path.join(POLICY_DIR, name), encoding="utf-8") as handle:
+                      return handle.read().strip()
+
+              deployment = head_ref[len("backstage/modeldeployment-running-"):]
+              expected_npu = policy("expected-npu-per-worker")
+              allowlist = [
+                  item.strip()
+                  for item in policy("allowlisted-requested-by").split(",")
+                  if item.strip()
+              ]
+
+              def call(method, path, body=None, accepted=(200,)):
+                  data = None if body is None else json.dumps(body).encode("utf-8")
+                  request = urllib.request.Request(
+                      api + path,
+                      data=data,
+                      method=method,
+                      headers={
+                          "Accept": "application/json",
+                          "Authorization": f"token {token}",
+                          **({} if data is None else {"Content-Type": "application/json"}),
+                      },
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          raw = response.read()
+                          status = response.status
+                  except urllib.error.HTTPError as error:
+                      raise SystemExit(
+                          f"Gitea {method} {path} returned HTTP {error.code}"
+                      ) from None
+                  if status not in accepted:
+                      raise SystemExit(f"Gitea {method} {path} returned HTTP {status}")
+                  return None if not raw else json.loads(raw)
+
+              pull = call("GET", f"{repository}/pulls/{pull_number}")
+              if pull.get("state") != "open":
+                  raise SystemExit("pull request is not open")
+              if pull.get("base", {}).get("ref") != "main":
+                  raise SystemExit("pull request base must be main")
+              if pull.get("head", {}).get("sha") != revision:
+                  raise SystemExit("pull request head differs from the validated revision")
+              if pull.get("head", {}).get("repo", {}).get("full_name") != "gitadmin/model-platform-config":
+                  raise SystemExit("pull request head repository is outside the trust boundary")
+              if pull.get("head", {}).get("ref") != head_ref:
+                  raise SystemExit("pull request branch differs from the webhook branch")
+
+              files = call("GET", f"{repository}/pulls/{pull_number}/files")
+              if len(files) != 1:
+                  raise SystemExit("running auto-merge requires exactly one changed file")
+              changed = files[0]
+              filename = changed.get("filename", "")
+              if changed.get("status") != "changed":
+                  raise SystemExit("running auto-merge only accepts an update to an existing request")
+              if not re.fullmatch(
+                  r"environments/production/modeldeployments/[a-z0-9](?:[-a-z0-9]*[a-z0-9])?\.yaml",
+                  filename,
+              ):
+                  raise SystemExit("changed path is outside the ModelDeployment request directory")
+              if filename != f"environments/production/modeldeployments/{deployment}.yaml":
+                  raise SystemExit("changed file does not match the request branch name")
+
+              def load_document(ref):
+                  encoded = "/".join(
+                      urllib.parse.quote(part, safe="") for part in filename.split("/")
+                  )
+                  response = call(
+                      "GET",
+                      f"{repository}/contents/{encoded}?ref={ref}",
+                  )
+                  return YAML(typ="safe").load(
+                      base64.b64decode(response["content"]).decode("utf-8")
+                  )
+
+              yaml_driver = YAML(typ="safe")
+              base_doc = load_document(pull["base"]["sha"])
+              head_doc = load_document(revision)
+
+              PREFIX = "platform.example.com/"
+              base_spec = base_doc.get("spec", {})
+              if base_spec.get("desiredState") != "Stopped":
+                  raise SystemExit("base request must be Stopped before a running request")
+              base_runtime = base_spec.get("runtime", {})
+              if base_runtime.get("workerReplicas") != 0:
+                  raise SystemExit("base request must have workerReplicas=0")
+              base_annotations = base_doc.get("metadata", {}).get("annotations", {})
+              if base_annotations.get(f"{PREFIX}request-mode") != "declarative-stopped":
+                  raise SystemExit("base request-mode must be declarative-stopped")
+
+              head_metadata = head_doc.get("metadata", {})
+              if head_metadata.get("name") != deployment:
+                  raise SystemExit("head request name does not match the branch")
+              if head_metadata.get("namespace") != "model-serving":
+                  raise SystemExit("head request namespace must be model-serving")
+              requested_by = head_metadata.get("labels", {}).get(f"{PREFIX}requested-by", "")
+              if requested_by not in allowlist:
+                  raise SystemExit("requested-by is outside the single-tenant allow-list")
+              head_spec = head_doc.get("spec", {})
+              head_runtime = head_spec.get("runtime", {})
+              head_annotations = head_metadata.get("annotations", {})
+              if head_spec.get("desiredState") != "Running":
+                  raise SystemExit("head request must request desiredState=Running")
+              if head_runtime.get("workerReplicas") != 1:
+                  raise SystemExit("running requests require workerReplicas=1")
+              if str(head_runtime.get("npuPerWorker")) != expected_npu:
+                  raise SystemExit("running requests must use the profile npuPerWorker")
+              if head_annotations.get(f"{PREFIX}request-mode") != "declarative-running":
+                  raise SystemExit("head request-mode must be declarative-running")
+              expected_effective = {
+                  f"{PREFIX}effective-tensor-parallel-size": policy(
+                      "expected-tensor-parallel-size"
+                  ),
+                  f"{PREFIX}effective-replicas": "1",
+                  f"{PREFIX}effective-npu-per-replica": expected_npu,
+              }
+              for key, value in expected_effective.items():
+                  if head_annotations.get(key) != value:
+                      raise SystemExit(f"effective annotation {key} must be {value}")
+              start_id = head_annotations.get(f"{PREFIX}requested-start-id", "")
+              if not re.fullmatch(r"[a-z0-9][a-z0-9-]{4,62}", start_id):
+                  raise SystemExit("requested-start-id is missing or malformed")
+              if f"{PREFIX}requested-start-id" in base_annotations:
+                  raise SystemExit("requested-start-id must be new for this start request")
+              if base_spec.get("compositionRef", {}).get("name") != policy(
+                  "expected-composition-ref"
+              ):
+                  raise SystemExit("base request composition is not the certified runtime")
+              if head_spec.get("crossplane", {}).get("compositionUpdatePolicy") != "Automatic":
+                  raise SystemExit("compositionUpdatePolicy must remain Automatic")
+
+              allowed_annotation_keys = set(expected_effective) | {
+                  f"{PREFIX}request-mode",
+                  f"{PREFIX}requested-start-id",
+                  f"{PREFIX}requested-start-reason",
+              }
+              projected = copy.deepcopy(base_doc)
+              projected["spec"]["desiredState"] = "Running"
+              projected["spec"]["runtime"]["workerReplicas"] = 1
+              projected_annotations = projected["metadata"].setdefault("annotations", {})
+              for key in allowed_annotation_keys:
+                  projected_annotations.pop(key, None)
+              for key, value in head_annotations.items():
+                  if key in allowed_annotation_keys:
+                      projected_annotations[key] = value
+              if projected != head_doc:
+                  raise SystemExit(
+                      "diff contains changes outside desiredState/workerReplicas/start annotations"
+                  )
+
+              directory = "environments/production/modeldeployments"
+              entries = call(
+                  "GET",
+                  f"{repository}/contents/{directory}?ref={revision}",
+              )
+              for entry in entries:
+                  entry_name = entry.get("name", "")
+                  if entry_name == f"{deployment}.yaml":
+                      continue
+                  if not entry_name.endswith(".yaml"):
+                      continue
+                  entry_response = call(
+                      "GET",
+                      f"{repository}/contents/{directory}/{urllib.parse.quote(entry_name)}?ref={revision}",
+                  )
+                  sibling = yaml_driver.load(
+                      base64.b64decode(entry_response["content"]).decode("utf-8")
+                  )
+                  sibling_annotations = (
+                      sibling.get("metadata", {}).get("annotations", {})
+                  )
+                  if sibling_annotations.get(f"{PREFIX}requested-start-id") == start_id:
+                      raise SystemExit("requested-start-id already exists on main")
+                  if sibling_annotations.get(f"{PREFIX}request-mode") == "declarative-running":
+                      raise SystemExit("another running request already exists on main")
+
+              call(
+                  "POST",
+                  f"{repository}/pulls/{pull_number}/merge",
+                  {
+                      "Do": "merge",
+                      "head_commit_id": revision,
+                      "delete_branch_after_merge": True,
+                      "force_merge": False,
+                  },
+              )
+              print(f"running_request_auto_merged_pull_request={pull_number}")
             computeResources:
               requests:
                 cpu: 100m

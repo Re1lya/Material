@@ -12,6 +12,113 @@ metadata:
   namespace: model-platform-ci
 automountServiceAccountToken: true
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-capacity-reader
+  namespace: model-platform-ci
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: model-capacity-reader-serving
+  namespace: model-serving
+rules:
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ray.io
+    resources:
+      - rayservices
+      - rayclusters
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - platform.example.com
+    resources:
+      - modeldeployments
+    verbs:
+      - get
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-capacity-reader-serving
+  namespace: model-serving
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: model-capacity-reader-serving
+subjects:
+  - kind: ServiceAccount
+    name: model-capacity-reader
+    namespace: model-platform-ci
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: model-capacity-reader-prometheus
+  namespace: monitoring
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services/proxy
+    resourceNames:
+      - promotel-kube-prometheus-s-prometheus
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: model-capacity-reader-prometheus
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: model-capacity-reader-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: model-capacity-reader
+    namespace: model-platform-ci
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: model-capacity-reader
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - pods
+      - events
+    verbs:
+      - get
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: model-capacity-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: model-capacity-reader
+subjects:
+  - kind: ServiceAccount
+    name: model-capacity-reader
+    namespace: model-platform-ci
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -53,6 +160,7 @@ rules:
       - serviceaccounts
     resourceNames:
       - model-platform-ci-runner
+      - model-capacity-reader
     verbs:
       - impersonate
   - apiGroups:
