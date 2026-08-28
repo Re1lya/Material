@@ -1,5 +1,10 @@
 # K12 data-pipeline image build contract
 
+> **Historical/superseded build material.** The empty Definitions image was a
+> safety probe and is not the current K12 production image or future release
+> path. It is retained for build reproducibility and incident/design review;
+> do not publish or deploy it as the active K12 control plane.
+
 This directory contains the platform-owned derivative Dockerfile for the
 Dagster control plane. It is built from the upstream KCC source commit
 `2fd605cfe572470f582c4ef9575a5382dd6f9ff2` and is not a Kubernetes manifest.

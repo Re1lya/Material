@@ -1,0 +1,24 @@
+# The Dagster control plane has no public Service. Backstage may query the
+# ClusterIP endpoint only after its separately scoped read-only RBAC is applied.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: k12-data-pipeline-dagster-ingress
+  namespace: k12-data-pipeline
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: k12-data-pipeline-dagster
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: backstage
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backstage
+      ports:
+        - protocol: TCP
+          port: 3000

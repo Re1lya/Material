@@ -1,0 +1,56 @@
+# This static local PV intentionally retains Dagster run history if the PVC is
+# later deleted. The host path is prepared only in the separately approved
+# production-release step; this file alone creates nothing.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: k12-data-pipeline-dagster-local
+provisioner: kubernetes.io/no-provisioner
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: k12-data-pipeline-dagster-server-00
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: k12-data-pipeline
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: k12-data-pipeline-dagster-local
+  claimRef:
+    namespace: k12-data-pipeline
+    name: k12-data-pipeline-dagster-home
+  local:
+    path: /mnt/data/k12-data-pipeline/dagster-home
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - server-00
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: k12-data-pipeline-dagster-home
+  namespace: k12-data-pipeline
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: dagster
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: k12-data-pipeline-dagster-local
+  resources:
+    requests:
+      storage: 20Gi

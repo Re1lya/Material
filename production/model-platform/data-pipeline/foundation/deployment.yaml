@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k12-data-pipeline-dagster
+  namespace: k12-data-pipeline
+  labels:
+    app.kubernetes.io/name: k12-data-pipeline-dagster
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: dagster
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k12-data-pipeline-dagster
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k12-data-pipeline-dagster
+        app.kubernetes.io/part-of: model-platform
+        app.kubernetes.io/component: dagster
+        model-platform.io/npu-policy: disabled
+    spec:
+      serviceAccountName: k12-data-pipeline-dagster
+      automountServiceAccountToken: false
+      priorityClassName: k12-data-pipeline-background
+      preemptionPolicy: Never
+      imagePullSecrets:
+        - name: artifact-keeper-image-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      nodeSelector:
+        kubernetes.io/hostname: server-00
+        kubernetes.io/arch: amd64
+      containers:
+        - name: webserver
+          image: 110.120.0.3:30670/container-images/k12-data-pipeline-dagster:0.3.0-control-plane@sha256:c5f80cd6f09becb3493745416f2020ebc3f667f904ff5c8e477be5f524b1e5ba
+          imagePullPolicy: IfNotPresent
+          command: ["dagster-webserver"]
+          args: ["-h", "0.0.0.0", "-p", "3000", "-m", "platform_control_plane.definitions"]
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: DAGSTER_HOME
+              value: /opt/dagster-home
+            - name: PIPELINE_WORKING_DIR
+              value: /opt/data-pipeline/src
+            - name: K12_PIPELINE_MODE
+              value: control-plane-only
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /server_info
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /server_info
+              port: http
+            initialDelaySeconds: 45
+            periodSeconds: 20
+          volumeMounts:
+            - name: dagster-home
+              mountPath: /opt/dagster-home
+            - name: config
+              mountPath: /opt/dagster-home/dagster.yaml
+              subPath: dagster.yaml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+        - name: daemon
+          image: 110.120.0.3:30670/container-images/k12-data-pipeline-dagster:0.3.0-control-plane@sha256:c5f80cd6f09becb3493745416f2020ebc3f667f904ff5c8e477be5f524b1e5ba
+          imagePullPolicy: IfNotPresent
+          command: ["dagster-daemon", "run", "-m", "platform_control_plane.definitions"]
+          env:
+            - name: DAGSTER_HOME
+              value: /opt/dagster-home
+            - name: PIPELINE_WORKING_DIR
+              value: /opt/data-pipeline/src
+            - name: K12_PIPELINE_MODE
+              value: control-plane-only
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          volumeMounts:
+            - name: dagster-home
+              mountPath: /opt/dagster-home
+            - name: config
+              mountPath: /opt/dagster-home/dagster.yaml
+              subPath: dagster.yaml
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: dagster-home
+          persistentVolumeClaim:
+            claimName: k12-data-pipeline-dagster-home
+        - name: config
+          configMap:
+            name: k12-data-pipeline-dagster-config
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi

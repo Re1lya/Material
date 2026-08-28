@@ -1,0 +1,35 @@
+# K12 data-pipeline Dagster control-plane image.
+#
+# Build context: the pinned upstream app/data_pipeline directory plus a
+# wheelhouse/ directory containing the two approved runtime wheels. This image
+# deliberately extends the internal, pre-validated AMD64 Dagster/Ray base and
+# builds with --network=none; it neither downloads packages nor contains an
+# NPU runtime.
+ARG BASE_IMAGE=110.120.0.3:8889/mineru/ray-data:py3.11.13-ray2.48.0-daft0.7.19-dagster1.13.13-web-20260720
+FROM ${BASE_IMAGE}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DAGSTER_HOME=/opt/dagster-home \
+    PIPELINE_WORKING_DIR=/opt/data-pipeline/src \
+    PYTHONPATH=/opt/data-pipeline/src
+
+WORKDIR /opt/data-pipeline
+
+# The base image already supplies the locked Dagster/Ray/Daft/S3 dependency
+# set. Only the source-declared packages absent from that base are installed
+# from the reviewed local wheelhouse.
+COPY wheelhouse/ /opt/wheelhouse/
+RUN python -m pip install --no-index --no-cache-dir \
+      --find-links=/opt/wheelhouse \
+      'Pillow>=10,<12' 'pypdfium2>=4,<5' \
+    && rm -rf /opt/wheelhouse
+
+COPY src ./src
+COPY config ./config
+COPY platform_control_plane ./platform_control_plane
+RUN mkdir -p /opt/dagster-home \
+    && cp /opt/data-pipeline/config/clean_qa/dagster.yaml /opt/dagster-home/dagster.yaml
+
+EXPOSE 3000
+CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-m", "platform_control_plane.definitions"]

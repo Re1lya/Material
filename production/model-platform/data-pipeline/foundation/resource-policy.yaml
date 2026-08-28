@@ -1,0 +1,30 @@
+# This priority is intentionally lower than normal platform workloads and is
+# non-preempting. It prevents the new control plane from evicting a workload
+# that is already running on the single control-plane node.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: k12-data-pipeline-background
+  labels:
+    app.kubernetes.io/part-of: model-platform
+value: -1000
+globalDefault: false
+preemptionPolicy: Never
+description: Non-preempting CPU-only K12 data-pipeline control plane.
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: k12-data-pipeline-control-plane
+  namespace: k12-data-pipeline
+spec:
+  hard:
+    pods: "2"
+    requests.cpu: "1"
+    requests.memory: 2Gi
+    limits.cpu: "2"
+    limits.memory: 4Gi
+    # Extended-resource quota of zero makes an Ascend request inadmissible in
+    # this namespace. All accelerator work belongs to a later, separately
+    # approved runtime namespace/profile.
+    requests.huawei.com/Ascend910: "0"

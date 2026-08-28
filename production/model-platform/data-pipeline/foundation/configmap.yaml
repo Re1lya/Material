@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k12-data-pipeline-dagster-config
+  namespace: k12-data-pipeline
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: dagster
+data:
+  dagster.yaml: |
+    storage:
+      sqlite:
+        base_dir: /opt/dagster-home/storage
+    compute_logs:
+      module: dagster.core.storage.local_compute_log_manager
+      class: LocalComputeLogManager
+      config:
+        base_dir: /opt/dagster-home/compute_logs
+    run_coordinator:
+      module: dagster.core.run_coordinator
+      class: QueuedRunCoordinator
+    run_launcher:
+      module: dagster.core.launcher
+      class: DefaultRunLauncher

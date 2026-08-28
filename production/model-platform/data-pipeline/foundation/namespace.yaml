@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k12-data-pipeline
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: k12-data-pipeline
+    model-platform.io/npu-policy: disabled

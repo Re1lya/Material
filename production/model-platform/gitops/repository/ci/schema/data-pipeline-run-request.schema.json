@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec", "status"],
+  "properties": {
+    "apiVersion": { "const": "platform.example.com/v1alpha1" },
+    "kind": { "const": "DataPipelineRunRequest" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "namespace", "labels", "annotations"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+        },
+        "namespace": { "const": "k12-data-pipeline" },
+        "labels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "properties": {
+            "app.kubernetes.io/part-of": { "const": "model-platform" },
+            "app.kubernetes.io/component": { "const": "data-pipeline-run-request" }
+          }
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "required": ["platform.example.com/requested-by", "platform.example.com/execution-policy"],
+          "properties": {
+            "platform.example.com/requested-by": { "type": "string", "minLength": 1, "maxLength": 63 },
+            "platform.example.com/execution-policy": { "const": "cpu-staging-only" }
+          }
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profileRef", "inputManifestRef", "desiredState", "npu"],
+      "properties": {
+        "profileRef": { "const": "cpu-staging-v1" },
+        "inputManifestRef": {
+          "type": "string",
+          "pattern": "^s3://k12-data-pipeline-staging/[A-Za-z0-9][A-Za-z0-9._/@+=:-]*$"
+        },
+        "desiredState": { "const": "Requested" },
+        "npu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": { "enabled": { "const": false } }
+        }
+      }
+    },
+    "status": { "type": "object", "maxProperties": 0 }
+  }
+}

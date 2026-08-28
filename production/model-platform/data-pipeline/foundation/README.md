@@ -1,5 +1,11 @@
 # K12 data-pipeline CPU-only foundation
 
+> **Historical/superseded material. Do not apply this Kustomization to
+> production.** The production K12 CPU integration now uses the complete KCC
+> business pipeline described in `../k12-platform-integration-plan-20260827.md`
+> and the 2026-08-28 cutover records. These files are retained to document the
+> earlier empty-control-plane safety design, dry-run gates and lessons learned.
+
 This is a **non-applied** first release unit for a new Dagster control plane.
 It is deliberately separate from the existing `k12/mineru-dagster` workload.
 
