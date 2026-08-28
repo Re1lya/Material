@@ -84,3 +84,42 @@ approved release must coordinate:
    `READY` cache and completes without an NPU request.
 5. Removal or retention of the old failed provider Object only after the new
    Job is verified.
+
+## Production execution
+
+The user approved the production release on 2026-08-28. The release was
+executed in this order:
+
+1. Apply the updated `ModelDeployment` XRD.
+2. Apply `modeldeployment-qwen38-ray-v1alpha1`; Crossplane created valid
+   CompositionRevision `modeldeployment-qwen38-ray-v1alpha1-06a8d0f`
+   (revision 13).
+3. Manually synchronize Argo CD Application
+   `model-platform-deployment-requests` to Gitea commit
+   `16d36213c17ba726cf3f087b384e5dd4eaf05bca` with prune disabled.
+
+Observed result:
+
+```text
+Argo Application: Synced / Healthy
+ModelDeployment:  Stopped / Synced=True / Ready=True / not paused
+cache Job:        qwen38-27b-cache-f2afa9e2-r1 Complete 1/1
+Ray worker:       0
+NPU requests:     0
+```
+
+The new Job completed in 30 seconds using the already present cache. The
+provider Object returned `Synced=True/Ready=True`; the immutable Job warning
+did not recur after the release. The previous completed
+`qwen38-27b-cache` Job was retained as historical evidence and does not own the
+PVC data.
+
+Unpausing the stopped XR recreated one CPU-only Ray head on `a3-server-00`
+(`2 CPU / 16Gi`, no Ascend request). The RayCluster became ready with zero
+workers. This is the current stopped-runtime behavior and must be accounted for
+before enabling automated sync.
+
+Container log retrieval from the completed A3 cache Pod encountered the known
+kubelet `10250` TLS handshake timeout. Kubernetes Job status, Pod exit status,
+provider conditions, cache completion and zero-NPU evidence were available and
+complete; the log transport issue is tracked separately from cache success.

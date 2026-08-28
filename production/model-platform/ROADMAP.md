@@ -23,8 +23,8 @@
 | K12 CPU 平台集成 | Complete | CI、GitOps、Dagster/Ray CPU、状态迁移、Backstage 启动和 NodePort 切换通过 | Material 提交归档；观察后决定旧 Deployment 删除 | 平台/K12 |
 | Material 事实归档 | In progress | 大量已上线源码、清单和记录仍未提交 | 按职责拆分审查，可从 Git 重建非敏感生产声明 | 平台 |
 | 通用 ModelDeployment CI | Complete | Gitea PR #10 精确 head 和合并后 main `16d36213…` 均通过 Tekton，schema/catalog/Stopped XR 已收敛 | 后续每个请求继续维持 webhook 绿色 | 推理平台 |
-| Qwen38 停止态基线 | In progress | Gitea 期望状态已修正为一致 Stopped，Argo Application 为 OutOfSync/Healthy；生产 XR 仍 paused，旧 Job Object 仍报 immutable 错误 | 发布 XRD/Composition 并手工 Sync，达到 Stopped、Synced=True、无 NPU worker | 推理平台 |
-| 缓存 Job 版本化 | In progress | 已实现 `<deployment>-cache-<cache.revision>` 命名、schema/profile 合同和校验，生产 API server dry-run 通过；Gitea 配置合同已合并，集群 Composition 尚未发布 | 新 revision 创建新 Job，当前 READY 缓存可复用，无 immutable 循环告警 | 推理平台 |
+| Qwen38 停止态基线 | Complete | Argo Synced/Healthy；XR 为 Stopped、Synced=True、Ready=True、未 paused；RayCluster 只有 CPU head，worker=0、NPU=0 | 后续 Stopped 变更继续保持零 NPU 和可回滚 | 推理平台 |
+| 缓存 Job 版本化 | Complete | `qwen38-27b-cache-f2afa9e2-r1` 在生产 30 秒内 Complete，复用现有 READY 缓存，旧 immutable 告警未再出现 | 后续模板/制品变更必须提升 cache.revision | 推理平台 |
 | 停止态全自动 | Prepared | Backstage PR、Tekton、release bot 和 Argo Application 已具备基础 | 自动合并/同步只产生 Stopped XR，零 NPU，可一键关闭 | 推理平台 |
 | 推理 Running 受控自动 | Prepared | TP2 历史端到端验证通过；本地 Running 请求未发布 | 有效审批、容量/制品门禁、缓存 READY、健康回写和回滚 | 推理平台 |
 | Backstage 推理状态聚合 | In progress | 已有目录和请求入口，运行阶段/失败原因尚未完整 | request ID 贯通 Git/Tekton/Argo/XR/RayService/health | 推理平台 |

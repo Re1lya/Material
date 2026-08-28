@@ -26,7 +26,7 @@ Material 中的平台文档分为三类：
 | Gitea | 应用与 PostgreSQL Ready | 生产配置事实源可用 |
 | Argo CD | K12/bootstrap/model-deployment 三个 Application Synced/Healthy | 仍为人工 Sync，prune/self-heal 关闭 |
 | Tekton | Operator、Pipelines、Triggers、Pruner Ready | K12 专用 CI 正常；通用模型配置 CI 仍失败 |
-| Crossplane | Core、Function、provider-kubernetes Ready | 推理平台 API 可用，Qwen38 XR 当前停止并暂停调谐 |
+| Crossplane | Core、Function、provider-kubernetes Ready | Qwen38 XR 已收敛为 Stopped、Synced=True、Ready=True，版本化缓存 Job 已完成 |
 | Backstage | `platform/kcc-backstage:0.1.4-recipe-ui-20260828` 1/1 Ready | K12 CPU 页面保持可用；vLLM 风格模型目录与推理参数配置页已上线 |
 | K12 CPU 数据管线 | 新 Dagster 1/1，Ray CPU head/worker Ready | CPU 平台集成已完成 |
 | 旧 K12 Dagster | Deployment 0/0，未删除 | 仅作为有界回滚对象 |
@@ -64,18 +64,11 @@ Material 中的平台文档分为三类：
 
 这些已上线变更应优先整理为按职责拆分的提交，避免生产与 Material 持续分叉。
 
-## 5. 本地已准备但尚未发布的推理变更
+## 5. 推理发布当前边界
 
-本地 `qwen38-27b.yaml` 已改为 `desiredState: Running`、`workerReplicas: 1`、
-`crossplane.io/paused: "false"` 并指定 `Ascend910-8,Ascend910-9`。这些变更**尚未 apply**，
-也不应直接推送，因为当前校验链仍未自洽：
-
-- ModelDeployment JSON Schema 尚不允许 `crossplane.io/paused`。
-- 生产 Gitea 中的 XR、RuntimeProfile 和 schema 存在版本漂移。
-- 通用 `validate-model-platform-config` 最近运行持续失败。
-- `qwen38-27b-cache` Job 仍因 PodTemplate immutable 无法调谐。
-
-在恢复 Stopped、Synced=True 且通用 CI 绿色前，不应启动该推理请求。
+当前 Git、Tekton、Argo CD、Crossplane 和版本化缓存 Job 已在 Stopped 状态收敛。
+尚未提交或启用新的 Running 请求。下一阶段是实现受限 PR 自动合并、
+Argo scoped auto-sync 和 Stopped 全自动验收；在这些门禁完成前不启用 NPU worker。
 
 ## 6. 正在进行和已知异常
 
@@ -83,23 +76,24 @@ Material 中的平台文档分为三类：
 
 K12 专用校验保持绿色。ModelDeployment schema、RuntimeProfile 和 Stopped XR 已通过
 Gitea PR #10 收敛；精确 PR head `0bf417b8…` 和合并后 main `16d36213…`
-均通过 Tekton 校验。推理 Application 仍保持手工 Sync，当前为 OutOfSync/Healthy。
+均通过 Tekton 校验。经批准的手工 Sync 已完成，推理 Application 当前为
+Synced/Healthy；automated sync、prune 和 self-heal 仍未启用。
 
 ### 6.2 推理组合资源
 
-`model-serving/qwen38-27b-cache-job` 持续报同名 Job `spec.template` 不可变。
-已实现基于 `spec.cache.revision` 的版本化 Job 合同并通过生产 API server
-dry-run；Gitea schema/catalog/XR 已合并，但集群 XRD/Composition 尚未发布。
-详情见 `crossplane/cache-job-versioning-20260828.md`。
+基于 `spec.cache.revision` 的版本化合同已上线。
+`qwen38-27b-cache-f2afa9e2-r1` 成功复用并校验现有缓存，Job 1/1 Complete；
+XR 为 Stopped、Synced=True、Ready=True 且已解除 pause。当前停止态会保留一个
+CPU-only Ray head，worker=0、NPU请求=0。详情见
+`crossplane/cache-job-versioning-20260828.md`。
 
 ### 6.3 训练侧集成
 
 训练侧由独立同事负责，Material 当前不保存其完整源码。实时观测为：
 
-- `model-platform-training-system` Application 为 OutOfSync/Healthy，有 10 个 orphaned resources。
-- KCC Controller 正在运行并生成 TrainingRun/RayCluster。
-- 存在 Volcano gang 不可调度和 Ray head/worker readiness 告警。
-- `TrainingRequest.status.outputArtifact` 与 XRD 正则不匹配，状态回写仍需修复。
+- `model-platform-training-system` Application 当前为 Synced/Healthy。
+- KCC Controller 2/2 Ready，已有多个 TrainingRun Succeeded。
+- 仍可见历史 Ray readiness 告警和 `status.outputArtifact` schema 告警，由训练责任人收敛。
 
 本文只记录集成面可观测事实，不代替训练侧自己的发布记录。
 
