@@ -448,6 +448,10 @@ function createDeploymentRequestAction(config: Config) {
           },
         },
         spec: {
+          crossplane: {
+            compositionRef: contract.compositionRef,
+            compositionUpdatePolicy: 'Automatic',
+          },
           projectRef: input.projectRef,
           modelVersionRef: input.modelVersionRef,
           runtimeProfileRef: input.runtimeProfileRef,
