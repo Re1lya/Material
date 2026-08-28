@@ -168,6 +168,43 @@ exception match, and the cluster had zero Pending Pods. Backstage remains pinned
 to `server-00`, requests `500m` CPU and `1Gi` memory, and declares no NPU
 resource. No Ray, ModelDeployment, PVC, Job, or existing workload was changed.
 
+### Backstage 0.1.4 developer recipe UI rollout — 2026-08-28
+
+The K12-integrated Backstage image was rebuilt from the complete current app
+source so the accepted data-pipeline functionality and the model recipe UI are
+present in one release. The developer-facing `/model-recipes` page now follows
+the vLLM Recipes interaction model: a compact searchable model catalog opens a
+resource and inference-parameter configurator with hardware profile, requested
+replicas, TP/DP/PP, context length, concurrency, batched tokens, memory target,
+prefix caching, MTP, priority and visibility choices.
+
+The selected values flow into the constrained Scaffolder input and are recorded
+as requested annotations. The backend still forces `desiredState: Stopped`,
+effective replicas/NPU/TP remain zero, and the rollout does not enable Argo CD
+automatic sync or direct Kubernetes writes from Backstage.
+
+Published image:
+
+```text
+110.120.0.3:30670/container-images/platform/kcc-backstage:0.1.4-recipe-ui-20260828@sha256:18ebfdbcddbcd4b1f547532eb4d670e4e064b160a593fea0803b49d0df33eede
+```
+
+The clean build-context archive SHA256 was
+`667b704f6be50aabe1e507ae1e13917208b7a7d737bc796c4219d22a19a968c0`.
+Local TypeScript, focused lint, two focused recipe-page tests and the complete
+frontend/backend image build passed. Docker reported `linux/amd64`; the image
+was published with the root-only K12 platform publisher Docker config.
+
+The production change used a server-side `kubectl set image --dry-run=server`
+and then changed only `deployment/backstage` container image. The replacement
+Pod became `1/1 Ready` with zero restarts. `/healthcheck`, `/model-recipes`,
+`/data-pipeline` and `/artifact-management` returned HTTP 200. The live bundle
+contains both the new `Deployment preview`/`Available models` markers and the
+existing `Launch controlled K12 CPU run` marker. Recent Backstage logs had no
+error/fatal/exception match; Artifact Keeper and Gitea remained Ready. The
+Backstage Pod is still fixed to `server-00/linux/amd64`, requests only CPU and
+memory, and declares no accelerator resource.
+
 ### Create-page template chooser fix — released 2026-08-17
 
 On 2026-08-17 the source was updated so the model template explicitly uses the

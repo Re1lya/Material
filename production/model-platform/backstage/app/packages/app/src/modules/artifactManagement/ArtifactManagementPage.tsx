@@ -22,6 +22,7 @@ import {
   Progress,
   ResponseErrorPanel,
 } from '@backstage/core-components';
+import { fetchApiRef, identityApiRef, useApi } from '@backstage/core-plugin-api';
 import { useCallback, useEffect, useState } from 'react';
 import { makeStyles } from '@material-ui/core/styles';
 
@@ -89,20 +90,50 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/artifact-management${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-    ...init,
-  });
+type ApiErrorBody = {
+  error?: string | { message?: string };
+};
+
+function errorMessage(status: number, body: ApiErrorBody | undefined): string {
+  const backendError =
+    typeof body?.error === 'string'
+      ? body.error
+      : body?.error?.message;
+
+  if (status === 401) {
+    return '登录会话不可用。请重新登录 Backstage 后重试。';
+  }
+
+  return backendError ?? `HTTP ${status}`;
+}
+
+async function api<T>(
+  authenticatedFetch: typeof fetch,
+  getCredentials: () => Promise<{ token?: string }>,
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const { token } = await getCredentials();
+  const headers = new Headers(init?.headers);
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  const response = await authenticatedFetch(
+    new URL(`/api/artifact-management${path}`, window.location.origin).toString(),
+    {
+      ...init,
+      headers,
+    },
+  );
   if (!response.ok) {
-    let message = `HTTP ${response.status}`;
+    let body: ApiErrorBody | undefined;
     try {
-      const body = (await response.json()) as { error?: string };
-      message = body.error ?? message;
+      body = (await response.json()) as ApiErrorBody;
     } catch {
-      // Keep the HTTP status when the backend did not return JSON.
+      // The HTTP status remains a safe fallback when the backend did not return JSON.
     }
-    throw new Error(message);
+    throw new Error(errorMessage(response.status, body));
   }
   return (await response.json()) as T;
 }
@@ -131,6 +162,8 @@ function runState(run: PipelineRun): string {
 
 export const ArtifactManagementPage = () => {
   const classes = useStyles();
+  const fetchApi = useApi(fetchApiRef);
+  const identityApi = useApi(identityApiRef);
   const [management, setManagement] = useState<ManagementResponse>();
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [runs, setRuns] = useState<PipelineRun[]>([]);
@@ -157,12 +190,20 @@ export const ArtifactManagementPage = () => {
     setLoading(true);
     setError(undefined);
     try {
-      const repositoryResponse = await api<ManagementResponse>('/repositories');
+      const repositoryResponse = await api<ManagementResponse>(
+        fetchApi.fetch,
+        () => identityApi.getCredentials(),
+        '/repositories',
+      );
       setManagement(repositoryResponse);
       setRepositories(repositoryResponse.repositories ?? []);
       setTokenRepository(repositoryResponse.repositories?.[0]?.key ?? '');
       try {
-        const runResponse = await api<{ items?: PipelineRun[] }>('/publish-runs');
+        const runResponse = await api<{ items?: PipelineRun[] }>(
+          fetchApi.fetch,
+          () => identityApi.getCredentials(),
+          '/publish-runs',
+        );
         setRuns(runResponse.items ?? []);
       } catch {
         // The dedicated artifact-publish namespace is an opt-in rollout gate;
@@ -174,7 +215,7 @@ export const ArtifactManagementPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchApi, identityApi]);
 
   useEffect(() => {
     void load();
@@ -185,7 +226,7 @@ export const ArtifactManagementPage = () => {
   async function createRepository() {
     setMessage('');
     try {
-      await api('/repositories', {
+      await api(fetchApi.fetch, () => identityApi.getCredentials(), '/repositories', {
         method: 'POST',
         body: JSON.stringify({
           key: repositoryKey,
@@ -205,7 +246,7 @@ export const ArtifactManagementPage = () => {
     setMessage('');
     setOneTimeToken('');
     try {
-      const result = await api<{ token?: string }>('/tokens', {
+      const result = await api<{ token?: string }>(fetchApi.fetch, () => identityApi.getCredentials(), '/tokens', {
         method: 'POST',
         body: JSON.stringify({
           repositoryKey: tokenRepository,
@@ -224,7 +265,7 @@ export const ArtifactManagementPage = () => {
   async function startPublish() {
     setMessage('');
     try {
-      await api('/publish-runs', {
+      await api(fetchApi.fetch, () => identityApi.getCredentials(), '/publish-runs', {
         method: 'POST',
         body: JSON.stringify({
           repositoryKey: publishRepository,

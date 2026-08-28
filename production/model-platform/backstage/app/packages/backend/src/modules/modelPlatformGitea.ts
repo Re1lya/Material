@@ -16,8 +16,15 @@ type DeploymentRequest = {
   runtimeProfileRef: string;
   visibility: 'internal' | 'private';
   requestedTensorParallelSize: number;
+  requestedDataParallelSize: number;
   requestedPipelineParallelSize: number;
   requestedReplicas: number;
+  requestedMaxModelLen: number;
+  requestedMaxNumSeqs: number;
+  requestedMaxNumBatchedTokens: number;
+  requestedGpuMemoryUtilization: number;
+  requestedPrefixCaching: boolean;
+  requestedMtpTokens: number;
   priority: 'low' | 'normal' | 'high';
 };
 
@@ -316,8 +323,15 @@ function createDeploymentRequestAction(config: Config) {
         runtimeProfileRef: z => z.string().min(1).max(253),
         visibility: z => z.enum(['internal', 'private']),
         requestedTensorParallelSize: z => z.number().int().min(1).max(16),
+        requestedDataParallelSize: z => z.number().int().min(1).max(4),
         requestedPipelineParallelSize: z => z.number().int().min(1).max(4),
         requestedReplicas: z => z.number().int().min(0).max(4),
+        requestedMaxModelLen: z => z.number().int().min(1024).max(131072),
+        requestedMaxNumSeqs: z => z.number().int().min(1).max(1024),
+        requestedMaxNumBatchedTokens: z => z.number().int().min(256).max(65536),
+        requestedGpuMemoryUtilization: z => z.number().min(0.5).max(0.98),
+        requestedPrefixCaching: z => z.boolean(),
+        requestedMtpTokens: z => z.number().int().min(0).max(8),
         priority: z => z.enum(['low', 'normal', 'high']),
       },
       output: {
@@ -396,11 +410,32 @@ function createDeploymentRequestAction(config: Config) {
             'platform.example.com/requested-tensor-parallel-size': String(
               input.requestedTensorParallelSize,
             ),
+            'platform.example.com/requested-data-parallel-size': String(
+              input.requestedDataParallelSize,
+            ),
             'platform.example.com/requested-pipeline-parallel-size': String(
               input.requestedPipelineParallelSize,
             ),
             'platform.example.com/requested-replicas': String(
               input.requestedReplicas,
+            ),
+            'platform.example.com/requested-max-model-len': String(
+              input.requestedMaxModelLen,
+            ),
+            'platform.example.com/requested-max-num-seqs': String(
+              input.requestedMaxNumSeqs,
+            ),
+            'platform.example.com/requested-max-num-batched-tokens': String(
+              input.requestedMaxNumBatchedTokens,
+            ),
+            'platform.example.com/requested-gpu-memory-utilization': String(
+              input.requestedGpuMemoryUtilization,
+            ),
+            'platform.example.com/requested-prefix-caching': String(
+              input.requestedPrefixCaching,
+            ),
+            'platform.example.com/requested-mtp-tokens': String(
+              input.requestedMtpTokens,
             ),
             'platform.example.com/requested-priority': input.priority,
             'platform.example.com/effective-runtime-profile':
@@ -461,7 +496,9 @@ function createDeploymentRequestAction(config: Config) {
                 '- Desired state: `Stopped`',
                 '- Accelerator pool: `control-plane-only`',
                 '- Execution mode: `declarative-stopped`',
-                `- Requested TP/PP/replicas: ${input.requestedTensorParallelSize}/${input.requestedPipelineParallelSize}/${input.requestedReplicas}`,
+                `- Requested TP/DP/PP/replicas: ${input.requestedTensorParallelSize}/${input.requestedDataParallelSize}/${input.requestedPipelineParallelSize}/${input.requestedReplicas}`,
+                `- Context/concurrency/batch: ${input.requestedMaxModelLen}/${input.requestedMaxNumSeqs}/${input.requestedMaxNumBatchedTokens}`,
+                `- Memory/prefix cache/MTP: ${input.requestedGpuMemoryUtilization}/${input.requestedPrefixCaching}/${input.requestedMtpTokens}`,
                 `- Runtime profile: ${input.runtimeProfileRef}`,
                 '- Runtime/NPU creation: remains stopped until a reviewed Argo CD sync',
                 '',

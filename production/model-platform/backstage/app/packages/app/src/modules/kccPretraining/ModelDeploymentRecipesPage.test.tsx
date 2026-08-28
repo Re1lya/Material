@@ -19,34 +19,44 @@ describe('ModelDeploymentRecipesPage', () => {
   it('shows the verified Artifact Keeper model catalog', () => {
     renderInTestApp(<ModelDeploymentRecipesPage />);
 
-    expect(screen.getByText('Model deployment recipes')).toBeInTheDocument();
+    expect(screen.getByText('Model recipes')).toBeInTheDocument();
+    expect(screen.getByText('Available models')).toBeInTheDocument();
     expect(screen.getByText('Qwen3.8-27B W8A8')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Gitea ModelVersion catalog · (live|fallback)/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Stopped XR first; no direct NPU allocation'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('W8A8')).toBeInTheDocument();
+    expect(screen.getByText('Configure model')).toBeInTheDocument();
   });
 
-  it('opens a recipe and links to the reviewed Gitea request template', () => {
+  it('opens a product deployment configurator and preserves the safe request contract', () => {
     renderInTestApp(<ModelDeploymentRecipesPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open recipe' }));
+    fireEvent.click(screen.getByText('Configure model'));
 
-    expect(screen.getByText('Hardware and variant')).toBeInTheDocument();
-    expect(screen.getAllByText('Qwen3.8-27B W8A8')).toHaveLength(2);
+    expect(screen.getAllByText('Hardware').length).toBeGreaterThan(0);
+    expect(screen.getByText('Parallel strategy')).toBeInTheDocument();
+    expect(screen.getByText('Context length')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Create Gitea deployment request' }),
-    ).toBeEnabled();
-    expect(
-      screen.getByRole('link', { name: 'Create Gitea deployment request' }),
-    ).toHaveAttribute(
-      'href',
-      '/create/templates/default/request-model-deployment?formData=%7B%22deploymentName%22%3A%22qwen38-27b-demo%22%2C%22projectRef%22%3A%22model-serving%22%2C%22modelVersionRef%22%3A%22qwen3.8-27b-w8a8%22%2C%22runtimeProfileRef%22%3A%22qwen38-w8a8-ray-ascend-910b3-v1%22%2C%22visibility%22%3A%22internal%22%2C%22requestedTensorParallelSize%22%3A8%2C%22requestedPipelineParallelSize%22%3A1%2C%22requestedReplicas%22%3A1%2C%22priority%22%3A%22normal%22%7D',
-    );
-    expect(
-      screen.getByText(/Tekton validates the catalog references/),
-    ).toBeInTheDocument();
+      screen.getAllByText('Qwen3.8-27B W8A8').length,
+    ).toBeGreaterThanOrEqual(2);
+    const requestLink = screen.getAllByRole('link', {
+      name: 'Deploy model',
+    })[0];
+    expect(requestLink).toBeEnabled();
+    const formData = new URLSearchParams(
+      (requestLink.getAttribute('href') ?? '').split('?')[1],
+    ).get('formData');
+    expect(JSON.parse(formData ?? '{}')).toMatchObject({
+      deploymentName: 'qwen38-27b',
+      modelVersionRef: 'qwen3.8-27b-w8a8',
+      runtimeProfileRef: 'qwen38-w8a8-ray-ascend-910b3-tp2-v1',
+      requestedTensorParallelSize: 2,
+      requestedDataParallelSize: 1,
+      requestedReplicas: 1,
+      requestedMaxModelLen: 32768,
+      requestedMaxNumSeqs: 64,
+      requestedMaxNumBatchedTokens: 8192,
+      requestedGpuMemoryUtilization: 0.9,
+      requestedPrefixCaching: true,
+      requestedMtpTokens: 3,
+    });
   });
 });

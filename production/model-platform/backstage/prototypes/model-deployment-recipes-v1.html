@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Model Deployment · Recipe UI prototype</title>
+    <style>
+      :root {
+        --ink:#11182b; --muted:#68758b; --line:#dce3ee; --canvas:#f6f8fc;
+        --panel:#fff; --brand:#635bdb; --brand-dark:#453db9; --soft:#f0efff;
+        --success:#08754b; --success-bg:#e8f8f0; --warning:#946000;
+        --warning-bg:#fff4d9; --shadow:0 12px 30px rgba(30,40,75,.08);
+      }
+      * { box-sizing:border-box; }
+      body { background:var(--canvas); color:var(--ink); font:14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif; margin:0; }
+      .shell { margin:0 auto; max-width:1320px; padding:30px 32px 50px; }
+      .crumb { color:var(--muted); font-size:13px; margin-bottom:18px; }
+      .crumb a { color:var(--muted); text-decoration:none; }
+      .crumb a:hover { color:var(--brand); text-decoration:underline; }
+      .crumb b { color:var(--ink); }
+      .hero { align-items:flex-start; display:flex; gap:22px; justify-content:space-between; margin-bottom:22px; }
+      h1 { font-size:30px; letter-spacing:-.04em; line-height:1.1; margin:0; }
+      .lede { color:var(--muted); font-size:15px; margin:8px 0 0; max-width:750px; }
+      .pill,.tag { align-items:center; border-radius:999px; display:inline-flex; font-size:12px; font-weight:700; gap:5px; padding:5px 9px; white-space:nowrap; }
+      .pill { background:var(--soft); color:var(--brand-dark); }
+      .tag { background:#eef1f6; color:#48556d; }
+      .tag.ok { background:var(--success-bg); color:var(--success); }
+      .tag.warn { background:var(--warning-bg); color:var(--warning); }
+      .layout { align-items:start; display:grid; gap:20px; grid-template-columns:minmax(0,1fr) 350px; }
+      .stack { display:grid; gap:20px; }
+      .card { background:var(--panel); border:1px solid var(--line); border-radius:13px; box-shadow:var(--shadow); }
+      .head { align-items:flex-start; border-bottom:1px solid #edf0f5; display:flex; gap:12px; justify-content:space-between; padding:18px 20px 16px; }
+      h2 { font-size:16px; letter-spacing:-.015em; margin:0; }
+      .head p { color:var(--muted); font-size:12px; margin:4px 0 0; }
+      .body { padding:20px; }
+      .model { border:1.5px solid var(--brand); border-radius:11px; display:grid; gap:14px; grid-template-columns:46px 1fr auto; padding:15px; }
+      .logo { align-items:center; background:linear-gradient(145deg,#4439bd,#8376ee); border-radius:10px; color:#fff; display:flex; font-size:18px; font-weight:800; height:46px; justify-content:center; width:46px; }
+      .name { font-size:16px; font-weight:800; }
+      .description { color:var(--muted); font-size:12px; margin-top:2px; }
+      .meta { display:grid; gap:12px; grid-template-columns:repeat(4,1fr); margin-top:16px; }
+      .meta label,.field label { color:var(--muted); display:block; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+      .meta strong { display:block; font-size:12px; margin-top:4px; overflow-wrap:anywhere; }
+      .grid { display:grid; gap:14px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .full { grid-column:1/-1; }
+      select,input { background:#fff; border:1px solid #cad3e1; border-radius:8px; color:var(--ink); font:inherit; margin-top:6px; min-height:40px; padding:8px 10px; width:100%; }
+      select:focus,input:focus { border-color:var(--brand); box-shadow:0 0 0 3px #e8e6ff; outline:0; }
+      .recipes { display:grid; gap:10px; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:16px; }
+      .recipe { border:1px solid var(--line); border-radius:10px; cursor:pointer; padding:14px; transition:.16s ease; }
+      .recipe:hover { border-color:#9c96e9; }
+      .recipe.selected { background:#f5f4ff; border:1.5px solid var(--brand); }
+      .recipe input { display:none; }
+      .recipe b { display:block; font-size:13px; }
+      .recipe span { color:var(--muted); display:block; font-size:12px; margin-top:5px; }
+      details { border-top:1px solid #edf0f5; margin-top:18px; padding-top:16px; }
+      summary { color:#3d4961; cursor:pointer; font-weight:750; }
+      details .grid { margin-top:14px; }
+      aside { position:sticky; top:18px; }
+      .summary-top { background:linear-gradient(135deg,#21185c,#5e50d7); border-radius:12px 12px 0 0; color:#fff; padding:20px; }
+      .summary-top p { color:#d9d5ff; font-size:12px; margin:5px 0 0; }
+      .summary-body { padding:0 20px 20px; }
+      .row { align-items:center; border-bottom:1px solid #edf0f5; display:flex; justify-content:space-between; min-height:48px; }
+      .row span { color:var(--muted); font-size:12px; }
+      .row b { font-size:12px; text-align:right; }
+      .notice { background:var(--success-bg); border:1px solid #b6e8d1; border-radius:8px; color:#176246; font-size:12px; margin:16px 0; padding:11px; }
+      pre { background:#11172a; border-radius:8px; color:#d4ddfa; font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; margin:16px 0; overflow:auto; padding:13px; }
+      button { border:0; border-radius:8px; cursor:pointer; font:inherit; font-weight:750; min-height:43px; width:100%; }
+      .primary { background:var(--brand); color:#fff; }
+      .primary:hover { background:var(--brand-dark); }
+      .secondary { background:#fff; border:1px solid #cbd4df; color:#364158; margin-top:9px; }
+      .toast { background:#17213b; border-radius:9px; bottom:22px; box-shadow:0 12px 30px #0003; color:#fff; display:none; left:50%; padding:12px 16px; position:fixed; transform:translateX(-50%); }
+      .toast.visible { display:block; }
+      @media (max-width:900px) { .layout{grid-template-columns:1fr}.meta{grid-template-columns:repeat(2,1fr)}aside{position:static} }
+      @media (max-width:580px) { .shell{padding:20px 14px}.hero{flex-direction:column}.model,.grid,.recipes{grid-template-columns:1fr}.meta{grid-template-columns:1fr} }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="crumb"><a href="model-catalog-recipes-v1.html">Catalog</a> / Model recipes / <b>Deploy model</b></div>
+      <header class="hero">
+        <div>
+          <h1>Deploy a model</h1>
+          <p class="lede">像 vLLM Recipes 一样先选择已验证的模型和运行配方；不同的是，这里创建的是可审阅的部署请求，而非复制一段 vLLM 指令。</p>
+        </div>
+        <span class="pill">● Local UI prototype · no backend action</span>
+      </header>
+
+      <section class="layout">
+        <div class="stack">
+          <article class="card">
+            <div class="head">
+              <div><h2>Model artifact</h2><p>只从 Artifact Keeper 的已验证模型版本中选择。</p></div>
+              <span class="tag ok">✓ Verified</span>
+            </div>
+            <div class="body">
+              <div class="model">
+                <div class="logo">Q</div>
+                <div>
+                  <div class="name">Qwen3.8-27B · W8A8</div>
+                  <div class="description">Qwen · ModelScope import · Hugging Face safetensors</div>
+                  <div style="margin-top:9px"><span class="tag">32.2 GB</span> <span class="tag">26 files</span> <span class="tag">sha256:f2afa9e2…</span></div>
+                </div>
+                <span class="tag ok">Ready</span>
+              </div>
+              <div class="meta">
+                <div><label>Repository</label><strong>model-artifacts</strong></div>
+                <div><label>Version</label><strong>e823e888…</strong></div>
+                <div><label>Format</label><strong>HF / safetensors</strong></div>
+                <div><label>Quantization</label><strong>W8A8</strong></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="head">
+              <div><h2>Deployment recipe</h2><p>选择平台验证过的 Ray/vLLM 运行配置；镜像、存储路径、物理节点均由后端 allow-list 决定。</p></div>
+              <span class="tag warn">Review gate</span>
+            </div>
+            <div class="body">
+              <div class="grid">
+                <div class="field"><label for="endpoint">Endpoint name</label><input id="endpoint" value="qwen38-chat" /></div>
+                <div class="field"><label for="priority">Request priority</label><select id="priority"><option>Standard</option><option>High · approval needed</option></select></div>
+              </div>
+              <div class="recipes" id="recipe-options">
+                <label class="recipe selected"><input checked name="recipe" type="radio" value="tp2" /><b>Ascend 910B3 · TP2</b><span>RayService · 1 worker · TP=2 · 32K context · recommended starting profile</span></label>
+                <label class="recipe"><input name="recipe" type="radio" value="tp8" /><b>Ascend 910B3 · TP8</b><span>RayService · 1 worker · TP=8 · larger allocation · explicit approval needed</span></label>
+              </div>
+              <details>
+                <summary>Advanced serving parameters</summary>
+                <div class="grid">
+                  <div class="field"><label for="context">Max context</label><input id="context" type="number" value="32768" /></div>
+                  <div class="field"><label for="concurrency">Max concurrent requests</label><input id="concurrency" type="number" value="64" /></div>
+                  <div class="field"><label for="cache">Prefix cache</label><select id="cache"><option>Enabled</option><option>Disabled</option></select></div>
+                  <div class="field"><label for="memory">Memory utilization cap</label><input id="memory" type="number" step="0.05" value="0.90" /></div>
+                </div>
+              </details>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="head"><div><h2>Deployment safety boundary</h2><p>第一版保持停止态：部署请求先进入 Gitea PR，再经过 Tekton、人工合并与 Argo CD 手工 Sync。</p></div><span class="tag ok">NPU-safe</span></div>
+            <div class="body">
+              <div class="grid">
+                <div class="field"><label>Desired state</label><input value="Stopped" readonly /></div>
+                <div class="field"><label>Worker replicas</label><input value="0" readonly /></div>
+                <div class="field full"><label for="note">Reviewer note</label><input id="note" placeholder="为什么需要此服务，以及计划如何验收" /></div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <aside class="card">
+          <div class="summary-top"><b>Deployment request</b><p>把已选择的模型与 recipe 固化为一个受限 GitOps 请求。</p></div>
+          <div class="summary-body">
+            <div class="row"><span>Model</span><b>Qwen3.8-27B W8A8</b></div>
+            <div class="row"><span>Recipe</span><b id="summary-recipe">RayService · TP2</b></div>
+            <div class="row"><span>Endpoint</span><b id="summary-endpoint">qwen38-chat</b></div>
+            <div class="row"><span>Initial state</span><b><span class="tag ok">Stopped</span></b></div>
+            <div class="row"><span>NPU allocation</span><b>0 until later approval</b></div>
+            <div class="notice">这个按钮未来只创建 Gitea Pull Request；它不直接创建 Pod、RayService、PVC 或 NPU 分配。</div>
+            <pre id="preview">modelVersionRef: qwen3.8-27b-w8a8
+runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-tp2-v1
+endpoint: qwen38-chat
+desiredState: Stopped
+replicas: 0</pre>
+            <button class="primary" id="deploy">Create stopped deployment request</button>
+            <button class="secondary" id="copy">Copy request preview</button>
+          </div>
+        </aside>
+      </section>
+    </main>
+    <div class="toast" id="toast"></div>
+    <script>
+      const endpoint = document.querySelector('#endpoint');
+      const recipeCards = document.querySelectorAll('.recipe');
+      const summaryRecipe = document.querySelector('#summary-recipe');
+      const summaryEndpoint = document.querySelector('#summary-endpoint');
+      const preview = document.querySelector('#preview');
+      const toast = document.querySelector('#toast');
+      let selected = 'tp2';
+      function message(text) {
+        toast.textContent = text;
+        toast.classList.add('visible');
+        window.setTimeout(() => toast.classList.remove('visible'), 2400);
+      }
+      function updatePreview() {
+        const profile = selected === 'tp8' ? 'qwen38-w8a8-ray-ascend-910b3-v1' : 'qwen38-w8a8-ray-ascend-910b3-tp2-v1';
+        summaryRecipe.textContent = selected === 'tp8' ? 'RayService · TP8' : 'RayService · TP2';
+        summaryEndpoint.textContent = endpoint.value || 'unnamed-endpoint';
+        preview.textContent = 'modelVersionRef: qwen3.8-27b-w8a8\\n'
+          + 'runtimeProfileRef: ' + profile + '\\n'
+          + 'endpoint: ' + (endpoint.value || 'unnamed-endpoint') + '\\n'
+          + 'desiredState: Stopped\\nreplicas: 0';
+      }
+      recipeCards.forEach(card => card.addEventListener('click', () => {
+        recipeCards.forEach(item => item.classList.remove('selected'));
+        card.classList.add('selected');
+        card.querySelector('input').checked = true;
+        selected = card.querySelector('input').value;
+        updatePreview();
+      }));
+      endpoint.addEventListener('input', updatePreview);
+      document.querySelector('#deploy').addEventListener('click', () => message('Prototype only — no deployment request was sent.'));
+      document.querySelector('#copy').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(preview.textContent); message('Request preview copied.'); }
+        catch (_) { message('Copy is unavailable in this local preview.'); }
+      });
+      updatePreview();
+    </script>
+  </body>
+</html>

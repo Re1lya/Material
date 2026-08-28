@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Model catalog · UI prototype</title>
+    <style>
+      :root {
+        --ink:#131b2e; --muted:#6a768b; --line:#dfe5ef; --canvas:#f6f8fc;
+        --panel:#fff; --brand:#635bdb; --brand-dark:#453db9; --soft:#f0efff;
+        --green:#08754b; --green-bg:#e8f8f0; --amber:#966000; --amber-bg:#fff4d9;
+        --shadow:0 12px 30px rgba(32,42,78,.07);
+      }
+      * { box-sizing:border-box; }
+      body { background:var(--canvas); color:var(--ink); font:14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif; margin:0; }
+      .shell { margin:0 auto; max-width:1320px; padding:30px 32px 50px; }
+      .nav { align-items:center; display:flex; justify-content:space-between; margin-bottom:48px; }
+      .brand { align-items:center; display:flex; font-size:15px; font-weight:850; gap:9px; letter-spacing:-.02em; }
+      .brand-mark { align-items:center; background:linear-gradient(145deg,#4439bd,#8376ee); border-radius:8px; color:#fff; display:flex; height:28px; justify-content:center; width:28px; }
+      .nav-right { color:var(--muted); font-size:13px; }
+      .hero { max-width:770px; }
+      h1 { font-size:38px; letter-spacing:-.047em; line-height:1.08; margin:0; }
+      .lede { color:var(--muted); font-size:16px; margin:11px 0 0; }
+      .search { align-items:center; background:#fff; border:1px solid #cdd5e2; border-radius:10px; box-shadow:var(--shadow); display:flex; margin:27px 0 16px; padding:0 13px; }
+      .search span { color:#8792a5; font-size:18px; }
+      .search input { border:0; font:inherit; min-height:48px; outline:0; padding:0 10px; width:100%; }
+      .shortcut { background:#f1f3f7; border-radius:5px; color:#738097; font-size:11px; padding:3px 6px; }
+      .filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:36px; }
+      .filter { background:transparent; border:1px solid #d2d9e5; border-radius:999px; color:#59667e; cursor:pointer; font:inherit; font-size:12px; font-weight:700; padding:6px 11px; }
+      .filter.active { background:var(--soft); border-color:#a19aea; color:var(--brand-dark); }
+      .section-head { align-items:baseline; display:flex; justify-content:space-between; margin:0 0 14px; }
+      h2 { font-size:18px; letter-spacing:-.025em; margin:0; }
+      .section-head span { color:var(--muted); font-size:12px; }
+      .grid { display:grid; gap:15px; grid-template-columns:repeat(3,minmax(0,1fr)); }
+      .card { background:var(--panel); border:1px solid var(--line); border-radius:13px; box-shadow:var(--shadow); display:flex; flex-direction:column; min-height:243px; padding:17px; transition:.16s ease; }
+      .card.ready { border-color:#c7c2f8; }
+      .card:hover { border-color:#9b94e9; box-shadow:0 15px 34px rgba(41,40,95,.12); transform:translateY(-2px); }
+      .card-top { align-items:flex-start; display:flex; gap:11px; justify-content:space-between; }
+      .logo { align-items:center; background:linear-gradient(145deg,#4439bd,#8376ee); border-radius:10px; color:#fff; display:flex; font-size:17px; font-weight:850; height:40px; justify-content:center; width:40px; }
+      .logo.deepseek { background:linear-gradient(145deg,#0e6abf,#4ba5f4); }
+      .logo.qwen { background:linear-gradient(145deg,#4439bd,#8376ee); }
+      .state { border-radius:999px; font-size:11px; font-weight:800; padding:4px 8px; white-space:nowrap; }
+      .state.ok { background:var(--green-bg); color:var(--green); }
+      .state.wait { background:var(--amber-bg); color:var(--amber); }
+      .title { font-size:16px; font-weight:800; letter-spacing:-.02em; margin-top:14px; }
+      .provider { color:var(--muted); font-size:12px; margin-top:3px; }
+      .description { color:#59657a; font-size:12px; margin:12px 0; min-height:36px; }
+      .facts { display:flex; flex-wrap:wrap; gap:6px; margin-top:auto; }
+      .fact { background:#f0f3f8; border-radius:999px; color:#536077; font-size:11px; font-weight:700; padding:4px 7px; }
+      .card-action { align-items:center; background:var(--brand); border-radius:8px; color:#fff; display:flex; font-size:12px; font-weight:800; justify-content:center; margin-top:15px; min-height:37px; text-decoration:none; }
+      .card-action:hover { background:var(--brand-dark); }
+      .card-action.disabled { background:#edf0f4; color:#8490a4; cursor:not-allowed; }
+      .empty { color:var(--muted); display:none; padding:35px 0; text-align:center; }
+      .footer-note { border-top:1px solid #e0e5ed; color:var(--muted); font-size:12px; margin-top:38px; padding-top:17px; }
+      @media (max-width:900px) { .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+      @media (max-width:580px) { .shell { padding:20px 14px; } .nav { margin-bottom:32px; } .grid { grid-template-columns:1fr; } h1 { font-size:31px; } }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <nav class="nav">
+        <div class="brand"><span class="brand-mark">M</span> Model Platform</div>
+        <div class="nav-right">Artifact Keeper catalog · prototype snapshot</div>
+      </nav>
+      <header class="hero">
+        <h1>Choose a model to deploy</h1>
+        <p class="lede">浏览已登记在 Artifact Keeper 的模型制品。只有同时拥有已审核 RuntimeProfile 的版本才可以进入部署配置页。</p>
+      </header>
+      <div class="search"><span>⌕</span><input id="search" placeholder="Search models, providers, quantization..." /><span class="shortcut">⌘ K</span></div>
+      <div class="filters" id="filters">
+        <button class="filter active" data-filter="all">All models</button>
+        <button class="filter" data-filter="ready">Deployable now</button>
+        <button class="filter" data-filter="qwen">Qwen</button>
+        <button class="filter" data-filter="deepseek">DeepSeek</button>
+        <button class="filter" data-filter="w8a8">W8A8</button>
+      </div>
+
+      <section>
+        <div class="section-head"><h2>Available model artifacts</h2><span id="count">3 models in catalog snapshot</span></div>
+        <div class="grid" id="catalog">
+          <article class="card ready" data-tags="ready qwen w8a8 qwen3.8 27b">
+            <div class="card-top"><div class="logo qwen">Q</div><span class="state ok">Deployable</span></div>
+            <div class="title">Qwen3.8-27B</div>
+            <div class="provider">Qwen · W8A8</div>
+            <div class="description">Verified Artifact Keeper model with approved Ascend 910B3 TP2 and TP8 serving recipes.</div>
+            <div class="facts"><span class="fact">32.2 GB</span><span class="fact">26 files</span><span class="fact">2 recipes</span></div>
+            <a class="card-action" href="model-deployment-recipes-v1.html">Open deployment recipe →</a>
+          </article>
+          <article class="card" data-tags="qwen w8a8 qwen3.6 27b">
+            <div class="card-top"><div class="logo qwen">Q</div><span class="state wait">Profile needed</span></div>
+            <div class="title">Qwen3.6-27B</div>
+            <div class="provider">Qwen · W8A8</div>
+            <div class="description">Artifact has been uploaded and verified. A production RuntimeProfile has not been certified yet.</div>
+            <div class="facts"><span class="fact">34 GB source</span><span class="fact">safetensors</span><span class="fact">0 recipes</span></div>
+            <span class="card-action disabled">RuntimeProfile pending</span>
+          </article>
+          <article class="card" data-tags="deepseek w8a8 flash">
+            <div class="card-top"><div class="logo deepseek">D</div><span class="state wait">Catalog review</span></div>
+            <div class="title">DeepSeek-V4-Flash</div>
+            <div class="provider">DeepSeek · W8A8</div>
+            <div class="description">Source material is known to the platform, but Artifact Keeper registration and compatible serving profile are pending.</div>
+            <div class="facts"><span class="fact">W8A8</span><span class="fact">0 recipes</span><span class="fact">Review required</span></div>
+            <span class="card-action disabled">Not deployable yet</span>
+          </article>
+        </div>
+        <div class="empty" id="empty">No model matches the current search and filter.</div>
+      </section>
+      <p class="footer-note">Prototype boundary: cards are a static catalog snapshot. The Backstage implementation will read ModelVersion and Artifact Keeper metadata through its existing read-only backend API; it will not expose registry credentials in the browser.</p>
+    </main>
+    <script>
+      const filters = document.querySelectorAll('.filter');
+      const cards = document.querySelectorAll('.card');
+      const search = document.querySelector('#search');
+      const count = document.querySelector('#count');
+      const empty = document.querySelector('#empty');
+      let active = 'all';
+      function render() {
+        const query = search.value.trim().toLowerCase();
+        let visible = 0;
+        cards.forEach(card => {
+          const tags = card.dataset.tags;
+          const matchesFilter = active === 'all' || tags.includes(active);
+          const matchesSearch = !query || card.textContent.toLowerCase().includes(query);
+          const show = matchesFilter && matchesSearch;
+          card.style.display = show ? 'flex' : 'none';
+          if (show) visible += 1;
+        });
+        count.textContent = visible + ' model' + (visible === 1 ? '' : 's') + ' shown';
+        empty.style.display = visible ? 'none' : 'block';
+      }
+      filters.forEach(button => button.addEventListener('click', () => {
+        filters.forEach(item => item.classList.remove('active'));
+        button.classList.add('active');
+        active = button.dataset.filter;
+        render();
+      }));
+      search.addEventListener('input', render);
+    </script>
+  </body>
+</html>
