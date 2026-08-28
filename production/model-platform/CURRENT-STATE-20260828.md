@@ -81,14 +81,16 @@ Material 中的平台文档分为三类：
 
 ### 6.1 通用 GitOps CI
 
-K12 专用校验已绿色，但通用模型配置校验仍因 Qwen38 schema、停止态和
-RuntimeProfile 差异失败。这使得当前 `model-platform-config` 不能作为全局绿色门禁。
+K12 专用校验保持绿色。ModelDeployment schema、RuntimeProfile 和 Stopped XR 已通过
+Gitea PR #10 收敛；精确 PR head `0bf417b8…` 和合并后 main `16d36213…`
+均通过 Tekton 校验。推理 Application 仍保持手工 Sync，当前为 OutOfSync/Healthy。
 
 ### 6.2 推理组合资源
 
 `model-serving/qwen38-27b-cache-job` 持续报同名 Job `spec.template` 不可变。
-本地已实现基于 `spec.cache.revision` 的版本化 Job 合同并通过生产 API server
-dry-run，但尚未发布。详情见 `crossplane/cache-job-versioning-20260828.md`。
+已实现基于 `spec.cache.revision` 的版本化 Job 合同并通过生产 API server
+dry-run；Gitea schema/catalog/XR 已合并，但集群 XRD/Composition 尚未发布。
+详情见 `crossplane/cache-job-versioning-20260828.md`。
 
 ### 6.3 训练侧集成
 

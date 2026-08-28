@@ -67,8 +67,15 @@ persisted no object.
 
 ## Production gate
 
-No production object was changed by this preparation. A later approved release
-must coordinate:
+Gitea PR #10 updated the production configuration contract. Tekton validated
+the exact PR head `0bf417b8f8582ca3db50b7b3f4a6a2a18a912963`; after merge, the
+main commit `16d36213c17ba726cf3f087b384e5dd4eaf05bca` also passed the webhook
+PipelineRun. Argo CD remains manual and the deployment-request Application is
+currently OutOfSync/Healthy, so the merge did not change the live XR or create
+the versioned Job.
+
+No production Kubernetes object was changed by this preparation. A later
+approved release must coordinate:
 
 1. Gitea catalog/schema/ModelDeployment changes and a green Tekton status.
 2. XRD and Composition publication.
