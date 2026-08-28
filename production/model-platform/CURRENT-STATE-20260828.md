@@ -30,7 +30,7 @@ Material 中的平台文档分为三类：
 | Backstage | 0.1.5 stopped-contract 镜像已发布，生产滚动待执行 | 修复 Stopped PR 的 `spec.crossplane` 和 `cache.revision` 生成合同 |
 | K12 CPU 数据管线 | 新 Dagster 1/1，Ray CPU head/worker Ready | CPU 平台集成已完成 |
 | 旧 K12 Dagster | Deployment 0/0，未删除 | 仅作为有界回滚对象 |
-| Qwen3.8 推理 | `ModelDeployment` 为 Stopped、paused | 历史 TP2 端到端验证通过，当前无在线 RayService |
+| Qwen3.8 推理 | `ModelDeployment` 为 Stopped；Running 门禁/合并/同步链路已验收，NPU worker 调度被既有 Volcano/MindX 插件缺陷阻塞 | 历史 TP2 端到端验证通过；Running 最后阻塞见 `tekton/running-gate-and-first-controlled-start-20260828.md` |
 | KCC 训练系统 | 由训练侧独立实施，当前正在联调 | Argo 应用 OutOfSync，状态合同与调度仍需收敛 |
 
 ## 3. 已完成的 K12 CPU 闭环
@@ -66,12 +66,17 @@ Material 中的平台文档分为三类：
 
 ## 5. 推理发布当前边界
 
-受限 Stopped auto-merge 与 scoped Argo automated sync 均已在生产验收通过：
-PR #11 全自动合并，main `0021e864…` 经自动同步物化为
-`qwen38-stopped-auto-smoke`（control-plane-only、Stopped、仅状态 ConfigMap、
-零 NPU）。`prune`/`selfHeal`/`allowEmpty` 保持 false。下一阶段是 Running
-请求合同、机器门禁与受控 NPU 验收；在此之前不启用任何 NPU worker。
-详见 `gitops/argo-auto-sync-and-stopped-acceptance-20260828.md`。
+Running 阶段前置开发已上线并通过真实生产验证：Running 机器门禁
+（capacity gate + running merge）、Backstage Start-inference action
+（0.1.6.1）与 scoped auto-sync 的开/关（含 Stop 回退）均在受控窗口内
+打通（`tekton/running-gate-and-first-controlled-start-20260828.md`）。
+首次受控 NPU 启动链路推进到 KubeRay 创建 worker Pod（请求恰好
+2×Ascend910）后被既有 Volcano/MindX NPU 拓扑插件缺陷阻塞
+（`qwen38-ray-tp2-execution-20260819.md` 同源问题）；按约束未修改全局
+调度配置，已执行 Git Stop 回退。当前 qwen38-27b 与
+qwen38-stopped-auto-smoke 均为 Stopped 基线、零 NPU；Volcano 兼容性
+修复或临时调度窗口为 Running 验收的最后阻塞项，等待用户裁定。
+`prune`/`selfHeal`/`allowEmpty` 保持 false。
 
 ## 6. 正在进行和已知异常
 

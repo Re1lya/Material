@@ -889,6 +889,10 @@ spec:
               for key, value in head_annotations.items():
                   if key in allowed_annotation_keys:
                       projected_annotations[key] = value
+              requested_by_key = f"{PREFIX}requested-by"
+              projected["metadata"].setdefault("labels", {})[requested_by_key] = (
+                  head_doc["metadata"]["labels"].get(requested_by_key, "")
+              )
               if projected != head_doc:
                   raise SystemExit(
                       "diff contains changes outside desiredState/workerReplicas/start annotations"

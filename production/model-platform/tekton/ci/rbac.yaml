@@ -74,6 +74,8 @@ rules:
       - services/proxy
     resourceNames:
       - promotel-kube-prometheus-s-prometheus
+      - http:promotel-kube-prometheus-s-prometheus:9090
+      - https:promotel-kube-prometheus-s-prometheus:9090
     verbs:
       - get
 ---
