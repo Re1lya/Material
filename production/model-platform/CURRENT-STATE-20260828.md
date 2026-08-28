@@ -27,7 +27,7 @@ Material 中的平台文档分为三类：
 | Argo CD | K12/bootstrap/model-deployment 三个 Application Synced/Healthy | 仍为人工 Sync，prune/self-heal 关闭 |
 | Tekton | Operator、Pipelines、Triggers、Pruner Ready | K12 专用 CI 正常；通用模型配置 CI 仍失败 |
 | Crossplane | Core、Function、provider-kubernetes Ready | Qwen38 XR 已收敛为 Stopped、Synced=True、Ready=True，版本化缓存 Job 已完成 |
-| Backstage | `platform/kcc-backstage:0.1.4-recipe-ui-20260828` 1/1 Ready | K12 CPU 页面保持可用；vLLM 风格模型目录与推理参数配置页已上线 |
+| Backstage | 0.1.5 stopped-contract 镜像已发布，生产滚动待执行 | 修复 Stopped PR 的 `spec.crossplane` 和 `cache.revision` 生成合同 |
 | K12 CPU 数据管线 | 新 Dagster 1/1，Ray CPU head/worker Ready | CPU 平台集成已完成 |
 | 旧 K12 Dagster | Deployment 0/0，未删除 | 仅作为有界回滚对象 |
 | Qwen3.8 推理 | `ModelDeployment` 为 Stopped、paused | 历史 TP2 端到端验证通过，当前无在线 RayService |

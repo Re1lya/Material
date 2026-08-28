@@ -205,6 +205,34 @@ error/fatal/exception match; Artifact Keeper and Gitea remained Ready. The
 Backstage Pod is still fixed to `server-00/linux/amd64`, requests only CPU and
 memory, and declares no accelerator resource.
 
+### Backstage 0.1.5 stopped request contract — 2026-08-28
+
+The 0.1.4 UI was retained without visual changes. The backend request
+generator was corrected to emit the complete ModelDeployment contract required
+by the production schema:
+
+- `spec.crossplane.compositionRef`;
+- `spec.crossplane.compositionUpdatePolicy: Automatic`;
+- the certified RuntimeProfile `cache.revision`.
+
+The backend still forces `desiredState: Stopped`, `workerReplicas: 0`, zero
+effective NPU annotations and `control-plane-only` placement.
+
+Build and release evidence:
+
+- Material source commit: `94b0cb0`;
+- clean build-context archive SHA256:
+  `7fbbe1888fa1d9ff525ee38719b3fab5ac0c5048f4702538f8ff891d2c5d79e8`;
+- local TypeScript and backend build passed;
+- Docker build completed on `server-00` for `linux/amd64`;
+- Registry pull confirmed the published digest and architecture.
+
+Published image:
+
+```text
+110.120.0.3:30670/container-images/platform/kcc-backstage:0.1.5-stopped-contract-20260828@sha256:800de8e16dcd8e10b427b7138bcd9fa3193f0881cb960ed840d0122de185cc73
+```
+
 ### Create-page template chooser fix — released 2026-08-17
 
 On 2026-08-17 the source was updated so the model template explicitly uses the
