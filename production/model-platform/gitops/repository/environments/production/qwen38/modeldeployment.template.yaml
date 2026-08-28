@@ -45,6 +45,7 @@ spec:
     npuPerWorker: 8
     workerReplicas: 0
   cache:
+    revision: <manifest-prefix-and-job-revision>
     image: 110.120.0.3:30670/container-images/model-cache@sha256:<cache-image-digest>
     baseURL: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
     readerSecret: artifact-keeper-model-runtime

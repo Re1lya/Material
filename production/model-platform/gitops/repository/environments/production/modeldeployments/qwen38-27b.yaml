@@ -90,6 +90,7 @@ spec:
     npuPerWorker: 2
     workerReplicas: 0
   cache:
+    revision: f2afa9e2-r1
     image: 110.120.0.3:30670/container-images/model-cache@sha256:3c2ee21efa53da44ec816fe2581ca35088caba91b3648db64949a2aea428db37
     baseURL: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
     readerSecret: artifact-keeper-model-runtime

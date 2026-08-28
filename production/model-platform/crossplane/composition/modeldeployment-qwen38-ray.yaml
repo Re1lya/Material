@@ -252,14 +252,15 @@ spec:
                               emptyDir:
                                 sizeLimit: 256Mi
             patches:
-              - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: metadata.name
+                    - fromFieldPath: spec.cache.revision
+                  strategy: string
+                  string:
+                    fmt: "%s-cache-%s"
                 toFieldPath: metadata.name
-                transforms:
-                  - type: string
-                    string:
-                      type: Format
-                      fmt: "%s-cache-job"
               - type: FromCompositeFieldPath
                 fromFieldPath: metadata.namespace
                 toFieldPath: metadata.namespace
@@ -267,13 +268,17 @@ spec:
                 fromFieldPath: metadata.name
                 toFieldPath: metadata.labels[platform.example.com/deployment]
               - type: FromCompositeFieldPath
-                fromFieldPath: metadata.name
+                fromFieldPath: spec.cache.revision
+                toFieldPath: metadata.labels[platform.example.com/cache-revision]
+              - type: CombineFromComposite
+                combine:
+                  variables:
+                    - fromFieldPath: metadata.name
+                    - fromFieldPath: spec.cache.revision
+                  strategy: string
+                  string:
+                    fmt: "%s-cache-%s"
                 toFieldPath: spec.forProvider.manifest.metadata.name
-                transforms:
-                  - type: string
-                    string:
-                      type: Format
-                      fmt: "%s-cache"
               - type: FromCompositeFieldPath
                 fromFieldPath: metadata.namespace
                 toFieldPath: spec.forProvider.manifest.metadata.namespace
@@ -281,8 +286,14 @@ spec:
                 fromFieldPath: metadata.name
                 toFieldPath: spec.forProvider.manifest.metadata.labels[platform.example.com/deployment]
               - type: FromCompositeFieldPath
+                fromFieldPath: spec.cache.revision
+                toFieldPath: spec.forProvider.manifest.metadata.labels[platform.example.com/cache-revision]
+              - type: FromCompositeFieldPath
                 fromFieldPath: metadata.name
                 toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.cache.revision
+                toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[platform.example.com/cache-revision]
               - type: FromCompositeFieldPath
                 fromFieldPath: spec.placement.nodeSelector
                 toFieldPath: spec.forProvider.manifest.spec.template.spec.nodeSelector

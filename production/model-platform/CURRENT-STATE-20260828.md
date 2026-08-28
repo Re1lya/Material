@@ -87,7 +87,8 @@ RuntimeProfile 差异失败。这使得当前 `model-platform-config` 不能作�
 ### 6.2 推理组合资源
 
 `model-serving/qwen38-27b-cache-job` 持续报同名 Job `spec.template` 不可变。
-需将缓存 Job 改为按 ModelVersion/manifest digest 版本化，并设计旧 Job 收敛策略。
+本地已实现基于 `spec.cache.revision` 的版本化 Job 合同并通过生产 API server
+dry-run，但尚未发布。详情见 `crossplane/cache-job-versioning-20260828.md`。
 
 ### 6.3 训练侧集成
 

@@ -69,8 +69,9 @@
             "cache": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["image", "storageClassName", "size", "readerSecret"],
+              "required": ["revision", "image", "storageClassName", "size", "readerSecret"],
               "properties": {
+                "revision": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,15}$" },
                 "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:30670/.+@sha256:[0-9a-f]{64}$" },
                 "storageClassName": { "type": "string", "pattern": "^model-cache-[a-z0-9-]+$" },
                 "size": { "type": "string", "pattern": "^[1-9][0-9]*(Gi|Ti)$" },

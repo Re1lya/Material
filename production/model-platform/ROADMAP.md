@@ -24,7 +24,7 @@
 | Material 事实归档 | In progress | 大量已上线源码、清单和记录仍未提交 | 按职责拆分审查，可从 Git 重建非敏感生产声明 | 平台 |
 | 通用 ModelDeployment CI | Blocked | K12 专用 CI 绿色，通用模型配置 CI 因 schema/catalog/XR 漂移失败 | Gitea main 上 catalog、schema、XR 同时通过 | 推理平台 |
 | Qwen38 停止态基线 | Blocked | XR 为 Stopped/paused，缓存 Job Object 持续报 immutable 错误 | Stopped、Synced=True、无循环告警、无 NPU Pod | 推理平台 |
-| 缓存 Job 版本化 | Prepared | 根因已明确，尚未形成审查后的命名/收敛方案 | 新 digest 创建新 Job，旧缓存可回滚，重试幂等 | 推理平台 |
+| 缓存 Job 版本化 | In progress | 已实现 `<deployment>-cache-<cache.revision>` 命名、schema/profile 合同和校验，生产 API server dry-run 通过；尚未发布 | 新 revision 创建新 Job，当前 READY 缓存可复用，无 immutable 循环告警 | 推理平台 |
 | 停止态全自动 | Prepared | Backstage PR、Tekton、release bot 和 Argo Application 已具备基础 | 自动合并/同步只产生 Stopped XR，零 NPU，可一键关闭 | 推理平台 |
 | 推理 Running 受控自动 | Prepared | TP2 历史端到端验证通过；本地 Running 请求未发布 | 有效审批、容量/制品门禁、缓存 READY、健康回写和回滚 | 推理平台 |
 | Backstage 推理状态聚合 | In progress | 已有目录和请求入口，运行阶段/失败原因尚未完整 | request ID 贯通 Git/Tekton/Argo/XR/RayService/health | 推理平台 |

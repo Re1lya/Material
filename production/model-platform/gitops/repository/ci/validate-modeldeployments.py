@@ -269,12 +269,22 @@ def validate_qwen38_release(
         errors.append(f"{prefix}: cache.readerSecret must be the fixed read-only Secret reference")
     if cache.get("storageClassName", "").startswith("ora-desktop"):
         errors.append(f"{prefix}: ora-desktop cache storage is forbidden")
+    manifest_digest = str(artifact.get("manifestDigest", ""))
+    expected_cache_prefix = manifest_digest.removeprefix("sha256:")[:8]
+    if expected_cache_prefix and not str(cache.get("revision", "")).startswith(
+        expected_cache_prefix
+    ):
+        errors.append(
+            f"{prefix}: cache.revision must start with the manifest digest prefix "
+            f"{expected_cache_prefix}"
+        )
 
     if runtime_profile is None:
         errors.append(f"{prefix}: ModelRuntimeProfile catalog entry is missing")
     else:
         profile_spec = runtime_profile.get("spec", {})
         profile_runtime = profile_spec.get("runtime", {})
+        profile_cache = profile_runtime.get("cache", {})
         if profile_spec.get("workload", {}).get("kind") != "RayService":
             errors.append(f"{prefix}: runtime profile workload.kind must be RayService")
         if runtime.get("image") != profile_runtime.get("image"):
@@ -285,6 +295,17 @@ def validate_qwen38_release(
             errors.append(f"{prefix}: XR runtime.modelName differs from RuntimeProfile catalog")
         if runtime.get("serveConfigV2") != profile_runtime.get("serveConfigV2"):
             errors.append(f"{prefix}: XR runtime.serveConfigV2 differs from RuntimeProfile catalog")
+        for cache_field in (
+            "revision",
+            "image",
+            "readerSecret",
+            "storageClassName",
+            "size",
+        ):
+            if cache.get(cache_field) != profile_cache.get(cache_field):
+                errors.append(
+                    f"{prefix}: XR cache.{cache_field} differs from RuntimeProfile catalog"
+                )
         expected_npu = QWEN38_RUNTIME_PROFILES.get(runtime_ref)
         if expected_npu is not None:
             profile_resources = profile_spec.get("resources", {})

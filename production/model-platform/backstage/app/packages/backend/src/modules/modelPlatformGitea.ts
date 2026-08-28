@@ -77,6 +77,7 @@ type DeploymentContract = {
     workerReplicas: number;
   };
   cache: {
+    revision: string;
     image: string;
     baseURL: string;
     readerSecret: string;
@@ -283,6 +284,7 @@ async function loadDeploymentContract(
     );
   }
   const cache = {
+    revision: profileCache.revision,
     image: profileCache.image,
     baseURL: gitea.artifactKeeperBaseUrl,
     readerSecret: profileCache.readerSecret,
@@ -317,7 +319,7 @@ function createDeploymentRequestAction(config: Config) {
     supportsDryRun: false,
     schema: {
       input: {
-        deploymentName: z => z.string().min(1).max(63).regex(dnsLabel),
+        deploymentName: z => z.string().min(1).max(40).regex(dnsLabel),
         projectRef: z => z.string().min(1).max(63).regex(dnsLabel),
         modelVersionRef: z => z.string().min(1).max(253),
         runtimeProfileRef: z => z.string().min(1).max(253),
