@@ -264,33 +264,21 @@ spec:
           value: $(params.revision)
         - name: pull-request-number
           value: $(params.pull-request-number)
-        - name: source-root
-          value: $(params.source-root)
-      workspaces:
-        - name: source
-          workspace: source
       taskSpec:
         params:
           - name: revision
             type: string
           - name: pull-request-number
             type: string
-          - name: source-root
-            type: string
-        workspaces:
-          - name: source
         steps:
           - name: merge
             image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
             imagePullPolicy: IfNotPresent
-            workingDir: $(workspaces.source.path)/repository
             env:
               - name: REVISION
                 value: $(params.revision)
               - name: PULL_REQUEST_NUMBER
                 value: $(params.pull-request-number)
-              - name: SOURCE_ROOT
-                value: $(params.source-root)
               - name: GITEA_MERGE_TOKEN
                 valueFrom:
                   secretKeyRef:
@@ -298,11 +286,12 @@ spec:
                     key: token
             script: |
               #!/usr/bin/env python3
+              import base64
               import json
               import os
-              from pathlib import Path
               import re
               import urllib.error
+              import urllib.parse
               import urllib.request
 
               from ruamel.yaml import YAML
@@ -371,9 +360,16 @@ spec:
               ):
                   raise SystemExit("changed path is outside the ModelDeployment request directory")
 
-              source_root = Path(os.environ["SOURCE_ROOT"])
-              request_file = source_root / filename
-              document = YAML(typ="safe").load(request_file.read_text(encoding="utf-8"))
+              encoded_filename = "/".join(
+                  urllib.parse.quote(part, safe="") for part in filename.split("/")
+              )
+              file_response = call(
+                  "GET",
+                  f"{repository}/contents/{encoded_filename}?ref={revision}",
+              )
+              document = YAML(typ="safe").load(
+                  base64.b64decode(file_response["content"]).decode("utf-8")
+              )
               spec = document.get("spec", {})
               annotations = document.get("metadata", {}).get("annotations", {})
               runtime = spec.get("runtime", {})
