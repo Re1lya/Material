@@ -686,6 +686,10 @@ function createStartInferenceAction(config: Config) {
       if (input.startReason) {
         annotations[`${prefix}requested-start-reason`] = input.startReason;
       }
+      // Record the allow-listed starter as the effective requested-by owner.
+      document.metadata.labels[`${prefix}requested-by`] = initiator
+        .replace(/^user:[^/]+\//, '')
+        .replace(/[^A-Za-z0-9_.-]/g, '-');
       const npuPerWorker = spec.runtime?.npuPerWorker;
       if (typeof npuPerWorker !== 'number' || npuPerWorker <= 0) {
         throw new Error(
