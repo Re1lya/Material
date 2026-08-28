@@ -67,8 +67,12 @@ Material 中的平台文档分为三类：
 ## 5. 推理发布当前边界
 
 当前 Git、Tekton、Argo CD、Crossplane 和版本化缓存 Job 已在 Stopped 状态收敛。
-尚未提交或启用新的 Running 请求。下一阶段是实现受限 PR 自动合并、
-Argo scoped auto-sync 和 Stopped 全自动验收；在这些门禁完成前不启用 NPU worker。
+受限 Stopped auto-merge Task 已发布到生产 Pipeline（generation 11），并在
+Gitea PR #11 上完成首次全自动合并验收（见
+`tekton/model-deployment-auto-merge-20260828.md`）。Argo CD
+`model-platform-deployment-requests` 仍为人工 Sync，automated sync、prune 和
+self-heal 未启用；下一阶段是 scoped auto-sync 与 Stopped 全自动验收。在这些
+门禁完成前不启用 NPU worker。
 
 ## 6. 正在进行和已知异常
 
@@ -78,6 +82,16 @@ K12 专用校验保持绿色。ModelDeployment schema、RuntimeProfile 和 Stopp
 Gitea PR #10 收敛；精确 PR head `0bf417b8…` 和合并后 main `16d36213…`
 均通过 Tekton 校验。经批准的手工 Sync 已完成，推理 Application 当前为
 Synced/Healthy；automated sync、prune 和 self-heal 仍未启用。
+
+通用 CI 的 Stopped auto-merge Task 首次生产 Smoke（PR #11、PipelineRun
+`b6pg4`）因 emptyDir workspace 不跨 Task Pod 共享而失败，未产生任何合并或
+同步副作用；修复（读取 Gitea Contents API）已随 Pipeline generation 11
+发布，PR #11 经 close/reopen 重触发后校验、自动合并、commit status 与
+合并后 main PipelineRun（`2zqdm`、`67k8q`）全部成功，详见
+`tekton/model-deployment-auto-merge-20260828.md`。当前 Gitea main 为
+`0021e86439d43ef93b0f79587dfaeb8b57b51a44`，推理 Application 因新增
+`qwen38-stopped-auto-smoke` 请求处于 OutOfSync/Healthy，等待 scoped
+auto-sync 阶段处理。
 
 ### 6.2 推理组合资源
 

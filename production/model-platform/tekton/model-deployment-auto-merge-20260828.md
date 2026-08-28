@@ -67,3 +67,71 @@ objects.
 Production acceptance requires a newly generated disposable Stopped request:
 the PR must validate, merge automatically, trigger a successful main
 PipelineRun, and leave Argo OutOfSync while automated sync is still disabled.
+
+## Production release and acceptance — 2026-08-28
+
+### First production attempt failed
+
+- Pipeline `model-platform-ci/validate-model-platform-config` generation 10
+  contained the original auto-merge task, which read the generated request
+  file from the shared Pipeline workspace.
+- Smoke PR #11
+  (`backstage/modeldeployment-qwen38-stopped-auto-smoke-acceptance`, head
+  `971461a3594849ec0cfdd0825fa499f70b9de8b8`, new file
+  `environments/production/modeldeployments/qwen38-stopped-auto-smoke.yaml`)
+  triggered PipelineRun `model-platform-config-validation-b6pg4`.
+- `clone-and-validate` Succeeded; `auto-merge-stopped-request` Failed with
+  `FileNotFoundError`: PipelineRun workspaces are per-Task-Pod `emptyDir`, so
+  the clone directory from the first Task Pod does not exist in the merge Task
+  Pod.
+- No merge, no Gitea main change, no Argo sync, no new XR and no NPU Pod
+  occurred as a result of that failure.
+
+### Fix (Material `8a3e612`)
+
+The merge task no longer reads the previous Task's workspace. It fetches the
+exact changed file from the Gitea Contents API at the already-validated
+40-character head revision and re-checks the policy before merging.
+
+### Controlled release
+
+- Local checksum
+  `sha256 2c0f32ef9c827eadb4565215a7b0f298a59a0eaf68c45b42011c157e5b2950d7`
+  verified on `server-00` before release
+  (`/tmp/model-platform-release-20260828-automerge/pipeline.yaml`).
+- `sudo k3s kubectl apply --dry-run=server -f pipeline.yaml` returned
+  `configured (server dry run)` for the Pipeline only.
+- Scoped apply updated only Pipeline
+  `model-platform-ci/validate-model-platform-config` (generation 10 -> 11);
+  RBAC, NetworkPolicy, Triggers and all other Pipelines were untouched.
+- Live object verified to contain the Contents-API read and no
+  workspace-read in the merge task.
+
+### Re-trigger and automatic merge evidence
+
+- PR #11 was closed and reopened (HTTP 201/201), which re-delivered the Gitea
+  `pull_request` webhook with action `reopened`.
+- PipelineRun `model-platform-config-validation-2zqdm` at head
+  `971461a3594849ec0cfdd0825fa499f70b9de8b8`: Succeeded.
+  - `clone-and-validate` Succeeded
+  - `auto-merge-stopped-request` Succeeded
+  - `finally/report-gitea-commit-status` Succeeded
+- PR #11 became `state=closed, merged=true`; merge commit
+  `0021e86439d43ef93b0f79587dfaeb8b57b51a44`; the generated branch was deleted
+  automatically (branch API now 404).
+- The merge push started main-push PipelineRun
+  `model-platform-config-validation-67k8q` at `0021e864…`:
+  `clone-and-validate` Succeeded, `report-gitea-commit-status` Succeeded
+  (auto-merge correctly skipped for `event-kind=push`).
+
+### Downstream state kept inert
+
+- Argo CD `model-platform-deployment-requests` observed OutOfSync/Healthy with
+  automated sync still absent (`spec.syncPolicy.automated` unset); the
+  OutOfSync diff is exactly the added `qwen38-stopped-auto-smoke`
+  ModelDeployment.
+- `model-serving` still contains only the pre-existing stopped-state CPU head
+  and the two completed cache Jobs; cluster-wide NPU requests remain zero and
+  no new XR was created.
+- `k12-data-pipeline`, `model-platform-bootstrap`,
+  `model-platform-training-system` and their workloads were not modified.
