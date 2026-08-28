@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k12-data-pipeline
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: model-platform
+spec:
+  project: k12-data-pipeline
+  source:
+    repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+    targetRevision: main
+    path: environments/production/k12-data-pipeline
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: k12
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=false
+      - ApplyOutOfSyncOnly=true

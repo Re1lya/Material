@@ -115,3 +115,24 @@ modelPlatform:
       - qwen38-w8a8-ray-ascend-910b3-tp2-v1
     artifactKeeperBaseUrl: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
     stoppedCompositionRef: modeldeployment-control-plane-v1alpha1
+  dataPipeline:
+    enabled: true
+    namespace: k12
+    deploymentName: k12-platform-cpu-k12-clean-qa-pipeline-dagster
+    rayClusterName: k12-platform-cpu-k12-clean-qa-pipeline-k12-clean-qa
+    dagsterBaseUrl: http://k12-platform-cpu-k12-clean-qa-pipeline-dagster.k12.svc.cluster.local:3000
+    allowedInitiators:
+      - user:default/gitadmin
+    jobName: cleanjopbstage1_10
+    profileName: k12-stage1-clean-v1
+    manifestBucket: k12-cleaned-corpus
+    manifestPrefix: cpu-smoke/manifests/
+    sourceBucket: k12-mineru-output
+    sourcePrefix: full-output/mineru34-hybrid-a3-full-20260722T104600Z
+    outputBucket: k12-cleaned-corpus
+    outputPrefix: stage1/platform-smoke/
+    documentCount: 10
+    maxDocumentInflight: 8
+    stage1Version: stage1-v1.0.2
+    image: 110.120.0.3:30670/container-images/platform/kcc-data-pipeline:0.4.0-cpu-528da6f@sha256:f37687ea197794cbeb471505f193c19adbbb5e29133b245dff6c505dc1756718
+    sourceCommit: 528da6fabc41ccd761e6e63eacb59713c662de5e

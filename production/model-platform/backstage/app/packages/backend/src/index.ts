@@ -18,6 +18,7 @@ backend.add(import('@backstage/plugin-scaffolder-backend'));
 backend.add(import('./modules/modelPlatformGitea'));
 backend.add(import('./modules/modelPlatformApi'));
 backend.add(import('./modules/artifactManagementApi'));
+backend.add(import('./modules/dataPipelineApi'));
 
 // auth plugin
 backend.add(import('@backstage/plugin-auth-backend'));

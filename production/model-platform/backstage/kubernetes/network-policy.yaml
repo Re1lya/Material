@@ -55,6 +55,14 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+    # K3s DNATs the kubernetes.default Service to the host-network API
+    # endpoint before NetworkPolicy enforcement.
+    - to:
+        - ipBlock:
+            cidr: 110.120.0.3/32
+      ports:
+        - protocol: TCP
+          port: 6443
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -137,3 +145,23 @@ spec:
       ports:
         - protocol: TCP
           port: 30081
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backstage-to-k12-dagster
+  namespace: backstage
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backstage
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: k12
+      ports:
+        - protocol: TCP
+          port: 3000

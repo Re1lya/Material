@@ -54,7 +54,16 @@ type ManagementResponse = {
 };
 
 const useStyles = makeStyles(theme => ({
-  content: { paddingBottom: theme.spacing(4) },
+  content: {
+    boxSizing: 'border-box',
+    margin: 0,
+    maxWidth: 'none',
+    padding: theme.spacing(3, 5, 6, 3),
+    width: '100%',
+    [theme.breakpoints.down('sm')]: {
+      padding: theme.spacing(2, 2, 5),
+    },
+  },
   notice: {
     borderLeft: `4px solid ${theme.palette.info.main}`,
     padding: theme.spacing(1.5),
@@ -238,18 +247,18 @@ export const ArtifactManagementPage = () => {
 
   return (
     <Page themeId="tool">
-      <ContentHeader title="Artifact & CI management">
-        <Chip
-          color="secondary"
-          icon={<LockIcon />}
-          label="Restricted MVP · no browser file upload"
-          variant="outlined"
-        />
-        <Button startIcon={<AutorenewIcon />} onClick={() => void load()}>
-          Refresh
-        </Button>
-      </ContentHeader>
       <Content className={classes.content}>
+        <ContentHeader title="Artifact & CI management">
+          <Chip
+            color="secondary"
+            icon={<LockIcon />}
+            label="Restricted MVP · no browser file upload"
+            variant="outlined"
+          />
+          <Button startIcon={<AutorenewIcon />} onClick={() => void load()}>
+            Refresh
+          </Button>
+        </ContentHeader>
         <Paper className={classes.notice} elevation={0} role="note">
           <Typography variant="body2">
             Backstage 只提交仓库、Token 和发布任务元数据。大文件由受控 staging 源和

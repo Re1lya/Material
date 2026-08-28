@@ -1,0 +1,8 @@
+FROM 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+
+# Build context supplies the reviewed server-00 linux/amd64 Helm v4.1.0 binary.
+# Expected SHA256:
+# 519950df50409cb78e460668913de49497f96eb7e229aa584d3a7ed953e7adc7
+COPY --chmod=0555 helm /usr/local/bin/helm
+
+USER 65532:65532

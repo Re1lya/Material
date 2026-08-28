@@ -123,3 +123,35 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: backstage-artifact-publish-read-only
+---
+# Read-only discovery of the platform-managed K12 release. Run launch goes to
+# the allow-listed Dagster GraphQL endpoint and never writes Kubernetes.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-k12-data-pipeline-read-only
+  namespace: k12
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["ray.io"]
+    resources: ["rayclusters"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-k12-data-pipeline-read-only
+  namespace: k12
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-k12-data-pipeline-read-only

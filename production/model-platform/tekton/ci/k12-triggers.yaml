@@ -1,0 +1,123 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: k12-data-pipeline-push
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: git-revision
+      value: $(body.after)
+    - name: event-kind
+      value: push
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: k12-data-pipeline-pull-request
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: git-revision
+      value: $(body.pull_request.head.sha)
+    - name: event-kind
+      value: pull-request
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: k12-data-pipeline-validation
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: git-revision
+    - name: event-kind
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: k12-data-pipeline-validation-
+        namespace: model-platform-ci
+        labels:
+          app.kubernetes.io/part-of: model-platform
+          app.kubernetes.io/component: k12-data-pipeline-ci
+          ci.model-platform.io/source: gitea
+          ci.model-platform.io/event: $(tt.params.event-kind)
+      spec:
+        pipelineRef:
+          name: validate-k12-data-pipeline
+        params:
+          - name: repository-url
+            value: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/kcc.git
+          - name: revision
+            value: $(tt.params.git-revision)
+        taskRunTemplate:
+          serviceAccountName: model-platform-ci-runner
+          podTemplate:
+            imagePullSecrets:
+              - name: artifact-keeper-image-pull
+            nodeSelector:
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: server-00
+            securityContext:
+              fsGroup: 65532
+              fsGroupChangePolicy: OnRootMismatch
+              runAsNonRoot: true
+              seccompProfile: {type: RuntimeDefault}
+        timeouts:
+          pipeline: 10m
+        workspaces:
+          - name: source
+            emptyDir: {sizeLimit: 768Mi}
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: k12-data-pipeline
+  namespace: model-platform-ci
+spec:
+  serviceAccountName: model-platform-ci-listener
+  resources:
+    kubernetesResource:
+      spec:
+        template:
+          spec:
+            nodeSelector:
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: server-00
+            securityContext:
+              runAsNonRoot: true
+              seccompProfile: {type: RuntimeDefault}
+            containers:
+              - resources:
+                  requests: {cpu: 100m, memory: 128Mi}
+                  limits: {cpu: 500m, memory: 512Mi}
+  triggers:
+    - name: validate-main-push
+      interceptors:
+        - ref: {name: cel}
+          params:
+            - name: filter
+              value: >-
+                header.match('X-Gitea-Event', 'push') &&
+                body.ref == 'refs/heads/main' &&
+                body.repository.full_name == 'gitadmin/kcc'
+      bindings:
+        - ref: k12-data-pipeline-push
+      template:
+        ref: k12-data-pipeline-validation
+    - name: validate-pull-request
+      interceptors:
+        - ref: {name: cel}
+          params:
+            - name: filter
+              value: >-
+                (header.match('X-Gitea-Event', 'pull_request') ||
+                 header.match('X-Gitea-Event', 'pull_request_sync')) &&
+                body.action in ['opened', 'reopened', 'synchronized'] &&
+                body.repository.full_name == 'gitadmin/kcc' &&
+                body.pull_request.base.ref == 'main' &&
+                body.pull_request.head.repo.full_name == 'gitadmin/kcc'
+      bindings:
+        - ref: k12-data-pipeline-pull-request
+      template:
+        ref: k12-data-pipeline-validation

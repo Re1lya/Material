@@ -66,8 +66,12 @@ metadata:
   namespace: model-platform-ci
 spec:
   podSelector:
-    matchLabels:
-      eventlistener: model-platform-config
+    matchExpressions:
+      - key: eventlistener
+        operator: In
+        values:
+          - model-platform-config
+          - k12-data-pipeline
   policyTypes:
     - Ingress
   ingress:
@@ -95,6 +99,7 @@ spec:
         values:
           - model-platform-config
           - model-platform-github
+          - k12-data-pipeline
   policyTypes:
     - Egress
   egress:

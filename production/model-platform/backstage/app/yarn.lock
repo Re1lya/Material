@@ -9992,7 +9992,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/express@npm:^4.17.21, @types/express@npm:^4.17.25, @types/express@npm:^4.17.6":
+"@types/express@npm:^4, @types/express@npm:^4.17.21, @types/express@npm:^4.17.25, @types/express@npm:^4.17.6":
   version: 4.17.25
   resolution: "@types/express@npm:4.17.25"
   dependencies:
@@ -12160,7 +12160,9 @@ __metadata:
     "@backstage/plugin-search-backend-module-pg": "npm:^0.5.57"
     "@backstage/plugin-search-backend-node": "npm:^1.4.6"
     "@backstage/plugin-user-settings-backend": "npm:^0.4.5"
+    "@types/express": "npm:^4"
     app: "link:../app"
+    express: "npm:^4.22.2"
     express-promise-router: "npm:^4.1.0"
     node-gyp: "npm:^10.0.0"
     pg: "npm:^8.11.3"
@@ -15992,7 +15994,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"express@npm:^4.14.0, express@npm:^4.22.0, express@npm:^4.22.1":
+"express@npm:^4.14.0, express@npm:^4.22.0, express@npm:^4.22.1, express@npm:^4.22.2":
   version: 4.22.2
   resolution: "express@npm:4.22.2"
   dependencies:
