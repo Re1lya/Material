@@ -17,6 +17,8 @@ spec:
       value: push
     - name: clone-credentials-secret
       value: gitea-ci-reader
+    - name: pull-request-number
+      value: "0"
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
@@ -37,6 +39,8 @@ spec:
       value: pull-request
     - name: clone-credentials-secret
       value: gitea-ci-reader
+    - name: pull-request-number
+      value: $(body.pull_request.number)
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
@@ -57,6 +61,8 @@ spec:
       value: push
     - name: clone-credentials-secret
       value: github-public-clone
+    - name: pull-request-number
+      value: "0"
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerBinding
@@ -77,6 +83,8 @@ spec:
       value: pull-request
     - name: clone-credentials-secret
       value: github-public-clone
+    - name: pull-request-number
+      value: "0"
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: TriggerTemplate
@@ -91,6 +99,7 @@ spec:
     - name: source-root
     - name: event-kind
     - name: clone-credentials-secret
+    - name: pull-request-number
   resourcetemplates:
     - apiVersion: tekton.dev/v1
       kind: PipelineRun
@@ -116,6 +125,10 @@ spec:
             value: $(tt.params.source-root)
           - name: clone-credentials-secret
             value: $(tt.params.clone-credentials-secret)
+          - name: event-kind
+            value: $(tt.params.event-kind)
+          - name: pull-request-number
+            value: $(tt.params.pull-request-number)
         taskRunTemplate:
           serviceAccountName: model-platform-ci-runner
           podTemplate:

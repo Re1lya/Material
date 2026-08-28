@@ -19,6 +19,12 @@ spec:
       type: string
     - name: clone-credentials-secret
       type: string
+    - name: event-kind
+      type: string
+      default: manual
+    - name: pull-request-number
+      type: string
+      default: "0"
   workspaces:
     - name: source
   tasks:
@@ -224,6 +230,180 @@ spec:
                 --requests-dir ./environments/production/modeldeployments \
                 --catalog-dir ./environments/production/catalog \
                 --schema ./ci/schema/modeldeployment.schema.json
+            computeResources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
+    - name: auto-merge-stopped-request
+      runAfter:
+        - clone-and-validate
+      when:
+        - input: $(params.source-provider)
+          operator: in
+          values:
+            - gitea
+        - input: $(params.event-kind)
+          operator: in
+          values:
+            - pull-request
+      params:
+        - name: revision
+          value: $(params.revision)
+        - name: pull-request-number
+          value: $(params.pull-request-number)
+        - name: source-root
+          value: $(params.source-root)
+      workspaces:
+        - name: source
+          workspace: source
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+          - name: pull-request-number
+            type: string
+          - name: source-root
+            type: string
+        workspaces:
+          - name: source
+        steps:
+          - name: merge
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            workingDir: $(workspaces.source.path)/repository
+            env:
+              - name: REVISION
+                value: $(params.revision)
+              - name: PULL_REQUEST_NUMBER
+                value: $(params.pull-request-number)
+              - name: SOURCE_ROOT
+                value: $(params.source-root)
+              - name: GITEA_MERGE_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-model-deployment-merger
+                    key: token
+            script: |
+              #!/usr/bin/env python3
+              import json
+              import os
+              from pathlib import Path
+              import re
+              import urllib.error
+              import urllib.request
+
+              from ruamel.yaml import YAML
+
+              api = "http://gitea-http.gitea.svc.cluster.local:3000/api/v1"
+              repository = "/repos/gitadmin/model-platform-config"
+              revision = os.environ["REVISION"]
+              pull_number = os.environ["PULL_REQUEST_NUMBER"]
+              token = os.environ["GITEA_MERGE_TOKEN"]
+
+              if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
+                  raise SystemExit("refusing to merge a malformed revision")
+              if not pull_number.isdigit() or int(pull_number) < 1:
+                  raise SystemExit("pull-request-number must be a positive integer")
+              if len(token) < 20:
+                  raise SystemExit("merge token is missing or too short")
+
+              def call(method, path, body=None, accepted=(200,)):
+                  data = None if body is None else json.dumps(body).encode("utf-8")
+                  request = urllib.request.Request(
+                      api + path,
+                      data=data,
+                      method=method,
+                      headers={
+                          "Accept": "application/json",
+                          "Authorization": f"token {token}",
+                          **({} if data is None else {"Content-Type": "application/json"}),
+                      },
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          raw = response.read()
+                          status = response.status
+                  except urllib.error.HTTPError as error:
+                      raise SystemExit(
+                          f"Gitea {method} {path} returned HTTP {error.code}"
+                      ) from None
+                  if status not in accepted:
+                      raise SystemExit(f"Gitea {method} {path} returned HTTP {status}")
+                  return None if not raw else json.loads(raw)
+
+              pull = call("GET", f"{repository}/pulls/{pull_number}")
+              if pull.get("state") != "open":
+                  raise SystemExit("pull request is not open")
+              if pull.get("base", {}).get("ref") != "main":
+                  raise SystemExit("pull request base must be main")
+              if pull.get("head", {}).get("sha") != revision:
+                  raise SystemExit("pull request head differs from the validated revision")
+              if pull.get("head", {}).get("repo", {}).get("full_name") != "gitadmin/model-platform-config":
+                  raise SystemExit("pull request head repository is outside the trust boundary")
+              if not str(pull.get("head", {}).get("ref", "")).startswith(
+                  "backstage/modeldeployment-"
+              ):
+                  raise SystemExit("pull request branch was not generated by Backstage")
+
+              files = call("GET", f"{repository}/pulls/{pull_number}/files")
+              if len(files) != 1:
+                  raise SystemExit("auto-merge requires exactly one changed file")
+              changed = files[0]
+              filename = changed.get("filename", "")
+              if changed.get("status") != "added":
+                  raise SystemExit("auto-merge only accepts a newly added request file")
+              if not re.fullmatch(
+                  r"environments/production/modeldeployments/[a-z0-9](?:[-a-z0-9]*[a-z0-9])?\.yaml",
+                  filename,
+              ):
+                  raise SystemExit("changed path is outside the ModelDeployment request directory")
+
+              source_root = Path(os.environ["SOURCE_ROOT"])
+              request_file = source_root / filename
+              document = YAML(typ="safe").load(request_file.read_text(encoding="utf-8"))
+              spec = document.get("spec", {})
+              annotations = document.get("metadata", {}).get("annotations", {})
+              runtime = spec.get("runtime", {})
+              if spec.get("desiredState") != "Stopped" or runtime.get("workerReplicas") != 0:
+                  raise SystemExit("auto-merge only accepts Stopped requests with workerReplicas=0")
+              if annotations.get("platform.example.com/request-mode") != "declarative-stopped":
+                  raise SystemExit("request-mode must be declarative-stopped")
+              if any(
+                  annotations.get(key) != "0"
+                  for key in (
+                      "platform.example.com/effective-tensor-parallel-size",
+                      "platform.example.com/effective-replicas",
+                      "platform.example.com/effective-npu-per-replica",
+                  )
+              ):
+                  raise SystemExit("effective runtime annotations must remain zero")
+              if "crossplane.io/paused" in annotations:
+                  raise SystemExit("auto-merge requests must not carry the pause annotation")
+
+              call(
+                  "POST",
+                  f"{repository}/pulls/{pull_number}/merge",
+                  {
+                      "Do": "merge",
+                      "head_commit_id": revision,
+                      "delete_branch_after_merge": True,
+                      "force_merge": False,
+                  },
+              )
+              print(f"auto_merged_pull_request={pull_number}")
             computeResources:
               requests:
                 cpu: 100m
