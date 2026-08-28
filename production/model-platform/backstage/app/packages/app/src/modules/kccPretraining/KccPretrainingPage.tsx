@@ -23,7 +23,14 @@ import { makeStyles } from '@material-ui/core/styles';
 
 const useStyles = makeStyles(theme => ({
   content: {
-    paddingBottom: theme.spacing(4),
+    boxSizing: 'border-box',
+    margin: 0,
+    maxWidth: 'none',
+    padding: theme.spacing(3, 5, 6, 3),
+    width: '100%',
+    [theme.breakpoints.down('sm')]: {
+      padding: theme.spacing(2, 2, 5),
+    },
   },
   notice: {
     borderLeft: `4px solid ${theme.palette.info.main}`,
@@ -81,15 +88,15 @@ export const KccPretrainingPage = () => {
 
   return (
     <Page themeId="tool">
-      <ContentHeader title="KCC Pretraining">
-        <Chip
-          color="secondary"
-          icon={<LockIcon />}
-          label="Release pipeline · read-only"
-          variant="outlined"
-        />
-      </ContentHeader>
       <Content className={classes.content}>
+        <ContentHeader title="KCC Pretraining">
+          <Chip
+            color="secondary"
+            icon={<LockIcon />}
+            label="Release pipeline · read-only"
+            variant="outlined"
+          />
+        </ContentHeader>
         <Paper className={classes.notice} elevation={0} role="note">
           <Typography variant="body2">
             当前页面只展示模型发布契约，不启动预训练、量化、Ray、Kubernetes 或

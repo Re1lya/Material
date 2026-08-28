@@ -81,17 +81,86 @@ GitOps 清单。
 
 ## Agent release bot 申请状态（2026-08-27）
 
-用户要求为后续 Agent 另建 Gitea 与 Artifact Keeper 的 release 身份。该身份当前
-**尚未创建**，不得把现有的 `model-platform-writer` 或
-`svc-k12-data-pipeline-publisher` 擅自扩权、复制凭据或改成通用账号。
+用户在 2026-08-27 明确批准了用于 KCC 完整集成的发布身份和目标仓库。本次已创建
+Gitea 与 Artifact Keeper 独立身份，没有复用或扩权既有
+`model-platform-writer` 和 `svc-k12-data-pipeline-publisher`。
 
-建议权限边界：
+### Gitea `release-bot`
 
-- Gitea：仅对明确列出的仓库创建分支、推送提交和创建 PR；不能直接写受保护的
-  `main`、不能 merge、不能管理仓库或用户。
-- Artifact Keeper：初始仅对 Docker `container-images` 授予 `read,write`；不授予
-  `delete`、`admin` 或通配仓库。
-- 凭据必须进入受控的 root-only 文件或 namespace-local Secret；Git 中只记录账号名、
-  权限、引用位置、创建/轮换日期和验证结论。
+| 项目 | 当前值 |
+| --- | --- |
+| 账号 | `release-bot` |
+| 账号类型 | restricted、active、非全局管理员 |
+| `gitadmin/kcc` | KCC monorepo；Repository Administrator |
+| `gitadmin/model-platform-config` | Repository Administrator |
+| 其他 Gitea 仓库 | 无显式权限 |
+| Token scope | `write:repository` |
+| 当前 Token 名称 | `server-00-kcc-release-bot-r3` |
+| 受控用户名路径 | `/etc/model-platform/release-auth/kcc-release-bot/gitea-username` |
+| 受控 Token 路径 | `/etc/model-platform/release-auth/kcc-release-bot/gitea-token` |
 
-开始创建前需由用户确认 Gitea 管理员身份与目标仓库清单。不得猜测或探测管理员密码。
+两个凭据文件均为 `root:root` / `0600`。Token 已验证可认证访问
+`gitadmin/kcc`；仓库权限经管理 API 回读为两个目标仓库 `admin`。
+`release-bot` 不是 Gitea 全局管理员，也没有 Kubernetes、Argo CD 或
+Crossplane 身份。仓库 Administrator 是用户为后续 Release、Webhook、保护分支和
+Tekton 设置明确批准的仓库级权限。
+
+2026-08-27，因前一枚 `server-00-kcc-release-bot` 曾进入会话日志，已在受控窗口
+轮换为 `server-00-kcc-release-bot-r3`。新 Token 对两个批准仓库的访问验证通过；
+受控文件恢复为 `root:root` / `0600`；旧 Token 和未采用的中间 Token 已撤销，旧
+Token 认证复核返回 HTTP 401。
+
+### 现有读取身份调整
+
+- `ci-reader`：`gitadmin/kcc` 为 `read`；`gitadmin/model-platform-config` 继续为
+  `read`。
+- `argocd-reader`：仅保留 `gitadmin/model-platform-config` 的 `read`；对
+  `gitadmin/kcc` 无权限。
+
+#### Argo CD repository reader 轮换（2026-08-27）
+
+因项目隔离 repository Secret 的 `password` 字段曾以 base64 形式进入会话日志，当前
+使用的 `argocd-reader-20260819` 已轮换为 `argocd-reader-20260827-r2`，scope 仍为
+`read:repository`。以下三个 Secret 已在内存中一致更新，未打印或写入 Git：
+
+- `argocd/k12-data-pipeline-repository`；
+- `argocd/model-platform-config-repository`；
+- `argocd/model-platform-config-repository-control-plane`。
+
+轮换后 `k12-data-pipeline`、`model-platform-bootstrap`、
+`model-platform-deployment-requests` 均保持 Synced/Healthy，旧
+`argocd-reader-20260819` 已撤销且认证复核返回 HTTP 401。历史
+`argocd-production-read` 未被当前三个 Secret 引用，但可能存在仓库外消费者，因此本次
+未擅自撤销。
+
+### Artifact Keeper KCC 镜像发布身份
+
+| 项目 | 当前值 |
+| --- | --- |
+| Service Account | `svc-kcc-release-bot` |
+| Token 名称 | `server-00-kcc-release-image-publisher` |
+| 权限 | `read,write` |
+| 仓库选择器 | Docker format + `container-images` |
+| 允许的 KCC 命名约定 | `110.120.0.3:30670/container-images/platform/kcc-*` |
+| 受控 Docker config | `/etc/model-platform/registry-auth/kcc-release-bot/config.json` |
+
+Docker config 为 `root:root` / `0600`，已成功完成认证登录和一次已有镜像拉取。
+Token 无 `delete`、`admin` 或非 Docker 仓库权限。Artifact Keeper 1.6.4 的当前
+授权粒度是 repository 而不是 repository 内部的镜像路径，因此
+`platform/kcc-*` 通过发布规则和代码评审约束，不是 Token 层的子路径 ACL。
+首个 KCC 镜像发布应另行记录 push、digest、architecture 和 pull 验证，不应
+把认证凭据复制到仓库、构建上下文或共享目录。
+
+### K12 CPU MinIO runtime identity（2026-08-28）
+
+`k12/k12-pipeline-s3` 保存独立非 root identity 的 `access-key` / `secret-key`。绑定策略
+`k12-cpu-runtime`：
+
+- `k12-mineru-output`：List/Get；
+- `k12-cleaned-corpus`：List/Get；
+- PutObject：仅 `cpu-smoke/*` 和 `stage1/platform-smoke/*`；
+- DeleteObject：仅上述两个 prefix 中名称匹配 `*.tmp-*` 的原子写临时对象。
+
+K12 的 `atomic_write_bytes` 需要删除 CopyObject 完成后的临时 key，因此“完全没有 Delete”
+会使所有正式写入失败。该例外不允许删除 `_SUCCESS.json`、summary、正式产物或历史数据；
+对普通 `cpu-smoke/` key 的 DeleteObject 复核返回 HTTP 403。

@@ -1,0 +1,51 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: k12-dagster-local
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: false
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: k12-dagster-home-server-00
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: k12-data-pipeline-state
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: k12-dagster-local
+  volumeMode: Filesystem
+  local:
+    path: /mnt/data/k12-data-pipeline/dagster-home
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - server-00
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: k12-dagster-home
+  namespace: k12
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: k12-data-pipeline-state
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: k12-dagster-local
+  volumeMode: Filesystem
