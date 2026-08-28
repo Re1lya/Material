@@ -1,0 +1,103 @@
+# Deliberately minimal A3 scheduling probe.  It loads no model and exposes no
+# service: the worker only asks Volcano/MindX for the two listed physical NPUs.
+#
+# The head is CPU-only.  The skip annotation is an existing site convention,
+# verified in the prior successful pretraining Ray manifests.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: model-serving-diagnostics
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    platform.example.com/purpose: volcano-ray-npu-probe
+---
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: volcano-ray-tp2-skip-head
+  namespace: model-serving-diagnostics
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    platform.example.com/purpose: volcano-ray-npu-probe
+spec:
+  rayVersion: "2.48.0"
+  enableInTreeAutoscaling: false
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      dashboard-host: "0.0.0.0"
+      num-cpus: "1"
+    template:
+      metadata:
+        annotations:
+          # Do not create a fictitious NPU request for the head.  This tells
+          # the Ascend plugin to skip the CPU-only pod instead.
+          huawei.com/skip-ascend-plugin: enabled
+        labels:
+          app.kubernetes.io/component: ray-head
+      spec:
+        schedulerName: default-scheduler
+        nodeSelector:
+          # MindX/Volcano uses this label to select the A3 16-card topology,
+          # rather than falling back to the generic 8-card device policy.
+          accelerator-type: module-a3-16
+          kubernetes.io/arch: arm64
+          kubernetes.io/hostname: a3-server-00
+          node.kubernetes.io/npu.chip.name: Ascend910
+        containers:
+          - name: ray-head
+            image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942
+            imagePullPolicy: IfNotPresent
+            resources:
+              requests:
+                cpu: "1"
+                memory: 2Gi
+              limits:
+                cpu: "1"
+                memory: 2Gi
+  workerGroupSpecs:
+    - groupName: tp2-probe
+      replicas: 1
+      minReplicas: 1
+      maxReplicas: 1
+      rayStartParams:
+        num-gpus: "2"
+        resources: "'{\"NPU\":2}'"
+      template:
+        metadata:
+          annotations:
+            # The probe intentionally fixes only the known-free rear pair.
+            huawei.com/Ascend910: Ascend910-8,Ascend910-9
+          labels:
+            app.kubernetes.io/component: ray-worker
+        spec:
+          schedulerName: default-scheduler
+          runtimeClassName: ascend
+          nodeSelector:
+            accelerator-type: module-a3-16
+            kubernetes.io/arch: arm64
+            kubernetes.io/hostname: a3-server-00
+            node.kubernetes.io/npu.chip.name: Ascend910
+          terminationGracePeriodSeconds: 10
+          containers:
+            - name: ray-worker
+              image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests:
+                  cpu: "2"
+                  memory: 4Gi
+                  huawei.com/Ascend910: "2"
+                limits:
+                  cpu: "2"
+                  memory: 4Gi
+                  huawei.com/Ascend910: "2"
+              volumeMounts:
+                - name: ascend-driver
+                  mountPath: /usr/local/Ascend/driver
+                  readOnly: true
+          volumes:
+            - name: ascend-driver
+              hostPath:
+                path: /usr/local/Ascend/driver
+                type: Directory

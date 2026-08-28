@@ -355,6 +355,11 @@ spec:
                             dashboard-host: "0.0.0.0"
                           template:
                             metadata:
+                              # The Ray head is CPU-only.  MindX's Ascend pod
+                              # annotation plugin must not treat it as an NPU
+                              # member of the Volcano gang.
+                              annotations:
+                                huawei.com/skip-ascend-plugin: enabled
                               labels:
                                 app.kubernetes.io/part-of: model-platform
                                 app.kubernetes.io/component: rayservice
@@ -363,6 +368,7 @@ spec:
                               imagePullSecrets:
                                 - name: artifact-keeper-image-pull
                               nodeSelector:
+                                accelerator-type: module-a3-16
                                 kubernetes.io/arch: arm64
                                 kubernetes.io/hostname: a3-server-00
                               initContainers:

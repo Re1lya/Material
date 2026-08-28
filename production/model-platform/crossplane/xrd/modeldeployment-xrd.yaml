@@ -73,6 +73,10 @@ spec:
                         - kubernetes.io/hostname
                         - node.kubernetes.io/npu.chip.name
                       properties:
+                        accelerator-type:
+                          type: string
+                          enum:
+                            - module-a3-16
                         kubernetes.io/arch:
                           type: string
                           const: arm64

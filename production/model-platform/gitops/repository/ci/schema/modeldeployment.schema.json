@@ -49,6 +49,10 @@
               "type": "string",
               "pattern": "^(?:[1-9]|1[0-6])$"
             },
+            "platform.example.com/requested-data-parallel-size": {
+              "type": "string",
+              "pattern": "^[1-4]$"
+            },
             "platform.example.com/requested-pipeline-parallel-size": {
               "type": "string",
               "pattern": "^[1-4]$"
@@ -56,6 +60,29 @@
             "platform.example.com/requested-replicas": {
               "type": "string",
               "pattern": "^[0-4]$"
+            },
+            "platform.example.com/requested-max-model-len": {
+              "type": "string",
+              "pattern": "^(8192|16384|32768)$"
+            },
+            "platform.example.com/requested-max-num-seqs": {
+              "type": "string",
+              "pattern": "^(16|32|64)$"
+            },
+            "platform.example.com/requested-max-num-batched-tokens": {
+              "type": "string",
+              "pattern": "^(2048|4096|8192)$"
+            },
+            "platform.example.com/requested-gpu-memory-utilization": {
+              "type": "string",
+              "pattern": "^0\\.(8|85|9)$"
+            },
+            "platform.example.com/requested-prefix-caching": {
+              "enum": ["true", "false"]
+            },
+            "platform.example.com/requested-mtp-tokens": {
+              "type": "string",
+              "pattern": "^(0|1|3)$"
             },
             "platform.example.com/requested-priority": {
               "enum": ["low", "normal", "high"]
@@ -143,6 +170,7 @@
                 "node.kubernetes.io/npu.chip.name"
               ],
               "properties": {
+                "accelerator-type": { "enum": ["module-a3-16"] },
                 "kubernetes.io/arch": { "const": "arm64" },
                 "kubernetes.io/hostname": {
                   "enum": ["gpu-server-00", "a3-server-00"]

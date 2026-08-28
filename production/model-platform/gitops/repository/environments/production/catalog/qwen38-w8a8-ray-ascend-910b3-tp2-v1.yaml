@@ -73,6 +73,7 @@ spec:
     sharedMemory: 64Gi
   placement:
     nodeSelector:
+      accelerator-type: module-a3-16
       kubernetes.io/arch: arm64
       kubernetes.io/hostname: a3-server-00
       node.kubernetes.io/npu.chip.name: Ascend910
