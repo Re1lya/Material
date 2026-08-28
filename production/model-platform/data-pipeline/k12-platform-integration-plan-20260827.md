@@ -1,9 +1,15 @@
 # K12 数据管线平台工程化集成方案（修订版）
 
-**状态：方案已按“复用 K12 原管线、完成平台工程化”修订；尚未实施生产变更。**
+> **文档类型：目标方案与验收合同。**
+>
+> 2026-08-28 实施状态：CPU 阶段已按本方案完成 Tekton、Artifact Keeper、
+> GitOps、Dagster/Ray CPU、状态迁移、Backstage 受限启动和旧服务切换。
+> NPU 阶段未因 CPU 集成自动启用。当前事实见 `../CURRENT-STATE-20260828.md`，
+> 实施证据见 `k12-cpu-backstage-cutover-record-20260828.md`。
 
-**业务源码基线：** `zzzYesYes/kcc` PR #2，head commit
-`2fd605cfe572470f582c4ef9575a5382dd6f9ff2`。
+**原始业务源码基线：** `zzzYesYes/kcc` PR #2，head commit
+`2fd605cfe572470f582c4ef9575a5382dd6f9ff2`。生产 KCC 后续已通过受审 PR 演进；
+精确生产 commit 以对应发布记录为准。
 
 ## 1. 决策
 

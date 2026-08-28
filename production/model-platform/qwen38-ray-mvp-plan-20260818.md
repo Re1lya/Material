@@ -1,5 +1,12 @@
 # Qwen3.8-27B（ModelScope）+ Ray 可复用生产首发方案
 
+> **文档状态：已执行的历史首发方案。**
+>
+> 本文用于解释当时的首发决策和门禁，不再作为平台目标架构或当前发布步骤。
+> 实际执行和收敛证据见 `qwen38-ray-tp2-execution-20260819.md`、
+> `qwen38-ray-runtime-release-20260820.md` 和 `CURRENT-STATE-20260828.md`。
+> 当前通用目标见 `TARGET-ARCHITECTURE.md`。
+
 > TP=2/DP=1 的当前首发参数、Docker→Ray 映射、chip 语义和 32K 容量测试以
 > `qwen38-ray-tp2-deployment-and-capacity-plan-20260819.md` 及
 > `qwen38-w8a8-ray-ascend-910b3-tp2-v1.yaml` 为准；本文保留基础设施与

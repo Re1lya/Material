@@ -1,9 +1,10 @@
 # Model platform agent handoff
 
 This file is the mandatory starting point for any Agent continuing work in
-this repository. The current production snapshot is dated 2026-08-27; read
-`production/model-platform/HANDOFF-20260827.md` first, then use this file for
-the rules for safely continuing the deployment.
+this repository. The current production snapshot is dated 2026-08-28. Read
+`production/model-platform/CURRENT-STATE-20260828.md` and then
+`production/model-platform/HANDOFF-20260827.md`; use this file for the rules
+for safely continuing the deployment.
 
 ## Mandatory operating rules
 

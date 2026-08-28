@@ -1,6 +1,12 @@
 # 模型自动化集成平台生产接入方案
 
-> 文档状态：第一版方案基线
+> **文档状态：历史 v1 方案基线，已被
+> `production/model-platform/TARGET-ARCHITECTURE.md` 取代。**
+>
+> 本文保留早期 Qwen3.6、POC 迁移和第一版实施思路，不再用于决定当前推理架构、
+> 节点、卡号、Gateway 边界或训练责任。当前生产事实见
+> `production/model-platform/CURRENT-STATE-20260828.md`，实施顺序见
+> `production/model-platform/ROADMAP.md`。
 >
 > 确认日期：2026-08-10
 >

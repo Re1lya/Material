@@ -1,5 +1,12 @@
 # Artifact Keeper 集群独立部署与平台接入预留方案
 
+> 文档类型：Artifact Keeper 组件长期目标方案。
+>
+> 本文的多副本、高可用数据库、跨节点存储、独立备份和 TLS 是目标态，
+> 不代表当前已实施。当前单副本、local PV、容量和网络事实见
+> `production/model-platform/CURRENT-STATE-20260828.md`，实施优先级见
+> `production/model-platform/ROADMAP.md`。
+
 ## 1. 执行摘要
 
 本方案只规划 Artifact Keeper：先在服务器上的生产 Kubernetes 集群中独立部署，再让 Backstage、Tekton、模型训练、Crossplane 和模型服务逐步接入。现有 POC 的整体交付链路继续保留，不在本方案中重构其他平台组件，也不迁移 POC 数据。

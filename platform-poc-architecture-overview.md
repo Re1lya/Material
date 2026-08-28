@@ -1,7 +1,11 @@
 # 平台 POC 架构总览
 
-> 更新日期：2026-08-05
-> 本文说明当前 POC 由什么组成、每一层负责什么、各组件如何协作，以及迁移到生产环境时需要补齐什么。
+> **文档状态：历史 POC 资料。**
+>
+> 更新日期：2026-08-05。本文保留 Kind、provider-helm、集群内 Helm Repository、
+> AppService/ModelService 和 Envoy Gateway 等早期 POC 设计，不代表当前生产或目标架构。
+> 当前目标架构见 `production/model-platform/TARGET-ARCHITECTURE.md`，当前生产状态见
+> `production/model-platform/CURRENT-STATE-20260828.md`。
 
 ## 1. 一句话理解
 

@@ -1,7 +1,11 @@
 # Model Deployment 全自动化目标与分阶段计划
 
-> 状态：设计阶段；截至 2026-08-25，生产仍保持“停止态请求 + 人工 Git 合并 +
-> Argo CD 手工 Sync”。本计划不改变任何当前生产策略。
+> 文档类型：推理部署自动化组件方案。
+>
+> 本文保留分级自动化、审批、Merge Bot 和 scoped Argo sync 的设计细节，
+> 必须与 `../TARGET-ARCHITECTURE.md` 和 `../ROADMAP.md` 一起使用。
+> 当前生产仍为停止态请求、人工合并和手工 Argo CD Sync；实时事实见
+> `../CURRENT-STATE-20260828.md`。
 
 ## 目标
 

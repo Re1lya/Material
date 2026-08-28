@@ -1,8 +1,14 @@
 # Qwen3.8-27B W8A8：Ray TP2/DP1 可复用部署与容量验证方案
 
-状态：已完成 Profile、XRD、Composition、Tekton allow-list 和 Backstage 目录
-契约的本地修改；尚未同步 Argo，也没有创建 PVC、缓存 Job、RayService、Ray
-worker 或任何 NPU 负载。下面的“执行阶段”只有在用户确认后才开始。
+> **文档状态：已执行的历史 TP2 发布/容量验证计划。**
+>
+> 文中的“尚未同步”、目标节点和执行状态是 2026-08-19 当时的历史语境。
+> 实际 TP2 执行、A3 runtime 修复、最小推理成功和最终停止收敛见
+> `qwen38-ray-tp2-execution-20260819.md`。通用目标见 `TARGET-ARCHITECTURE.md`。
+>
+> 原状态：已完成 Profile、XRD、Composition、Tekton allow-list 和 Backstage 目录
+> 契约的本地修改；尚未同步 Argo，也没有创建 PVC、缓存 Job、RayService、Ray
+> worker 或任何 NPU 负载。
 
 ## 1. 先确认 chip 的含义
 
