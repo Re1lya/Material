@@ -24,7 +24,7 @@ Material 中的平台文档分为三类：
 | K3s | 10 个节点 Ready，`server-00` 为唯一 control-plane | 可用，但仍存在单控制面维护窗口风险 |
 | Artifact Keeper | backend 1.6.4、Web、PostgreSQL Ready | 可用；`container-images` 已超配额 |
 | Gitea | 应用与 PostgreSQL Ready | 生产配置事实源可用 |
-| Argo CD | K12/bootstrap/model-deployment 三个 Application Synced/Healthy | 仍为人工 Sync，prune/self-heal 关闭 |
+| Argo CD | 四个 Application Synced/Healthy | `model-platform-deployment-requests` 已开启受限 automated sync（prune/self-heal/allowEmpty=false）；其余仍为人工 Sync |
 | Tekton | Operator、Pipelines、Triggers、Pruner Ready | K12 专用 CI 正常；通用模型配置 CI 仍失败 |
 | Crossplane | Core、Function、provider-kubernetes Ready | Qwen38 XR 已收敛为 Stopped、Synced=True、Ready=True，版本化缓存 Job 已完成 |
 | Backstage | 0.1.5 stopped-contract 镜像已发布，生产滚动待执行 | 修复 Stopped PR 的 `spec.crossplane` 和 `cache.revision` 生成合同 |
@@ -66,13 +66,12 @@ Material 中的平台文档分为三类：
 
 ## 5. 推理发布当前边界
 
-当前 Git、Tekton、Argo CD、Crossplane 和版本化缓存 Job 已在 Stopped 状态收敛。
-受限 Stopped auto-merge Task 已发布到生产 Pipeline（generation 11），并在
-Gitea PR #11 上完成首次全自动合并验收（见
-`tekton/model-deployment-auto-merge-20260828.md`）。Argo CD
-`model-platform-deployment-requests` 仍为人工 Sync，automated sync、prune 和
-self-heal 未启用；下一阶段是 scoped auto-sync 与 Stopped 全自动验收。在这些
-门禁完成前不启用 NPU worker。
+受限 Stopped auto-merge 与 scoped Argo automated sync 均已在生产验收通过：
+PR #11 全自动合并，main `0021e864…` 经自动同步物化为
+`qwen38-stopped-auto-smoke`（control-plane-only、Stopped、仅状态 ConfigMap、
+零 NPU）。`prune`/`selfHeal`/`allowEmpty` 保持 false。下一阶段是 Running
+请求合同、机器门禁与受控 NPU 验收；在此之前不启用任何 NPU worker。
+详见 `gitops/argo-auto-sync-and-stopped-acceptance-20260828.md`。
 
 ## 6. 正在进行和已知异常
 
@@ -89,9 +88,10 @@ Synced/Healthy；automated sync、prune 和 self-heal 仍未启用。
 发布，PR #11 经 close/reopen 重触发后校验、自动合并、commit status 与
 合并后 main PipelineRun（`2zqdm`、`67k8q`）全部成功，详见
 `tekton/model-deployment-auto-merge-20260828.md`。当前 Gitea main 为
-`0021e86439d43ef93b0f79587dfaeb8b57b51a44`，推理 Application 因新增
-`qwen38-stopped-auto-smoke` 请求处于 OutOfSync/Healthy，等待 scoped
-auto-sync 阶段处理。
+`0021e86439d43ef93b0f79587dfaeb8b57b51a44`。scoped automated sync 开启后
+推理 Application 已恢复 Synced/Healthy，`qwen38-stopped-auto-smoke` XR 为
+Stopped/Synced=True/Ready=True 且零 NPU，详见
+`gitops/argo-auto-sync-and-stopped-acceptance-20260828.md`。
 
 ### 6.2 推理组合资源
 
