@@ -24,14 +24,14 @@ Material 中的平台文档分为三类：
 | K3s | 10 个节点 Ready，`server-00` 为唯一 control-plane | 可用，但仍存在单控制面维护窗口风险 |
 | Artifact Keeper | backend 1.6.4、Web、PostgreSQL Ready | 可用；`container-images` 已超配额 |
 | Gitea | 应用与 PostgreSQL Ready | 生产配置事实源可用 |
-| Argo CD | 四个 Application Synced/Healthy | `model-platform-deployment-requests` 已开启受限 automated sync（prune/self-heal/allowEmpty=false）；其余仍为人工 Sync |
-| Tekton | Operator、Pipelines、Triggers、Pruner Ready | K12 专用 CI 正常；通用模型配置 CI 仍失败 |
+| Argo CD | K12、bootstrap、ModelDeployment Application 为 Synced/Healthy；training Application 为 OutOfSync/Healthy | `model-platform-deployment-requests` 已开启受限 automated sync（prune/self-heal/allowEmpty=false）；training 仍有 orphaned resources 待审查 |
+| Tekton | Operator、Pipelines、Triggers、Pruner Ready | 通用模型配置 CI、Running capacity gate 和自动合并已通过生产验收 |
 | Crossplane | Core、Function、provider-kubernetes Ready | Qwen38 XR 已收敛为 Stopped、Synced=True、Ready=True，版本化缓存 Job 已完成 |
-| Backstage | 0.1.5 stopped-contract 镜像已发布，生产滚动待执行 | 修复 Stopped PR 的 `spec.crossplane` 和 `cache.revision` 生成合同 |
-| K12 CPU 数据管线 | 新 Dagster 1/1，Ray CPU head/worker Ready | CPU 平台集成已完成 |
+| Backstage | `kcc-backstage:0.5.9-kcc-merge-ca2b700` 1/1 Ready；训练、推理、K12 路由均 HTTP 200 | 当前 image 在 Artifact Keeper；源码 commit provenance 缺口见 `TRAINING-BACKSTAGE-PROVENANCE-20260831.md` |
+| K12 CPU 数据管线 | Dagster 1/1、Ray CPU head/worker Ready；遗留 MinerU NPU smoke 已取消并缩到 0 | CPU 平台集成可用；Application 已恢复 Synced/Healthy |
 | 旧 K12 Dagster | Deployment 0/0，未删除 | 仅作为有界回滚对象 |
-| Qwen3.8 推理 | `ModelDeployment` 为 Stopped；Running 门禁/合并/同步链路已验收，NPU worker 调度被既有 Volcano/MindX 插件缺陷阻塞 | 历史 TP2 端到端验证通过；Running 最后阻塞见 `tekton/running-gate-and-first-controlled-start-20260828.md` |
-| KCC 训练系统 | 由训练侧独立实施，当前正在联调 | Argo 应用 OutOfSync，状态合同与调度仍需收敛 |
+| Qwen3.8 推理 | 已完成 Volcano 动态分卡和真实 HTTP 200；Start/Stop action、Stop 自动合并及 RayCluster 生命周期控制器已上线，当前 Stopped/Synced/Ready、零 NPU | Running window 已关闭；待从 Backstage 完成负向与正向 Start/Stop UI 验收 |
+| KCC 训练系统 | TrainingRequest XRD/Composition、KCC Controller 2/2、多个 TrainingRequest 已在生产 | Application `OutOfSync/Healthy` 且有 orphaned resources；TrainingRun outputArtifact 与完整源码 provenance 仍需收敛 |
 
 ## 3. 已完成的 K12 CPU 闭环
 
@@ -70,12 +70,14 @@ Running 阶段前置开发已上线并通过真实生产验证：Running 机器�
 （capacity gate + running merge）、Backstage Start-inference action
 （0.1.6.1）与 scoped auto-sync 的开/关（含 Stop 回退）均在受控窗口内
 打通（`tekton/running-gate-and-first-controlled-start-20260828.md`）。
-首次受控 NPU 启动链路推进到 KubeRay 创建 worker Pod（请求恰好
-2×Ascend910）后被既有 Volcano/MindX NPU 拓扑插件缺陷阻塞
-（`qwen38-ray-tp2-execution-20260819.md` 同源问题）；按约束未修改全局
-调度配置，已执行 Git Stop 回退。当前 qwen38-27b 与
-qwen38-stopped-auto-smoke 均为 Stopped 基线、零 NPU；Volcano 兼容性
-修复或临时调度窗口为 Running 验收的最后阻塞项，等待用户裁定。
+2026-08-31 已在不修改全局 Volcano/KubeRay 调度参数的条件下完成正式
+Running 验收：动态容量 gate、自动合并、Argo 自动同步、Crossplane、Volcano
+PodGroup、两卡 Worker、Ray Serve/vLLM 模型加载和 `/v1/chat/completions` HTTP 200
+全部通过，实际卡为 Ascend910-14/15。验收后 Git Stop 和 Argo 自动回退成功，当前
+qwen38-27b 与 qwen38-stopped-auto-smoke 均为 Stopped 基线、零 NPU。
+遗留缺口是 KubeRay v1.6.0 不会让已存在的 pending RayCluster 随 RayService 的
+workerReplicas 0/1 原地更新，启动和停止仍各需一次受控 RayCluster 删除重建；该动作
+需要进入平台自动化后才能宣称完全无人值守。
 `prune`/`selfHeal`/`allowEmpty` 保持 false。
 
 ## 6. 正在进行和已知异常
@@ -108,13 +110,16 @@ CPU-only Ray head，worker=0、NPU请求=0。详情见
 
 ### 6.3 训练侧集成
 
-训练侧由独立同事负责，Material 当前不保存其完整源码。实时观测为：
+训练侧已通过 `TrainingRequest` XRD、`trainingrequest-kcc-v1alpha1`
+Composition、KCC Controller 与 Argo 多 source Application 进入生产。Controller 2/2
+Ready，TrainingRequest 均 Synced/Ready，历史 TrainingRun 包含 Succeeded、
+ManualRequired 与 Suspended；当前没有训练 NPU workload。
 
-- `model-platform-training-system` Application 当前为 Synced/Healthy。
-- KCC Controller 2/2 Ready，已有多个 TrainingRun Succeeded。
-- 仍可见历史 Ray readiness 告警和 `status.outputArtifact` schema 告警，由训练责任人收敛。
-
-本文只记录集成面可观测事实，不代替训练侧自己的发布记录。
+`model-platform-training-system` 当前是 OutOfSync/Healthy，并报告 orphaned
+resources，不能未审查即全量 Sync。训练 GitOps 配置在
+`gitadmin/model-platform-config`，训练/K12 源码在 `gitadmin/kcc`；当前 Backstage
+和 Controller image tag 的 source SHA 映射仍需回填。完整保留规则见
+`TRAINING-BACKSTAGE-PROVENANCE-20260831.md`。
 
 ### 6.4 容量和主机维护
 

@@ -26,9 +26,9 @@
 | Qwen38 停止态基线 | Complete | Argo Synced/Healthy；XR 为 Stopped、Synced=True、Ready=True、未 paused；RayCluster 只有 CPU head，worker=0、NPU=0 | 后续 Stopped 变更继续保持零 NPU 和可回滚 | 推理平台 |
 | 缓存 Job 版本化 | Complete | `qwen38-27b-cache-f2afa9e2-r1` 在生产 30 秒内 Complete，复用现有 READY 缓存，旧 immutable 告警未再出现 | 后续模板/制品变更必须提升 cache.revision | 推理平台 |
 | 停止态全自动 | In progress | PR #11 全自动合并与 scoped auto-sync 均已生产验收：`qwen38-stopped-auto-smoke` 经自动同步收敛为 control-plane-only XR，仅生成状态 ConfigMap，零 NPU；prune/selfHeal/allowEmpty 保持 false | 实际演练一键关闭 automated sync 后转 Complete | 推理平台 |
-| 推理 Running 受控自动 | In progress | Running 门禁（capacity gate+merge）、Start-inference action、auto-sync 开关与 Stop 回退均生产验证；首次受控启动推进到 KubeRay worker Pod（2×NPU 请求）后被既有 Volcano/MindX 拓扑插件缺陷阻塞，平台已回停 Stopped | Volcano 兼容修复或批准临时调度窗口后完成 NPU Running/Stop/Restart/Rollback 验收 | 推理平台 |
+| 推理 Running 受控自动 | In progress | Volcano 动态分配、真实 HTTP 200、Start/Stop action、Stop 自动合并和 stale RayCluster 生命周期控制器均已上线；当前 Stopped/零 NPU | 从 Backstage 完成 window-closed 负向 Start 与正向 Start/Stop UI 验收，再完成 Restart/Rollback | 推理平台 |
 | Backstage 推理状态聚合 | In progress | 已有目录和请求入口，运行阶段/失败原因尚未完整 | request ID 贯通 Git/Tekton/Argo/XR/RayService/health | 推理平台 |
-| 训练集成 | External | 训练 Controller 正联调，Argo OutOfSync，状态 schema/调度/探针有问题 | 训练团队提供稳定 TrainingRequest/TrainingRun 合同和状态 | 训练团队 |
+| 训练集成 | In progress | TrainingRequest XRD/Composition、KCC Controller 2/2 与多个 TrainingRequest 已在生产；Argo OutOfSync/Healthy 并有 orphaned resources | 收敛 orphan、TrainingRun outputArtifact、终态语义与完整 source provenance | 平台/训练团队 |
 | Gateway 集成 | External | 推理平台尚无对外 Gateway 资源 | 平台输出稳定 Service/健康合同，网关团队完成路由/TLS/认证 | Gateway 团队 |
 | Artifact Keeper 容量 | Blocked | `container-images` 使用超配额约 31% | 扩容或安全清理后保留当前和上一可回滚版本 | 平台/运维 |
 | `server-00` 维护 | Blocked | 主机待重启、更新和 zombie 进程治理 | 受控窗口内备份、重启、全控制面验收 | 运维 |

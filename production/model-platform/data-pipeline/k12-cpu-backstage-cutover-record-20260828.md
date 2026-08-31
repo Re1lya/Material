@@ -135,6 +135,31 @@ After completion Dagster reported zero active runs. The Dagster webserver and
 daemon remained `2/2` Ready, and the Ray head and CPU worker remained Ready,
 all with zero restarts. This closes the interactive CPU acceptance gate.
 
+## 2026-08-31 stale MinerU NPU smoke cleanup
+
+A later NPU smoke left `mineru_smoke_10_job` run
+`a2b6bc76-b801-44ac-9543-50b0c38602ee` in `STARTED` from
+2026-08-28 15:49:27 UTC with no later update or end time. The associated live
+MinerU Deployment remained at one unavailable replica on `a3-server-00`, using
+Ascend910-14/15, while the Gitea-rendered desired Deployment already specified
+`replicas: 0`; Argo therefore reported that resource OutOfSync.
+
+The user explicitly approved abandoning and cleaning this stale smoke. A normal
+Dagster terminate attempt failed because its user-code gRPC server was no
+longer reachable. The run was then marked through Dagster's supported
+`MARK_AS_CANCELED_IMMEDIATELY` policy and verified `CANCELED`; the active-run
+query returned an empty result. Only
+`deployment/k12-platform-cpu-k12-clean-qa-pipeline-mineru` was scaled from one
+to the Git-declared zero replicas. The Pod deleted successfully; the
+Deployment and its ConfigMaps, data, images and other K12 resources were
+retained.
+
+Post-cleanup, Dagster and the K12 CPU Ray head/worker remained Running/Ready,
+the MinerU resource became Synced in Argo, and physical process counts on A3
+devices 14/15 returned to zero. No Kubernetes NPU claim remains on A3. The K12
+Application is still OutOfSync but Healthy because of other resource drift;
+the cleanup intentionally did not perform a full Application sync.
+
 ## State and cutover gates
 
 Before cutover, both the old and new Dagster instances reported zero active

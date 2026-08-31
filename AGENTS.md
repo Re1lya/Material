@@ -1,8 +1,9 @@
 # Model platform agent handoff
 
 This file is the mandatory starting point for any Agent continuing work in
-this repository. The current production snapshot is dated 2026-08-28. Read
-`production/model-platform/CURRENT-STATE-20260828.md` and then
+this repository. The current production snapshot is dated 2026-08-31. Read
+`production/model-platform/CURRENT-STATE-20260828.md`,
+`production/model-platform/TRAINING-BACKSTAGE-PROVENANCE-20260831.md` and then
 `production/model-platform/HANDOFF-20260827.md`; use this file for the rules
 for safely continuing the deployment.
 
@@ -33,6 +34,24 @@ for safely continuing the deployment.
    runtime target is ARM64 Ascend and must use its own image.
 7. Use Git as the source of truth for non-secret manifests. Do not commit
    rendered secrets, generated credentials, kubeconfigs or live object dumps.
+
+## Backstage source-preservation gate (2026-08-31)
+
+Production Backstage currently runs Artifact Keeper image
+`platform/kcc-backstage:0.5.9-kcc-merge-ca2b700` at immutable digest
+`sha256:057988d8725b3b47ac5f4e6744e452884ef0b2c03725a69cf6baa76648d3fb59`.
+It includes K12 data-pipeline, KCC training console, model recipe/lifecycle,
+Artifact Keeper and Gitea integrations. Its tag short SHA is not currently
+resolvable to a commit in `gitadmin/kcc`; do not replace this image with a
+partial/detached clean worktree or older Material source tree.
+
+Before any Backstage rebuild or rollout, the Agent must read
+`production/model-platform/TRAINING-BACKSTAGE-PROVENANCE-20260831.md`, obtain a
+verifiable full source snapshot/commit for the current baseline, preserve every
+listed module/config/RBAC/NetworkPolicy input, and record the new
+source-commit/build-context/image-digest mapping. If the source provenance
+cannot be established, stop before building; the existing digest remains the
+rollback baseline.
 
 ## Collaboration and release workflow
 
