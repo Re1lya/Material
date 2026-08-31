@@ -47,8 +47,9 @@ partial/detached clean worktree or older Material source tree.
 
 Before any Backstage rebuild or rollout, the Agent must read
 `production/model-platform/TRAINING-BACKSTAGE-PROVENANCE-20260831.md`, obtain a
-verifiable full source snapshot/commit for the current baseline, preserve every
-listed module/config/RBAC/NetworkPolicy input, and record the new
+verifiable full source snapshot/commit for the current baseline in Gitea
+`gitadmin/platform-backstage`, preserve every listed module/config/RBAC/
+NetworkPolicy input, and record the new
 source-commit/build-context/image-digest mapping. If the source provenance
 cannot be established, stop before building; the existing digest remains the
 rollback baseline.

@@ -55,6 +55,7 @@ container-images/platform/kcc-data-pipeline:0.5.0-npu-smoke-837fe220
 | --- | --- |
 | `gitadmin/model-platform-config` | Argo Application、训练 Helm values、TrainingRequest 平台 API、K12 与 ModelDeployment 的生产 GitOps 期望状态 |
 | `gitadmin/kcc` | `app/data_pipeline` 的 K12 数据管线源码；`pretrain-ray-main` 的训练代码、contracts、deploy、docker、tests 与 Ray startup bundle |
+| `gitadmin/platform-backstage` | 2026-08-31 创建的私有 Backstage 源码目标仓库；当前仅有初始化 `main`，等待完整当前源树回填 |
 
 `gitadmin/kcc` main 在盘点时为 `ac8f042961037bad19bd8c667a10f6fc79fe578f`，
 包含 “K12: complete NPU smoke orchestration” 的合并记录。
@@ -116,10 +117,15 @@ Secret、创建 Deployment、直接创建 Ray/NPU workload。
 ## 4. 源码回填行动
 
 下一次 Backstage 功能更新之前，需要由当前 `0.5.9-kcc-merge-ca2b700` 构建责任人
-提供精确源码目录或可验证 commit。随后：
+提供精确源码目录或可验证 commit。完整源树应导入已创建的私有仓库：
 
-1. 将完整 Backstage/KCC Console 源码作为 `gitadmin/kcc` 的受控目录或新私有
-   Gitea 仓库提交；
+```text
+http://110.120.0.3:30081/gitadmin/platform-backstage.git
+```
+
+随后：
+
+1. 将完整 Backstage/KCC Console 源码提交到 `gitadmin/platform-backstage`；
 2. 将 image digest 与 full source commit 写入 release record；
 3. 为 Backstage Dockerfile 添加 OCI labels：
    `org.opencontainers.image.source`、`org.opencontainers.image.revision`、
