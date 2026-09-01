@@ -103,6 +103,7 @@ type GiteaFileWrite = {
 };
 
 const dnsLabel = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
+const runningCompositionRef = 'modeldeployment-qwen38-ray-v1alpha1';
 
 function readGiteaConfig(config: Config): GiteaConfig {
   const section = config.getConfig('modelPlatform.gitea');
@@ -646,9 +647,12 @@ export function createStartInferenceAction(config: Config) {
           'Only a declarative-stopped request with workerReplicas=0 can be started',
         );
       }
-      if (spec.compositionRef?.name !== 'modeldeployment-qwen38-ray-v1alpha1') {
+      if (
+        spec.compositionRef?.name !== gitea.stoppedCompositionRef ||
+        spec.crossplane?.compositionRef?.name !== gitea.stoppedCompositionRef
+      ) {
         throw new Error(
-          'Only a request bound to the certified Ray runtime composition can be started',
+          'Only a request bound to the certified stopped composition can be started',
         );
       }
       const profileRef = spec.runtimeProfileRef as string;
@@ -703,6 +707,8 @@ export function createStartInferenceAction(config: Config) {
       annotations[`${prefix}effective-npu-per-replica`] = String(npuPerWorker);
       spec.desiredState = 'Running';
       spec.runtime.workerReplicas = 1;
+      spec.compositionRef = { name: runningCompositionRef };
+      spec.crossplane.compositionRef = { name: runningCompositionRef };
 
       const yaml = stringify(document, { lineWidth: 0 });
 
@@ -878,7 +884,10 @@ export function createStopInferenceAction(config: Config) {
           'Only a declarative-running request with workerReplicas=1 can be stopped',
         );
       }
-      if (spec.compositionRef?.name !== 'modeldeployment-qwen38-ray-v1alpha1') {
+      if (
+        spec.compositionRef?.name !== runningCompositionRef ||
+        spec.crossplane?.compositionRef?.name !== runningCompositionRef
+      ) {
         throw new Error(
           'Only a request bound to the certified Ray runtime composition can be stopped',
         );
@@ -924,6 +933,10 @@ export function createStopInferenceAction(config: Config) {
         .replace(/[^A-Za-z0-9_.-]/g, '-');
       spec.desiredState = 'Stopped';
       spec.runtime.workerReplicas = 0;
+      spec.compositionRef = { name: gitea.stoppedCompositionRef };
+      spec.crossplane.compositionRef = {
+        name: gitea.stoppedCompositionRef,
+      };
 
       const yaml = stringify(document, { lineWidth: 0 });
       const pullRequest = await ctx.checkpoint({

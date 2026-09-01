@@ -118,7 +118,7 @@ modelPlatform:
       - qwen38-w8a8-ray-ascend-910b3-v1
       - qwen38-w8a8-ray-ascend-910b3-tp2-v1
     artifactKeeperBaseUrl: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
-    stoppedCompositionRef: modeldeployment-control-plane-v1alpha1
+    stoppedCompositionRef: modeldeployment-stopped-v1alpha1
   dataPipeline:
     enabled: true
     namespace: k12

@@ -27,7 +27,7 @@ Material 中的平台文档分为三类：
 | Argo CD | K12、bootstrap、ModelDeployment Application 为 Synced/Healthy；training Application 为 OutOfSync/Healthy | `model-platform-deployment-requests` 已开启受限 automated sync（prune/self-heal/allowEmpty=false）；training 仍有 orphaned resources 待审查 |
 | Tekton | Operator、Pipelines、Triggers、Pruner Ready | 通用模型配置 CI、Running capacity gate 和自动合并已通过生产验收 |
 | Crossplane | Core、Function、provider-kubernetes Ready | Qwen38 XR 已收敛为 Stopped、Synced=True、Ready=True，版本化缓存 Job 已完成 |
-| Backstage | `kcc-backstage:0.5.9-kcc-merge-ca2b700` 1/1 Ready；训练、推理、K12 路由均 HTTP 200 | 当前 image 在 Artifact Keeper；源码 commit provenance 缺口见 `TRAINING-BACKSTAGE-PROVENANCE-20260831.md` |
+| Backstage | `kcc-backstage:0.6.1.1-start-composition-hotfix-20260901` 1/1 Ready；训练、推理、K12 路由均 HTTP 200 | Start/Stop 已支持 stopped ↔ Ray Composition 安全切换；Dashboard 候选未部署 |
 | K12 CPU 数据管线 | Dagster 1/1、Ray CPU head/worker Ready；遗留 MinerU NPU smoke 已取消并缩到 0 | CPU 平台集成可用；Application 已恢复 Synced/Healthy |
 | 旧 K12 Dagster | Deployment 0/0，未删除 | 仅作为有界回滚对象 |
 | Qwen3.8 推理 | 已完成 Volcano 动态分卡和真实 HTTP 200；Start/Stop action、Stop 自动合并及 RayCluster 生命周期控制器已上线，当前 Stopped/Synced/Ready、零 NPU | Running window 已关闭；待从 Backstage 完成负向与正向 Start/Stop UI 验收 |

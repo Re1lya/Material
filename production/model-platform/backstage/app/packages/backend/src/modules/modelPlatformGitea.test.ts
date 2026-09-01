@@ -19,7 +19,7 @@ const config = new ConfigReader({
       allowedModelVersions: ['qwen3.8-27b-w8a8'],
       allowedRuntimeProfiles: ['qwen38-w8a8-ray-ascend-910b3-tp2-v1'],
       artifactKeeperBaseUrl: 'http://artifact-keeper.example.test',
-      stoppedCompositionRef: 'modeldeployment-control-plane-v1alpha1',
+      stoppedCompositionRef: 'modeldeployment-stopped-v1alpha1',
     },
   },
 });
@@ -56,7 +56,19 @@ function manifest(state: 'Stopped' | 'Running') {
     },
     spec: {
       runtimeProfileRef: 'qwen38-w8a8-ray-ascend-910b3-tp2-v1',
-      compositionRef: { name: 'modeldeployment-qwen38-ray-v1alpha1' },
+      compositionRef: {
+        name: running
+          ? 'modeldeployment-qwen38-ray-v1alpha1'
+          : 'modeldeployment-stopped-v1alpha1',
+      },
+      crossplane: {
+        compositionRef: {
+          name: running
+            ? 'modeldeployment-qwen38-ray-v1alpha1'
+            : 'modeldeployment-stopped-v1alpha1',
+        },
+        compositionUpdatePolicy: 'Automatic',
+      },
       desiredState: state,
       runtime: {
         npuPerWorker: 2,
@@ -146,6 +158,10 @@ describe('model platform inference lifecycle actions', () => {
     ) as Record<string, any>;
     expect(updated.spec).toMatchObject({
       desiredState: 'Running',
+      compositionRef: { name: 'modeldeployment-qwen38-ray-v1alpha1' },
+      crossplane: {
+        compositionRef: { name: 'modeldeployment-qwen38-ray-v1alpha1' },
+      },
       runtime: { workerReplicas: 1 },
     });
     expect(updated.metadata.annotations).toMatchObject({
@@ -204,6 +220,10 @@ describe('model platform inference lifecycle actions', () => {
     ) as Record<string, any>;
     expect(updated.spec).toMatchObject({
       desiredState: 'Stopped',
+      compositionRef: { name: 'modeldeployment-stopped-v1alpha1' },
+      crossplane: {
+        compositionRef: { name: 'modeldeployment-stopped-v1alpha1' },
+      },
       runtime: { workerReplicas: 0 },
     });
     expect(updated.metadata.annotations).toMatchObject({
