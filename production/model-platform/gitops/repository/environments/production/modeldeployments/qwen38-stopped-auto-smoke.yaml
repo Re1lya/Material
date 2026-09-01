@@ -1,0 +1,79 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelDeployment
+metadata:
+  name: qwen38-stopped-auto-smoke
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/managed-by: argocd
+    platform.example.com/requested-by: automation-smoke
+  annotations:
+    platform.example.com/request-mode: declarative-stopped
+    platform.example.com/requested-tensor-parallel-size: '2'
+    platform.example.com/requested-pipeline-parallel-size: '1'
+    platform.example.com/requested-replicas: '1'
+    platform.example.com/requested-priority: normal
+    platform.example.com/effective-runtime-profile: qwen38-w8a8-ray-ascend-910b3-tp2-v1
+    platform.example.com/effective-tensor-parallel-size: '0'
+    platform.example.com/effective-replicas: '0'
+    platform.example.com/effective-npu-per-replica: '0'
+spec:
+  crossplane:
+    compositionRef:
+      name: modeldeployment-control-plane-v1alpha1
+    compositionUpdatePolicy: Automatic
+  projectRef: model-serving
+  modelVersionRef: qwen3.8-27b-w8a8
+  runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-tp2-v1
+  compositionRef:
+    name: modeldeployment-control-plane-v1alpha1
+  desiredState: Stopped
+  placement:
+    acceleratorPool: control-plane-only
+  access:
+    visibility: internal
+  artifact:
+    modelId: Qwen/Qwen3.8-27B
+    revision: e823e888ae179eb3be02c1a48899c4f828371376
+    repository: model-artifacts
+    path: qwen3.8-27b/w8a8/e823e888ae179eb3be02c1a48899c4f828371376/msmodelslim-w8a8-a3-f2afa9e2
+    manifestDigest: sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f
+  runtime:
+    image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942
+    rayVersion: 2.48.0
+    modelPath: /models/Qwen3.8-27B-w8a8
+    modelName: qwen3.8-27b-w8a8
+    serveConfigV2: "applications:\n- name: default\n  route_prefix: /\n  import_path:\
+      \ ray.serve.llm:build_openai_app\n  args:\n    llm_configs:\n    - model_loading_config:\n\
+      \        model_id: qwen3.8-27b-w8a8\n        model_source: /models/Qwen3.8-27B-w8a8\n\
+      \      deployment_config:\n        num_replicas: 1\n        max_ongoing_requests:\
+      \ 64\n      resources_per_bundle:\n        NPU: 1\n        GPU: 1\n      engine_kwargs:\n\
+      \        tensor_parallel_size: 2\n        data_parallel_size: 1\n        pipeline_parallel_size:\
+      \ 1\n        distributed_executor_backend: ray\n        quantization: ascend\n\
+      \        max_model_len: 32768\n        max_num_seqs: 64\n        max_num_batched_tokens:\
+      \ 8192\n        gpu_memory_utilization: 0.9\n        enable_prefix_caching:\
+      \ true\n        trust_remote_code: true\n        safetensors_load_strategy:\
+      \ eager\n        speculative_config:\n          method: qwen3_5_mtp\n      \
+      \    num_speculative_tokens: 3\n          enforce_eager: true\n        compilation_config:\n\
+      \          cudagraph_mode: FULL_DECODE_ONLY\n"
+    serving:
+      maxModelLen: 32768
+      maxNumSeqs: 64
+      maxNumBatchedTokens: 8192
+      gpuMemoryUtilization: 0.9
+      prefixCaching: true
+      mtpTokens: 3
+      maxOngoingRequests: 64
+    headCPU: '2'
+    headMemory: 16Gi
+    workerCPU: '48'
+    workerMemory: 256Gi
+    npuPerWorker: 2
+    workerReplicas: 0
+  cache:
+    revision: f2afa9e2-r1
+    image: 110.120.0.3:30670/container-images/model-cache@sha256:3c2ee21efa53da44ec816fe2581ca35088caba91b3648db64949a2aea428db37
+    baseURL: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+    readerSecret: artifact-keeper-model-runtime
+    storageClassName: model-cache-gpu-local
+    size: 40Gi

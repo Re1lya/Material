@@ -54,6 +54,14 @@ spec:
                 enforce_eager: true
               compilation_config:
                 cudagraph_mode: FULL_DECODE_ONLY
+    serving:
+      maxModelLen: 32768
+      maxNumSeqs: 64
+      maxNumBatchedTokens: 8192
+      gpuMemoryUtilization: 0.9
+      prefixCaching: true
+      mtpTokens: 3
+      maxOngoingRequests: 64
     npuPerWorker: 2
     workerReplicas: 0
     cache:

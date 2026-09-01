@@ -12,15 +12,12 @@ spec:
     kind: ModelDeployment
   mode: Pipeline
   pipeline:
-    - step: render-stopped-release
+    - step: render-stopped-status
       functionRef:
         name: function-patch-and-transform
       input:
         apiVersion: pt.fn.crossplane.io/v1beta1
         kind: Resources
-        # The patch-and-transform function rejects an empty resource list. Keep
-        # one status-only ConfigMap so the XR can remain Synced/Ready while all
-        # runtime, cache, network and NPU resources are removed.
         resources:
           - name: release-status
             base:

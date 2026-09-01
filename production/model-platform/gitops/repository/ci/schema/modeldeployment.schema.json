@@ -152,10 +152,10 @@
               "properties": {
                 "name": {
                   "enum": [
-                    "modeldeployment-control-plane-v1alpha1",
-                    "modeldeployment-runtime-zero-v1alpha1",
-                    "modeldeployment-qwen38-ray-v1alpha1",
-                    "modeldeployment-stopped-v1alpha1"
+              "modeldeployment-control-plane-v1alpha1",
+              "modeldeployment-runtime-zero-v1alpha1",
+              "modeldeployment-qwen38-ray-v1alpha1",
+              "modeldeployment-stopped-v1alpha1"
                   ]
                 }
               }
@@ -246,14 +246,8 @@
             "modelId": { "type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$" },
             "revision": { "type": "string", "pattern": "^[0-9a-f]{8,64}$" },
             "repository": { "const": "model-artifacts" },
-            "path": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
-            },
-            "manifestDigest": {
-              "type": "string",
-              "pattern": "^sha256:[0-9a-f]{64}$"
-            }
+            "path": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$" },
+            "manifestDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
           }
         },
         "runtime": {
@@ -274,27 +268,11 @@
             "workerReplicas"
           ],
           "properties": {
-            "image": {
-              "type": "string",
-              "pattern": "^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$"
-            },
-            "rayVersion": {
-              "type": "string",
-              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
-            },
-            "modelPath": {
-              "type": "string",
-              "pattern": "^/models/[A-Za-z0-9._/-]+$"
-            },
-            "modelName": {
-              "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9.-]*$"
-            },
-            "serveConfigV2": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 20000
-            },
+            "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$" },
+            "rayVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "modelPath": { "type": "string", "pattern": "^/models/[A-Za-z0-9._/-]+$" },
+            "modelName": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*$" },
+            "serveConfigV2": { "type": "string", "minLength": 1, "maxLength": 20000 },
             "serving": {
               "type": "object",
               "additionalProperties": false,
@@ -328,32 +306,13 @@
         "cache": {
           "type": "object",
           "additionalProperties": false,
-          "required": [
-            "revision",
-            "image",
-            "baseURL",
-            "readerSecret",
-            "storageClassName",
-            "size"
-          ],
+          "required": ["revision", "image", "baseURL", "readerSecret", "storageClassName", "size"],
           "properties": {
-            "revision": {
-              "type": "string",
-              "pattern": "^[a-z0-9][a-z0-9-]{0,15}$"
-            },
-            "image": {
-              "type": "string",
-              "pattern": "^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$"
-            },
-            "baseURL": {
-              "type": "string",
-              "pattern": "^https?://[A-Za-z0-9.-]+(:[0-9]+)?$"
-            },
+            "revision": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,15}$" },
+            "image": { "type": "string", "pattern": "^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$" },
+            "baseURL": { "type": "string", "pattern": "^https?://[A-Za-z0-9.-]+(:[0-9]+)?$" },
             "readerSecret": { "const": "artifact-keeper-model-runtime" },
-            "storageClassName": {
-              "type": "string",
-              "pattern": "^model-cache-[a-z0-9-]+$"
-            },
+            "storageClassName": { "type": "string", "pattern": "^model-cache-[a-z0-9-]+$" },
             "size": { "type": "string", "pattern": "^[1-9][0-9]*(Gi|Ti)$" }
           }
         }

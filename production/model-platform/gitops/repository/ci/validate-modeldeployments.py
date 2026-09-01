@@ -25,6 +25,65 @@ def load_yaml(path: pathlib.Path) -> dict:
     return document
 
 
+def validate_stopped_composition(
+    path: pathlib.Path, composition: dict, errors: list[str]
+) -> None:
+    """Allow one audited status ConfigMap and forbid stopped runtime resources."""
+
+    prefix = f"{path}: stopped Composition"
+    if path.name != "modeldeployment-stopped-composition.yaml":
+        errors.append(f"{prefix}: unexpected Composition file")
+    if composition.get("apiVersion") != "apiextensions.crossplane.io/v1":
+        errors.append(f"{prefix}: apiVersion must be apiextensions.crossplane.io/v1")
+    if composition.get("metadata", {}).get("name") != "modeldeployment-stopped-v1alpha1":
+        errors.append(f"{prefix}: metadata.name is fixed")
+    spec = composition.get("spec", {})
+    if spec.get("compositeTypeRef") != {
+        "apiVersion": "platform.example.com/v1alpha1",
+        "kind": "ModelDeployment",
+    }:
+        errors.append(f"{prefix}: compositeTypeRef must target ModelDeployment")
+    pipeline = spec.get("pipeline", [])
+    if len(pipeline) != 1:
+        errors.append(f"{prefix}: exactly one pipeline step is required")
+        return
+    step = pipeline[0]
+    if step.get("functionRef", {}).get("name") != "function-patch-and-transform":
+        errors.append(f"{prefix}: only function-patch-and-transform is allowed")
+    resources = step.get("input", {}).get("resources", [])
+    if len(resources) != 1:
+        errors.append(f"{prefix}: exactly one status ConfigMap is required")
+        return
+    resource = resources[0]
+    base = resource.get("base", {})
+    if resource.get("name") != "release-status" or base.get("kind") != "ConfigMap":
+        errors.append(f"{prefix}: the only resource must be release-status ConfigMap")
+    forbidden_kinds = {
+        "Deployment",
+        "Job",
+        "PersistentVolumeClaim",
+        "RayService",
+        "RayCluster",
+        "Service",
+        "NetworkPolicy",
+        "Object",
+    }
+    if base.get("kind") in forbidden_kinds:
+        errors.append(f"{prefix}: runtime or storage resources are forbidden")
+    data = base.get("data", {})
+    expected = {
+        "phase": "Stopped",
+        "desiredState": "Stopped",
+        "runtimeEnabled": "false",
+        "cacheEnabled": "false",
+        "npuRequested": "0",
+    }
+    if any(data.get(key) != value for key, value in expected.items()):
+        errors.append(f"{prefix}: stopped status data must declare zero runtime/NPU")
+    if resource.get("readinessChecks") != [{"type": "None"}]:
+        errors.append(f"{prefix}: status ConfigMap must use readinessChecks None")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--requests-dir", type=pathlib.Path, required=True)
@@ -61,12 +120,21 @@ def main() -> int:
         requests = sorted(args.requests_dir.glob("*.yaml"))
 
     seen_names: set[str] = set()
+    deployment_count = 0
     for path in requests:
         try:
             document = load_yaml(path)
         except Exception as error:
             errors.append(f"{path}: invalid YAML: {error}")
             continue
+
+        if document.get("kind") == "Composition":
+            validate_stopped_composition(path, document, errors)
+            continue
+        if document.get("kind") != "ModelDeployment":
+            errors.append(f"{path}: only ModelDeployment or the stopped Composition is allowed")
+            continue
+        deployment_count += 1
 
         for error in sorted(validator.iter_errors(document), key=lambda item: list(item.path)):
             location = ".".join(str(part) for part in error.path) or "<root>"
@@ -103,7 +171,7 @@ def main() -> int:
         print("modeldeployment_validation=FAIL", file=sys.stderr)
         return 1
 
-    print(f"modeldeployment_validation=PASS requests={len(requests)}")
+    print(f"modeldeployment_validation=PASS requests={deployment_count}")
     return 0
 
 
@@ -301,6 +369,10 @@ def validate_qwen38_release(
             errors.append(f"{prefix}: XR runtime.modelPath differs from RuntimeProfile catalog")
         if runtime.get("modelName") != profile_runtime.get("modelName"):
             errors.append(f"{prefix}: XR runtime.modelName differs from RuntimeProfile catalog")
+        if runtime.get("serveConfigV2") != profile_runtime.get("serveConfigV2"):
+            errors.append(f"{prefix}: XR runtime.serveConfigV2 differs from RuntimeProfile catalog")
+        if runtime.get("serving") != profile_runtime.get("serving"):
+            errors.append(f"{prefix}: XR runtime.serving differs from RuntimeProfile catalog")
         for cache_field in (
             "revision",
             "image",
@@ -426,7 +498,9 @@ def validate_qwen38_tp2_serve_config(
         "num_speculative_tokens": serving.get("mtpTokens"),
         "enforce_eager": True,
     }:
-        errors.append(f"{prefix}: serveConfigV2 speculative_config must match runtime.serving.mtpTokens")
+        errors.append(
+            f"{prefix}: serveConfigV2 speculative_config must match runtime.serving.mtpTokens"
+        )
 
 
 if __name__ == "__main__":

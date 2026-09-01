@@ -28,7 +28,7 @@ gitadmin/model-platform-config
 生产 Backstage 运行：
 
 ```text
-110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.1.1-start-composition-hotfix-20260901@sha256:dcd4dfa7c333f90426399699f4a18114bff5a48fd7cbea079e2022b89ea6b19a
+110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.1.2-serving-contract-hotfix-20260901@sha256:48ec0a673d565dc93fa1cd3460cc91727da99b295d964c2b02e4971fc3d5a0ac
 ```
 
 Deployment 为 1/1 Ready；`/healthcheck`、`/kcc-pretraining`、

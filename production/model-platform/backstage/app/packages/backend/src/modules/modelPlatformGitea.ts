@@ -70,6 +70,15 @@ type DeploymentContract = {
     modelPath: string;
     modelName: string;
     serveConfigV2: string;
+    serving: {
+      maxModelLen: number;
+      maxNumSeqs: number;
+      maxNumBatchedTokens: number;
+      gpuMemoryUtilization: number;
+      prefixCaching: boolean;
+      mtpTokens: number;
+      maxOngoingRequests: number;
+    };
     headCPU: string;
     headMemory: string;
     workerCPU: string;
@@ -271,6 +280,7 @@ async function loadDeploymentContract(
     modelPath: profileRuntime.modelPath,
     modelName: profileRuntime.modelName,
     serveConfigV2: profileRuntime.serveConfigV2,
+    serving: profileRuntime.serving,
     headCPU: profileRuntime.headCPU ?? '2',
     headMemory: profileRuntime.headMemory ?? '8Gi',
     workerCPU: profileRuntime.workerCPU ?? profileRequests.cpu,

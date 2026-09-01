@@ -6,18 +6,20 @@ metadata:
   labels:
     app.kubernetes.io/part-of: model-platform
     app.kubernetes.io/managed-by: argocd
-    platform.example.com/requested-by: platform-team
+    platform.example.com/requested-by: gitadmin
   annotations:
     platform.example.com/lifecycle-controller: enabled
-    platform.example.com/request-mode: declarative-stopped
+    platform.example.com/request-mode: declarative-running
     platform.example.com/requested-tensor-parallel-size: "2"
     platform.example.com/requested-pipeline-parallel-size: "1"
     platform.example.com/requested-replicas: "1"
     platform.example.com/requested-priority: normal
     platform.example.com/effective-runtime-profile: qwen38-w8a8-ray-ascend-910b3-tp2-v1
-    platform.example.com/effective-tensor-parallel-size: "0"
-    platform.example.com/effective-replicas: "0"
-    platform.example.com/effective-npu-per-replica: "0"
+    platform.example.com/effective-tensor-parallel-size: "2"
+    platform.example.com/effective-replicas: "1"
+    platform.example.com/effective-npu-per-replica: "2"
+    platform.example.com/requested-start-id: start-6ed781be-d77d-4a71-b6fb-bcafc0fac329
+    platform.example.com/requested-start-reason: Started from the model recipes page
 spec:
   crossplane:
     compositionRef:
@@ -28,7 +30,7 @@ spec:
   runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-tp2-v1
   compositionRef:
     name: modeldeployment-qwen38-ray-v1alpha1
-  desiredState: Stopped
+  desiredState: Running
   placement:
     acceleratorPool: ascend-a3
     nodeSelector:
@@ -46,7 +48,7 @@ spec:
     manifestDigest: sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f
   runtime:
     image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942
-    rayVersion: "2.48.0"
+    rayVersion: 2.48.0
     modelPath: /models/Qwen3.8-27B-w8a8
     modelName: qwen3.8-27b-w8a8
     serveConfigV2: |
@@ -84,8 +86,6 @@ spec:
                 enforce_eager: true
               compilation_config:
                 cudagraph_mode: FULL_DECODE_ONLY
-    # Structured serving fields are the audited source of truth. The validator
-    # parses serveConfigV2 and rejects any divergence from these values.
     serving:
       maxModelLen: 32768
       maxNumSeqs: 64
@@ -99,7 +99,7 @@ spec:
     workerCPU: "48"
     workerMemory: 256Gi
     npuPerWorker: 2
-    workerReplicas: 0
+    workerReplicas: 1
   cache:
     revision: f2afa9e2-r1
     image: 110.120.0.3:30670/container-images/model-cache@sha256:3c2ee21efa53da44ec816fe2581ca35088caba91b3648db64949a2aea428db37
