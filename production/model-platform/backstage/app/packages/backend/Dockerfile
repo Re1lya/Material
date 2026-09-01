@@ -28,6 +28,14 @@ RUN node .yarn/releases/yarn-4.13.0.cjs tsc && \
 
 FROM docker.1ms.run/library/node@sha256:f2925910482dc53394bc0034c5f4abffcd01de400794c050ca343fe0d733b486
 
+ARG SOURCE_REPOSITORY="https://github.com/Re1lya/Material"
+ARG SOURCE_REVISION="unknown"
+ARG RELEASE_VERSION="development"
+
+LABEL org.opencontainers.image.source="${SOURCE_REPOSITORY}" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.version="${RELEASE_VERSION}"
+
 # Set Python interpreter for `node-gyp` to use
 ENV PYTHON=/usr/bin/python3
 

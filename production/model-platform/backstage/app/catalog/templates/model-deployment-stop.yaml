@@ -1,0 +1,51 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: stop-model-inference
+  namespace: default
+  title: Stop inference (Running -> Stopped)
+  description: >
+    Opens a constrained Stop update for an existing Running ModelDeployment.
+    Stop requests do not require an NPU capacity window and take priority over
+    new starts. The Git request remains the source of truth.
+  tags:
+    - model-platform
+    - stopping
+    - two-step
+spec:
+  owner: group:default/platform-team
+  type: model-inference-stop
+  parameters:
+    - title: Stop inference
+      required:
+        - deploymentName
+      properties:
+        deploymentName:
+          title: Deployment name
+          type: string
+          description: Existing Running ModelDeployment request name
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          maxLength: 40
+        stopReason:
+          title: Stop reason
+          type: string
+          description: Recorded in the pull request for audit purposes
+          maxLength: 512
+  steps:
+    - id: stop
+      name: Open stop request
+      action: model-platform:gitea-stop-inference-pr
+      input:
+        deploymentName: ${{ parameters.deploymentName }}
+        stopReason: ${{ parameters.stopReason }}
+  output:
+    links:
+      - title: Open stop request pull request
+        icon: github
+        url: ${{ steps.stop.output.pullRequestUrl }}
+    text:
+      - title: Safety state
+        content: >
+          Stop ID `${{ steps.stop.output.stopRequestId }}` recorded for
+          `${{ parameters.deploymentName }}`. The request changes only the
+          certified deployment lifecycle fields from Running to Stopped.

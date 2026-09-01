@@ -415,6 +415,13 @@ spec:
                                       containerPort: 6379
                                     - name: dashboard
                                       containerPort: 8265
+                                    # KubeRay creates the stable <RayService>-serve-svc
+                                    # only when the head container exposes a port named
+                                    # "serve" (or prefixed "serve-").  Keep this fixed
+                                    # service contract on the Ray Serve HTTP port.
+                                    - name: serve
+                                      containerPort: 8000
+                                      protocol: TCP
                                   resources:
                                     requests:
                                       cpu: "2"

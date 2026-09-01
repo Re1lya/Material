@@ -1,0 +1,658 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Model Deployments · Dashboard prototype</title>
+    <style>
+      :root {
+        --bg: #f4f5f7;
+        --panel: #fff;
+        --line: #dfe3e8;
+        --line-soft: #edf0f3;
+        --ink: #1f2328;
+        --muted: #6f7782;
+        --blue: #195ba6;
+        --blue-2: #0f4d91;
+        --blue-soft: #edf5ff;
+        --green: #147d52;
+        --green-soft: #e8f7ef;
+        --amber: #966400;
+        --amber-soft: #fff4d6;
+        --red: #c4374f;
+        --red-soft: #fff0f2;
+        --gray-soft: #f1f2f4;
+        --shadow: 0 1px 3px rgba(20, 30, 45, 0.12);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { min-height: 100%; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        margin: 0;
+      }
+
+      button, a { font: inherit; }
+      button { cursor: pointer; }
+      .app-shell { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 100vh; }
+      .sidebar {
+        background: #171717;
+        color: #c8c8c8;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      .brand {
+        align-items: center;
+        border-bottom: 1px solid #2c2c2c;
+        color: #55d6c2;
+        display: flex;
+        font-size: 20px;
+        font-weight: 700;
+        gap: 9px;
+        height: 67px;
+        padding: 0 17px;
+      }
+      .brand-mark { font-size: 25px; }
+      .sidebar-search {
+        align-items: center;
+        border-bottom: 1px solid #2c2c2c;
+        color: #a6a6a6;
+        display: flex;
+        gap: 10px;
+        min-height: 57px;
+        padding: 0 20px;
+      }
+      .nav { padding: 11px 0; }
+      .nav-item {
+        align-items: center;
+        color: #bdbdbd;
+        display: flex;
+        gap: 11px;
+        min-height: 43px;
+        overflow: hidden;
+        padding: 0 19px;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .nav-item:hover { background: #242424; color: #fff; }
+      .nav-item.active { background: #242424; border-left: 3px solid #55d6c2; color: #fff; padding-left: 16px; }
+      .nav-icon { color: #aeb2b6; font-size: 16px; width: 18px; }
+      .nav-separator { border-top: 1px solid #2c2c2c; margin: 9px 0; }
+      .sidebar-bottom { border-top: 1px solid #2c2c2c; margin-top: auto; }
+      .main-area { min-width: 0; }
+      .topbar {
+        align-items: center;
+        background: #fff;
+        border-bottom: 1px solid #e8eaed;
+        display: flex;
+        font-size: 14px;
+        font-weight: 650;
+        gap: 10px;
+        height: 62px;
+        padding: 0 18px;
+      }
+      .topbar-icon {
+        align-items: center;
+        background: #f5f6f7;
+        border-radius: 4px;
+        display: inline-flex;
+        height: 30px;
+        justify-content: center;
+        width: 30px;
+      }
+      .page { padding: 28px 29px 48px; }
+      .page-heading {
+        align-items: center;
+        display: flex;
+        gap: 18px;
+        justify-content: space-between;
+        margin-bottom: 15px;
+      }
+      .page-heading h1 { font-size: 25px; letter-spacing: -0.035em; margin: 0; }
+      .page-heading p { color: var(--muted); margin: 5px 0 0; }
+      .page-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+      .top-action {
+        align-items: center;
+        background: transparent;
+        border: 0;
+        border-radius: 4px;
+        color: #343a42;
+        display: inline-flex;
+        gap: 7px;
+        min-height: 36px;
+        padding: 0 10px;
+        text-decoration: none;
+      }
+      .top-action:hover { background: #e9edf2; }
+      .top-action.outline { background: #fff; border: 1px solid #7ca5d2; color: var(--blue); }
+      .top-action.primary { background: var(--blue); color: #fff; padding-left: 14px; padding-right: 14px; }
+      .flow-banner {
+        align-items: center;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        min-height: 66px;
+        padding: 10px 16px;
+      }
+      .flow-banner strong { display: block; font-size: 14px; }
+      .flow-banner p { color: var(--muted); font-size: 12px; margin: 3px 0 0; }
+      .flow-count { background: #e5e5e5; border-radius: 999px; color: #555; font-size: 11px; padding: 6px 11px; }
+      .workspace {
+        align-items: start;
+        display: grid;
+        gap: 14px;
+        grid-template-columns: minmax(330px, 41%) minmax(0, 59%);
+        margin: 0 auto;
+        max-width: 1900px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        box-shadow: var(--shadow);
+        min-width: 0;
+      }
+      .panel-header {
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        min-height: 68px;
+        padding: 14px 18px;
+      }
+      .panel-header h1, .panel-header h2 {
+        font-size: 20px;
+        letter-spacing: -0.02em;
+        margin: 0;
+      }
+      .panel-header p { color: var(--muted); font-size: 12px; margin: 3px 0 0; }
+      .new-button {
+        align-items: center;
+        background: var(--blue);
+        border: 0;
+        border-radius: 6px;
+        color: #fff;
+        display: inline-flex;
+        font-weight: 700;
+        gap: 7px;
+        min-height: 36px;
+        padding: 0 14px;
+        text-decoration: none;
+      }
+      .new-button:hover { background: var(--blue-2); }
+      .new-button .plus { font-size: 20px; font-weight: 400; line-height: 1; }
+
+      .list-toolbar {
+        align-items: center;
+        display: flex;
+        gap: 9px;
+        padding: 12px 16px 5px;
+      }
+      .search {
+        background: #fafbfc;
+        border: 1px solid #ccd2da;
+        border-radius: 6px;
+        color: var(--ink);
+        flex: 1;
+        min-height: 35px;
+        padding: 7px 10px;
+      }
+      .filter {
+        background: #fff;
+        border: 1px solid #ccd2da;
+        border-radius: 6px;
+        min-height: 35px;
+        padding: 0 9px;
+      }
+      .deployment-list {
+        display: grid;
+        gap: 9px;
+        max-height: calc(100vh - 145px);
+        overflow: auto;
+        padding: 9px 16px 16px;
+      }
+      .deployment-card {
+        background: #fff;
+        border: 1px solid #d9dde3;
+        border-radius: 9px;
+        cursor: pointer;
+        min-height: 126px;
+        padding: 15px 16px;
+        text-align: left;
+        transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+        width: 100%;
+      }
+      .deployment-card:hover { border-color: #7ba8db; }
+      .deployment-card.selected {
+        background: #fbfdff;
+        border: 1.5px solid var(--blue);
+        box-shadow: 0 0 0 1px rgba(25, 91, 166, 0.06);
+      }
+      .card-top { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
+      .deployment-name {
+        font: 600 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        overflow-wrap: anywhere;
+      }
+      .model-name { color: var(--muted); font-size: 12px; margin-top: 4px; }
+      .status {
+        border-radius: 999px;
+        display: inline-flex;
+        font-size: 12px;
+        line-height: 1;
+        padding: 6px 9px;
+        white-space: nowrap;
+      }
+      .status.running, .status.succeeded { background: #185a9d; color: #fff; }
+      .status.pending, .status.deploying, .status.stopping { background: var(--amber-soft); color: var(--amber); }
+      .status.stopped { background: #e5e7ea; color: #40454c; }
+      .status.failed { background: var(--red-soft); color: var(--red); }
+      .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; }
+      .chip {
+        background: #fff;
+        border: 1px solid #d5d9df;
+        border-radius: 999px;
+        color: #3f454d;
+        font-size: 11px;
+        padding: 4px 8px;
+      }
+      .chip.stage { background: var(--blue); border-color: var(--blue); color: #fff; }
+      .chip.error { background: #ef1750; border-color: #ef1750; color: #fff; }
+      .card-foot { color: #7b8189; font-size: 11px; margin-top: 11px; overflow-wrap: anywhere; }
+
+      .detail { min-height: 430px; }
+      .detail-content { padding: 16px; }
+      .summary-grid {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: 1fr 1.35fr 1.15fr 1.05fr 1.1fr;
+      }
+      .summary-box {
+        background: #f7f7f8;
+        border-radius: 7px;
+        min-height: 104px;
+        padding: 12px;
+      }
+      .summary-box label {
+        color: #777d85;
+        display: block;
+        font-size: 11px;
+        margin-bottom: 5px;
+      }
+      .summary-box strong { display: block; font-size: 13px; line-height: 1.45; }
+      .summary-box small { color: var(--muted); display: block; font-size: 11px; margin-top: 4px; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+      .actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+      .action {
+        align-items: center;
+        background: #fff;
+        border: 1px solid #ccd2da;
+        border-radius: 5px;
+        color: #343a42;
+        display: inline-flex;
+        gap: 7px;
+        min-height: 37px;
+        padding: 0 12px;
+      }
+      .action.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+      .action.danger { background: #fff; border-color: #d65b6e; color: #a51e35; }
+      .action:disabled { color: #a9adb3; cursor: not-allowed; opacity: 0.62; }
+      .link-action { border: 0; color: #303740; padding-left: 7px; padding-right: 7px; }
+
+      .section {
+        border-top: 1px solid var(--line-soft);
+        margin-top: 13px;
+        padding-top: 15px;
+      }
+      .section-title { align-items: center; display: flex; justify-content: space-between; margin-bottom: 11px; }
+      .section-title h3 { font-size: 14px; margin: 0; }
+      .section-title span { color: var(--muted); font-size: 11px; }
+      .pipeline {
+        display: grid;
+        gap: 0;
+        grid-template-columns: repeat(8, minmax(65px, 1fr));
+        overflow-x: auto;
+        padding: 4px 0 8px;
+      }
+      .pipeline-step { min-width: 75px; position: relative; text-align: center; }
+      .pipeline-step:not(:last-child)::after {
+        background: #d8dde4;
+        content: "";
+        height: 2px;
+        left: calc(50% + 12px);
+        position: absolute;
+        right: calc(-50% + 12px);
+        top: 11px;
+      }
+      .pipeline-step.done:not(:last-child)::after { background: var(--green); }
+      .dot {
+        align-items: center;
+        background: #e5e8ec;
+        border: 2px solid #fff;
+        border-radius: 50%;
+        box-shadow: 0 0 0 1px #cfd5dc;
+        color: #666;
+        display: inline-flex;
+        font-size: 10px;
+        height: 23px;
+        justify-content: center;
+        position: relative;
+        width: 23px;
+        z-index: 1;
+      }
+      .done .dot { background: var(--green); box-shadow: none; color: #fff; }
+      .active .dot { background: var(--blue); box-shadow: 0 0 0 4px #dcecff; color: #fff; }
+      .error-step .dot { background: var(--red); box-shadow: 0 0 0 4px #ffe0e5; color: #fff; }
+      .pipeline-step b { display: block; font-size: 10px; font-weight: 650; margin-top: 7px; white-space: nowrap; }
+      .pipeline-step small { color: var(--muted); display: block; font-size: 9px; margin-top: 2px; }
+
+      .detail-grid { display: grid; gap: 10px; grid-template-columns: 1.2fr 0.8fr; }
+      .subcard { border: 1px solid var(--line); border-radius: 7px; padding: 13px; }
+      .subcard h4 { font-size: 13px; margin: 0 0 10px; }
+      .kv { display: grid; gap: 0; grid-template-columns: 128px 1fr; }
+      .kv div { border-top: 1px solid var(--line-soft); min-height: 34px; padding: 8px 0; }
+      .kv div:nth-child(-n+2) { border-top: 0; }
+      .kv .key { color: var(--muted); font-size: 11px; }
+      .kv .value { font-size: 11px; overflow-wrap: anywhere; }
+      .health-line { align-items: center; display: flex; gap: 8px; margin: 8px 0; }
+      .health-dot { background: var(--green); border-radius: 50%; height: 9px; width: 9px; }
+      .health-dot.warn { background: var(--amber); }
+      .health-dot.fail { background: var(--red); }
+      .event {
+        border-left: 3px solid #a9b6c8;
+        margin: 9px 0;
+        padding: 2px 0 2px 10px;
+      }
+      .event b { display: block; font-size: 11px; }
+      .event span { color: var(--muted); font-size: 10px; }
+      .raw {
+        background: #171b24;
+        border-radius: 6px;
+        color: #dbe5f7;
+        font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        margin-top: 10px;
+        overflow: auto;
+        padding: 10px;
+      }
+      .empty { color: var(--muted); padding: 80px 20px; text-align: center; }
+      .toast {
+        background: #172033;
+        border-radius: 6px;
+        bottom: 22px;
+        color: #fff;
+        display: none;
+        left: 50%;
+        padding: 11px 16px;
+        position: fixed;
+        transform: translateX(-50%);
+        z-index: 10;
+      }
+      .toast.show { display: block; }
+
+      @media (max-width: 1050px) {
+        .app-shell { grid-template-columns: 72px minmax(0, 1fr); }
+        .brand { font-size: 0; justify-content: center; padding: 0; }
+        .brand-mark { font-size: 25px; }
+        .sidebar-search { justify-content: center; padding: 0; }
+        .sidebar-search span:last-child, .nav-item span:last-child { display: none; }
+        .nav-item { justify-content: center; padding: 0; }
+        .nav-item.active { border-left: 3px solid #55d6c2; padding: 0 0 0 0; }
+        .workspace { grid-template-columns: 1fr; }
+        .deployment-list { max-height: 430px; }
+        .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (max-width: 650px) {
+        .app-shell { display: block; }
+        .sidebar { display: none; }
+        .page { padding: 16px 10px 32px; }
+        .page-heading, .flow-banner { align-items: flex-start; flex-direction: column; }
+        .page-actions { justify-content: flex-start; }
+        .panel-header { align-items: flex-start; gap: 10px; }
+        .summary-grid, .detail-grid { grid-template-columns: 1fr; }
+        .pipeline { grid-template-columns: repeat(8, 90px); }
+        .kv { grid-template-columns: 105px 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">◉</span><span>Backstage</span></div>
+        <div class="sidebar-search"><span>⌕</span><span>Search</span></div>
+        <nav class="nav">
+          <a class="nav-item" href="#"><span class="nav-icon">◆</span><span>Catalog</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⊕</span><span>Create</span></a>
+          <div class="nav-separator"></div>
+          <a class="nav-item" href="#"><span class="nav-icon">✚</span><span>APIs</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">▤</span><span>Artifact & CI Management</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⌘</span><span>Catalog Graph</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">↳</span><span>K12 Data Pipeline</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⚙</span><span>KCC Pretraining</span></a>
+          <a class="nav-item active" href="#"><span class="nav-icon">▦</span><span>Model Deployments</span></a>
+          <a class="nav-item" href="#"><span class="nav-icon">⊕</span><span>Register Existing</span></a>
+        </nav>
+        <div class="sidebar-bottom"><a class="nav-item" href="#"><span class="nav-icon">⚙</span><span>Settings</span></a></div>
+      </aside>
+
+      <div class="main-area">
+        <header class="topbar"><span class="topbar-icon">⚙</span><span>Model Platform</span></header>
+        <main class="page">
+          <header class="page-heading">
+            <div>
+              <h1>模型推理部署</h1>
+              <p>统一查看 ModelDeployment 的申请、发布、运行、停止和回滚状态。</p>
+            </div>
+            <div class="page-actions">
+              <a class="top-action outline" href="model-catalog-recipes-v1.html">▦ 模型目录</a>
+              <a class="top-action primary" href="model-catalog-recipes-v1.html">＋ New deployment</a>
+              <button class="top-action">▤ Runtime profiles</button>
+              <button class="top-action" id="refresh">↻ Refresh</button>
+            </div>
+          </header>
+
+          <section class="flow-banner">
+            <div>
+              <strong>ModelDeployment → Gitea → Tekton → Argo → Crossplane → KubeRay</strong>
+              <p>点击左侧部署查看完整阶段；Start、Stop和Update始终通过受限 GitOps 请求执行。</p>
+            </div>
+            <span class="flow-count">4 deployments · 1 running · model-serving</span>
+          </section>
+
+          <section class="workspace">
+            <aside class="panel">
+              <header class="panel-header">
+                <div><h2>部署实例</h2><p>动态状态、运行配置和当前阶段</p></div>
+              </header>
+              <div class="list-toolbar">
+                <input class="search" id="search" placeholder="Search deployment or model" />
+                <select class="filter" id="filter">
+                  <option value="all">All</option>
+                  <option value="running">Running</option>
+                  <option value="pending">Pending</option>
+                  <option value="stopped">Stopped</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
+              <div class="deployment-list" id="deployment-list"></div>
+            </aside>
+
+            <section class="panel detail" id="detail-panel">
+              <div class="empty">Select a deployment to view runtime details.</div>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const stages = ['Request', 'Git PR', 'Tekton', 'Argo', 'Crossplane', 'RayCluster', 'Model load', 'Healthy'];
+      const deployments = [
+        {
+          id: 'qwen38-27b', model: 'Qwen3.8-27B W8A8', profile: 'A3 · TP2 · 2 NPU', state: 'Running', stateKey: 'running',
+          phase: 'Healthy', phaseIndex: 7, phaseText: 'Ray Serve is healthy and accepting requests',
+          requestedBy: 'gitadmin', revision: 'start-f0d1ed1e', age: '18 min', npu: 'Ascend910-14, 15', node: 'a3-server-00',
+          endpoint: 'qwen38-27b-serve-svc:8000', pr: '#28 · merged', pipeline: 'model-platform-config-validation-k7f2m',
+          argo: 'Synced / Healthy', crossplane: 'Synced / Ready', serve: 'RUNNING · HTTP 200', cache: 'f2afa9e2-r1 · Ready',
+          config: { context: '32K', concurrency: '64', batch: '8192', memory: '90%', prefix: 'On', mtp: '3 tokens' },
+          events: [['Serve healthy', 'LLMDeployment and Router are healthy · 2m ago'], ['Traffic ready', 'Stable service points to active RayCluster · 2m ago'], ['Worker allocated', 'Volcano selected Ascend910-14,15 · 10m ago']]
+        },
+        {
+          id: 'deepseek-r1-a3', model: 'DeepSeek-R1 Distill', profile: 'A3 · TP4 · 4 NPU', state: 'Deploying', stateKey: 'pending',
+          phase: 'Argo syncing', phaseIndex: 3, phaseText: 'Waiting for ModelDeployment reconciliation',
+          requestedBy: 'platform-team', revision: 'deploy-0901-0042', age: '3 min', npu: 'Not allocated', node: 'a3-server-00',
+          endpoint: 'Pending', pr: '#31 · merged', pipeline: 'model-platform-config-validation-p9czr',
+          argo: 'Progressing', crossplane: 'Pending', serve: 'Not created', cache: 'd103ab77-r1 · Ready',
+          config: { context: '16K', concurrency: '32', batch: '4096', memory: '85%', prefix: 'On', mtp: 'Off' },
+          events: [['Argo sync started', 'Applying desired revision · 20s ago'], ['Policy passed', 'Capacity and schema gate succeeded · 2m ago']]
+        },
+        {
+          id: 'qwen38-batch', model: 'Qwen3.8-27B W8A8', profile: 'A3 · TP2 · 2 NPU', state: 'Stopped', stateKey: 'stopped',
+          phase: 'Stopped', phaseIndex: -1, phaseText: 'Worker replicas are zero; cache is retained',
+          requestedBy: 'gitadmin', revision: 'stop-0901-0018', age: '1 h', npu: '0', node: 'a3-server-00',
+          endpoint: 'Unavailable while stopped', pr: '#29 · merged', pipeline: 'model-platform-config-validation-v31jc',
+          argo: 'Synced / Healthy', crossplane: 'Synced / Ready', serve: 'Stopped', cache: 'f2afa9e2-r1 · Ready',
+          config: { context: '32K', concurrency: '32', batch: '4096', memory: '85%', prefix: 'On', mtp: '3 tokens' },
+          events: [['Stopped safely', 'Worker released and NPU process count is zero · 1h ago'], ['Cache retained', 'Restart will reuse versioned cache · 1h ago']]
+        },
+        {
+          id: 'embedding-bge-m3', model: 'BAAI BGE-M3', profile: '910B3 · 1 NPU', state: 'Failed', stateKey: 'failed',
+          phase: 'Tekton failed', phaseIndex: 2, phaseText: 'Runtime profile is outside the certified allow-list',
+          requestedBy: 'user-a', revision: 'deploy-0901-0007', age: '2 h', npu: '0', node: 'Not selected',
+          endpoint: 'Not created', pr: '#30 · open', pipeline: 'model-platform-config-validation-x91ps',
+          argo: 'Not synced', crossplane: 'Not created', serve: 'Not created', cache: 'Not prepared',
+          config: { context: '8K', concurrency: '16', batch: '2048', memory: '80%', prefix: 'Off', mtp: 'Off' },
+          events: [['Policy rejected', 'runtimeProfileRef is not certified · 2h ago'], ['No cluster changes', 'PR remains open and no NPU was requested · 2h ago']]
+        }
+      ];
+
+      let selectedId = deployments[0].id;
+      const list = document.querySelector('#deployment-list');
+      const detail = document.querySelector('#detail-panel');
+      const search = document.querySelector('#search');
+      const filter = document.querySelector('#filter');
+      const toast = document.querySelector('#toast');
+
+      function statusClass(item) { return item.stateKey === 'pending' ? item.state.toLowerCase() : item.stateKey; }
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 2300);
+      }
+
+      function renderList() {
+        const query = search.value.trim().toLowerCase();
+        const stateFilter = filter.value;
+        const items = deployments.filter(item => {
+          const matchesText = !query || `${item.id} ${item.model} ${item.profile}`.toLowerCase().includes(query);
+          const matchesState = stateFilter === 'all' || item.stateKey === stateFilter;
+          return matchesText && matchesState;
+        });
+        list.innerHTML = items.map(item => `
+          <button class="deployment-card ${item.id === selectedId ? 'selected' : ''}" data-id="${item.id}">
+            <div class="card-top">
+              <div><div class="deployment-name">${item.id}</div><div class="model-name">${item.model}</div></div>
+              <span class="status ${statusClass(item)}">${item.state}</span>
+            </div>
+            <div class="chips">
+              <span class="chip">${item.profile}</span>
+              <span class="chip">${item.npu === '0' ? '0 NPU' : item.npu}</span>
+              <span class="chip ${item.stateKey === 'failed' ? 'error' : 'stage'}">${item.phase}</span>
+            </div>
+            <div class="card-foot">${item.revision} · ${item.age}</div>
+          </button>`).join('') || '<div class="empty">No deployments match the filter.</div>';
+        document.querySelectorAll('.deployment-card').forEach(card => card.addEventListener('click', () => {
+          selectedId = card.dataset.id;
+          renderList();
+          renderDetail();
+        }));
+      }
+
+      function pipelineMarkup(item) {
+        return stages.map((stage, index) => {
+          let klass = '';
+          let mark = index + 1;
+          if (item.stateKey === 'failed' && index === item.phaseIndex) { klass = 'error-step'; mark = '!'; }
+          else if (item.phaseIndex === 7 || index < item.phaseIndex) { klass = 'done'; mark = '✓'; }
+          else if (index === item.phaseIndex) { klass = 'active'; mark = '•'; }
+          return `<div class="pipeline-step ${klass}"><span class="dot">${mark}</span><b>${stage}</b><small>${klass === 'done' ? 'Done' : klass === 'active' ? 'In progress' : klass === 'error-step' ? 'Failed' : 'Waiting'}</small></div>`;
+        }).join('');
+      }
+
+      function renderDetail() {
+        const item = deployments.find(entry => entry.id === selectedId);
+        if (!item) { detail.innerHTML = '<div class="empty">Select a deployment.</div>'; return; }
+        const running = item.stateKey === 'running';
+        const stopped = item.stateKey === 'stopped';
+        const busy = item.stateKey === 'pending';
+        detail.innerHTML = `
+          <header class="panel-header">
+            <div><h2>Deployment details · ${item.id}</h2><p>${item.model} · requested by ${item.requestedBy}</p></div>
+            <span class="status ${statusClass(item)}">${item.state}</span>
+          </header>
+          <div class="detail-content">
+            <div class="summary-grid">
+              <div class="summary-box"><label>Status</label><strong>${item.state}</strong><small>${item.age}</small></div>
+              <div class="summary-box"><label>Current phase</label><strong>${item.phase}</strong><small>${item.phaseText}</small></div>
+              <div class="summary-box"><label>Placement</label><strong class="mono">${item.node}</strong><small>${item.npu}</small></div>
+              <div class="summary-box"><label>Runtime</label><strong>${item.profile}</strong><small>${item.crossplane}</small></div>
+              <div class="summary-box"><label>Endpoint</label><strong class="mono">${item.endpoint}</strong><small>${item.serve}</small></div>
+            </div>
+            <div class="actions">
+              <button class="action primary" id="start" ${stopped ? '' : 'disabled'}>▶ Start</button>
+              <button class="action danger" id="stop" ${running ? '' : 'disabled'}>■ Stop</button>
+              <button class="action" id="update" ${running || stopped ? '' : 'disabled'}>⚙ Update</button>
+              <button class="action" id="rollback" ${busy ? 'disabled' : ''}>↶ Rollback</button>
+              <button class="action link-action" id="pipeline-link">☷ View pipeline</button>
+              <button class="action link-action" id="logs">▤ Logs</button>
+            </div>
+            <section class="section">
+              <div class="section-title"><h3>Deployment pipeline</h3><span>${item.pipeline}</span></div>
+              <div class="pipeline">${pipelineMarkup(item)}</div>
+            </section>
+            <section class="section detail-grid">
+              <article class="subcard">
+                <h4>Configuration and release</h4>
+                <div class="kv">
+                  <div class="key">Git pull request</div><div class="value">${item.pr}</div>
+                  <div class="key">Argo CD</div><div class="value">${item.argo}</div>
+                  <div class="key">Crossplane</div><div class="value">${item.crossplane}</div>
+                  <div class="key">Model cache</div><div class="value">${item.cache}</div>
+                  <div class="key">Serving config</div><div class="value">Context ${item.config.context} · concurrency ${item.config.concurrency} · batch ${item.config.batch}</div>
+                  <div class="key">Optimizations</div><div class="value">Memory ${item.config.memory} · prefix ${item.config.prefix} · MTP ${item.config.mtp}</div>
+                </div>
+                <div class="raw">deployment: ${item.id}\nrevision: ${item.revision}\nphase: ${item.phase}\nendpoint: ${item.endpoint}</div>
+              </article>
+              <article class="subcard">
+                <h4>Health and recent events</h4>
+                <div class="health-line"><span class="health-dot ${item.stateKey === 'failed' ? 'fail' : ''}"></span><span>Model deployment · ${item.stateKey === 'failed' ? 'Failed' : item.crossplane}</span></div>
+                <div class="health-line"><span class="health-dot ${running ? '' : stopped ? 'warn' : item.stateKey === 'failed' ? 'fail' : 'warn'}"></span><span>Ray Serve · ${item.serve}</span></div>
+                <div class="health-line"><span class="health-dot ${item.npu === '0' || item.npu === 'Not allocated' ? 'warn' : ''}"></span><span>NPU · ${item.npu}</span></div>
+                <div class="section" style="margin-top:12px;padding-top:9px">
+                  ${item.events.map(event => `<div class="event"><b>${event[0]}</b><span>${event[1]}</span></div>`).join('')}
+                </div>
+              </article>
+            </section>
+          </div>`;
+        document.querySelector('#start').onclick = () => showToast('Prototype: open the existing Start inference flow.');
+        document.querySelector('#stop').onclick = () => showToast('Prototype: open the constrained Stop confirmation.');
+        document.querySelector('#update').onclick = () => showToast('Prototype: open the parameter update form.');
+        document.querySelector('#rollback').onclick = () => showToast('Prototype: select a previous healthy revision.');
+        document.querySelector('#pipeline-link').onclick = () => showToast(item.pipeline);
+        document.querySelector('#logs').onclick = () => showToast('Prototype: aggregated Tekton / Ray / Serve logs.');
+      }
+
+      search.addEventListener('input', renderList);
+      filter.addEventListener('change', renderList);
+      document.querySelector('#refresh').addEventListener('click', () => showToast('Prototype: deployment status refreshed.'));
+      renderList();
+      renderDetail();
+    </script>
+  </body>
+</html>

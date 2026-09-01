@@ -7,9 +7,11 @@ import DeveloperBoardIcon from '@material-ui/icons/DeveloperBoard';
 import MemoryIcon from '@material-ui/icons/Memory';
 import { KccPretrainingPage } from './KccPretrainingPage';
 import { ModelDeploymentRecipesPage } from './ModelDeploymentRecipesPage';
+import { ModelDeploymentsPage } from './ModelDeploymentsPage';
 
 const trainingRouteRef = createRouteRef();
 const modelRecipesRouteRef = createRouteRef();
+const modelDeploymentsRouteRef = createRouteRef();
 
 const kccPretrainingPage = PageBlueprint.make({
   name: 'training',
@@ -33,6 +35,17 @@ const modelDeploymentPage = PageBlueprint.make({
   },
 });
 
+const modelDeploymentsDashboardPage = PageBlueprint.make({
+  name: 'model-deployments-dashboard',
+  params: {
+    path: '/model-deployments',
+    routeRef: modelDeploymentsRouteRef,
+    title: 'Model Deployments',
+    icon: <DeveloperBoardIcon fontSize="inherit" />,
+    loader: async () => <ModelDeploymentsPage />,
+  },
+});
+
 export const kccPretrainingPlugin = createFrontendPlugin({
   pluginId: 'kcc-pretraining',
   title: 'KCC and Model Deployment',
@@ -40,6 +53,7 @@ export const kccPretrainingPlugin = createFrontendPlugin({
   routes: {
     root: trainingRouteRef,
     modelRecipes: modelRecipesRouteRef,
+    modelDeployments: modelDeploymentsRouteRef,
   },
-  extensions: [kccPretrainingPage, modelDeploymentPage],
+  extensions: [kccPretrainingPage, modelDeploymentPage, modelDeploymentsDashboardPage],
 });

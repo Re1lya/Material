@@ -1,0 +1,300 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: validate-k12-npu-gitops-release
+  namespace: model-platform-ci
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: k12-data-pipeline-ci
+spec:
+  description: >-
+    Validate one exact gitadmin/model-platform-config commit whose diff is the
+    scoped K12 data-pipeline NPU smoke release directory. Renders kustomize
+    objects, enforces the 10-object allowlist, digest-pinned images,
+    Ascend910-only resources on a3-server-00 (physical devices 14/15),
+    allowlisted hostPaths, compatibility-only NodePort and no Secrets/cluster
+    RBAC, then reports tekton/k12-npu-gitops-release back to Gitea.
+  params:
+    - name: repository-url
+      type: string
+    - name: revision
+      type: string
+  workspaces:
+    - name: source
+  tasks:
+    - name: validate-k12-npu-gitops
+      params:
+        - name: repository-url
+          value: $(params.repository-url)
+        - name: revision
+          value: $(params.revision)
+      workspaces:
+        - name: source
+          workspace: source
+      taskSpec:
+        params:
+          - name: repository-url
+            type: string
+          - name: revision
+            type: string
+        workspaces:
+          - name: source
+        steps:
+          - name: clone
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            workingDir: $(workspaces.source.path)
+            env:
+              - name: REPOSITORY_URL
+                value: $(params.repository-url)
+              - name: REVISION
+                value: $(params.revision)
+              - name: GITEA_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-ci-reader
+                    key: username
+              - name: GITEA_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-ci-reader
+                    key: token
+            script: |
+              #!/bin/sh
+              set -eu
+              test "${REPOSITORY_URL}" = \
+                'http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git'
+              case "${REVISION}" in
+                *[!0-9a-f]*|'') exit 1 ;;
+              esac
+              test "${#REVISION}" -eq 40
+              test "${#GITEA_TOKEN}" -ge 20
+
+              askpass="$(workspaces.source.path)/git-askpass.sh"
+              checkout="$(workspaces.source.path)/repository"
+              rm -rf "${checkout}"
+              cat > "${askpass}" <<'EOF'
+              #!/bin/sh
+              case "$1" in
+                *Username*) printf '%s' "$GITEA_USERNAME" ;;
+                *Password*) printf '%s' "$GITEA_TOKEN" ;;
+                *) exit 1 ;;
+              esac
+              EOF
+              chmod 0700 "${askpass}"
+              export GIT_ASKPASS="${askpass}" GIT_TERMINAL_PROMPT=0
+              git clone --no-checkout "${REPOSITORY_URL}" "${checkout}"
+              git -C "${checkout}" checkout --detach "${REVISION}"
+              rm -f "${askpass}"
+              test "$(git -C "${checkout}" rev-parse HEAD)" = "${REVISION}"
+              test -d "${checkout}/environments/production/k12-data-pipeline"
+              echo 'k12_npu_gitops_clone=PASS'
+            computeResources:
+              requests: {cpu: 100m, memory: 128Mi}
+              limits: {cpu: 500m, memory: 512Mi}
+            securityContext: &restricted
+              allowPrivilegeEscalation: false
+              capabilities: {drop: [ALL]}
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile: {type: RuntimeDefault}
+
+          - name: render-and-policy
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            workingDir: $(workspaces.source.path)
+            script: |
+              #!/bin/sh
+              set -eu
+              rendered="$(workspaces.source.path)/k12-npu-smoke-rendered.yaml"
+              kubectl kustomize \
+                repository/environments/production/k12-data-pipeline > "${rendered}"
+              test -s "${rendered}"
+              python3 - "${rendered}" <<'PY'
+              import re
+              import sys
+
+              text = open(sys.argv[1]).read()
+              errors = []
+
+              CPU = "sha256:430327a3c07b8ef146fd165acb51e6ea90ba2f9c95e29e79668e3eac28fba537"
+              MINERU = "sha256:878cce76d3e954cbddec8d7870d8d7288ce1e561fc52a99cf2d5346efee026ae"
+              QWEN = "sha256:d6f9824f0460e1bc814e4eb2466c5dfd5878b821263c42bd1d17cc9b0504cc28"
+
+              kinds = re.findall(r"^kind:\s*(\S+)\s*$", text, flags=re.M)
+              expected = sorted([
+                  "ServiceAccount", "ConfigMap", "ConfigMap", "ConfigMap",
+                  "Service", "Service", "Deployment", "Deployment",
+                  "Deployment", "RayCluster", "NetworkPolicy",
+                  "NetworkPolicy",
+              ])
+              print(f"rendered_object_count={len(kinds)}")
+              if sorted(kinds) != expected:
+                  errors.append(f"kinds mismatch {sorted(kinds)}")
+              else:
+                  print("k12_npu_gitops_kinds=PASS")
+
+              documents = re.split(r"^---\s*$", text, flags=re.M)
+              ray_documents = [
+                  document
+                  for document in documents
+                  if re.search(r"^kind:\s*RayCluster\s*$", document, flags=re.M)
+              ]
+              if len(ray_documents) != 1:
+                  errors.append(f"RayCluster count {len(ray_documents)}")
+              elif re.search(r"^spec:\s*\n\s+schedulerName:", ray_documents[0], flags=re.M):
+                  errors.append("unsupported RayCluster spec.schedulerName")
+              else:
+                  print("k12_npu_gitops_raycluster_schema=PASS")
+
+              images = re.findall(r"^\s*image:\s*(\S+)\s*$", text, flags=re.M)
+              unpinned = [i for i in images if "@sha256:" not in i]
+              if unpinned or not images:
+                  errors.append(f"unpinned images {unpinned}")
+              else:
+                  print(f"k12_npu_gitops_image_pinning=PASS images={len(images)}")
+              cpu_refs = text.count(f"platform/kcc-data-pipeline:0.5.1-npu-smoke-3b51c26@{CPU}")
+              mineru_refs = text.count(
+                  "platform/kcc-mineru-npu:official-v0.11.0-20260715-ray248-lake-20260716@"
+                  + MINERU)
+              qwen_refs = text.count(
+                  "platform/kcc-qwen-vllm-ascend:v0.21.0rc1-a3-20260713-s3@" + QWEN)
+              if (cpu_refs, mineru_refs, qwen_refs) != (4, 2, 1):
+                  errors.append(f"digest assignment {cpu_refs}/{mineru_refs}/{qwen_refs}")
+              else:
+                  print("k12_npu_gitops_digest_assignment=PASS")
+
+              if re.search(r"huawei\.com/Ascend(?!910)", text):
+                  errors.append("non-Ascend910 resource")
+              asc = re.findall(r"^\s*huawei\.com/Ascend910:\s*\"?(\d+)\"?\s*$", text, flags=re.M)
+              if sorted(asc) != ["2", "2", "2", "2"]:
+                  errors.append(f"Ascend910 requests {asc}")
+              else:
+                  print("k12_npu_gitops_ascend_requests=PASS")
+              ann = re.findall(r"huawei\.com/Ascend910:\s*\"?Ascend910-14,Ascend910-15\"?", text)
+              if len(ann) != 4:
+                  errors.append(f"device annotations {len(ann)}")
+              else:
+                  print("k12_npu_gitops_device_annotation=PASS")
+
+              missing_pid_aliases = [
+                  pid_file
+                  for pid_file in ("vllm-A.pid", "vllm-B.pid")
+                  if pid_file not in text
+              ]
+              if missing_pid_aliases:
+                  errors.append(f"MinerU PID aliases missing {missing_pid_aliases}")
+              else:
+                  print("k12_npu_gitops_mineru_pid_aliases=PASS")
+
+              approved = {
+                  "/usr/local/Ascend/driver", "/usr/local/dcmi",
+                  "/usr/local/bin/npu-smi",
+                  "/home/admin/models/Qwen3.6-35B-A3B-w8a8",
+              }
+              hostpaths = re.findall(r"hostPath:\s*\n\s*path:\s*\"?([^\"\n]+)", text)
+              if len(hostpaths) != 7 or [p for p in hostpaths if p not in approved]:
+                  errors.append(f"hostPath violation {hostpaths}")
+              else:
+                  print("k12_npu_gitops_hostpath_allowlist=PASS")
+
+              a3 = re.findall(r"kubernetes\.io/hostname:\s*a3-server-00", text)
+              s0 = re.findall(r"kubernetes\.io/hostname:\s*server-00", text)
+              if len(a3) != 2 or len(s0) != 3:
+                  errors.append(f"node pinning a3={len(a3)} s0={len(s0)}")
+              else:
+                  print("k12_npu_gitops_node_pinning=PASS")
+
+              if re.search(r"kind:\s*(Secret|PersistentVolume|PersistentVolumeClaim|ClusterRole|ClusterRoleBinding|Role|RoleBinding|Job|CronJob)\b", text):
+                  errors.append("forbidden kind present")
+              else:
+                  print("k12_npu_gitops_forbidden_kinds=PASS")
+
+              node_ports = re.findall(r"nodePort:\s*(\S+)", text)
+              if node_ports != ["30080"]:
+                  errors.append(f"nodePorts {node_ports}")
+              else:
+                  print("k12_npu_gitops_nodeport=PASS")
+
+              priv = re.findall(r"privileged:\s*true", text)
+              if len(priv) != 2:
+                  errors.append(f"privileged count {len(priv)}")
+              else:
+                  print("k12_npu_gitops_privileged=PASS")
+
+              if errors:
+                  for e in errors:
+                      print(f"K12_NPU_GITOPS_FAIL {e}")
+                  raise SystemExit(1)
+              print("k12_npu_gitops_render_policy=PASS")
+              PY
+            computeResources:
+              requests: {cpu: 100m, memory: 128Mi}
+              limits: {cpu: 500m, memory: 512Mi}
+            securityContext: *restricted
+  finally:
+    - name: report-k12-npu-gitops-status
+      params:
+        - name: revision
+          value: $(params.revision)
+        - name: aggregate-status
+          value: $(tasks.status)
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+          - name: aggregate-status
+            type: string
+        steps:
+          - name: report
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            env:
+              - name: REVISION
+                value: $(params.revision)
+              - name: AGGREGATE_STATUS
+                value: $(params.aggregate-status)
+              - name: GITEA_STATUS_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-ci-status-writer
+                    key: token
+            script: |
+              #!/usr/bin/env python3
+              import json
+              import os
+              import urllib.error
+              import urllib.request
+
+              revision = os.environ["REVISION"]
+              aggregate = os.environ["AGGREGATE_STATUS"]
+              if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
+                  raise SystemExit("malformed revision")
+              state = "success" if aggregate == "Succeeded" else "failure"
+              request = urllib.request.Request(
+                  f"http://gitea-http.gitea.svc.cluster.local:3000/api/v1/repos/gitadmin/model-platform-config/statuses/{revision}",
+                  method="POST",
+                  data=json.dumps(
+                      {
+                          "state": state,
+                          "context": "tekton/k12-npu-gitops-release",
+                          "description": f"K12 NPU GitOps release validation: {aggregate}",
+                          "target_url": f"http://110.120.0.3:30081/gitadmin/model-platform-config/commit/{revision}",
+                      }
+                  ).encode(),
+                  headers={
+                      "Authorization": f"token {os.environ['GITEA_STATUS_TOKEN']}",
+                      "Content-Type": "application/json",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      if response.status != 201:
+                          raise SystemExit(f"Gitea returned HTTP {response.status}")
+              except urllib.error.HTTPError as error:
+                  raise SystemExit(f"Gitea returned HTTP {error.code}") from None
+              print(f"gitea_commit_status={state}")
+            computeResources:
+              requests: {cpu: 100m, memory: 128Mi}
+              limits: {cpu: 500m, memory: 512Mi}
+            securityContext: *restricted

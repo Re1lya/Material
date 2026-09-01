@@ -139,6 +139,7 @@ spec:
                     - modelPath
                     - modelName
                     - serveConfigV2
+                    - serving
                     - headCPU
                     - headMemory
                     - workerCPU
@@ -162,6 +163,37 @@ spec:
                       type: string
                       minLength: 1
                       maxLength: 20000
+                    serving:
+                      type: object
+                      required:
+                        - maxModelLen
+                        - maxNumSeqs
+                        - maxNumBatchedTokens
+                        - gpuMemoryUtilization
+                        - prefixCaching
+                        - mtpTokens
+                        - maxOngoingRequests
+                      properties:
+                        maxModelLen:
+                          type: integer
+                          enum: [8192, 16384, 32768]
+                        maxNumSeqs:
+                          type: integer
+                          enum: [16, 32, 64]
+                        maxNumBatchedTokens:
+                          type: integer
+                          enum: [2048, 4096, 8192]
+                        gpuMemoryUtilization:
+                          type: number
+                          enum: [0.8, 0.85, 0.9]
+                        prefixCaching:
+                          type: boolean
+                        mtpTokens:
+                          type: integer
+                          enum: [0, 1, 3]
+                        maxOngoingRequests:
+                          type: integer
+                          enum: [16, 32, 64]
                     headCPU:
                       type: string
                       pattern: "^[0-9]+m?$"
@@ -223,6 +255,7 @@ spec:
                         - modeldeployment-control-plane-v1alpha1
                         - modeldeployment-runtime-zero-v1alpha1
                         - modeldeployment-qwen38-ray-v1alpha1
+                        - modeldeployment-stopped-v1alpha1
             status:
               type: object
               properties:

@@ -25,8 +25,10 @@ data:
   expected-tensor-parallel-size: "2"
   expected-data-parallel-size: "1"
   expected-pipeline-parallel-size: "1"
-  # Target placement and physical devices for the TP2 release unit.
+  # Target placement for the TP2 release unit. Volcano/MindX chooses a
+  # topology-valid pair dynamically. The gate checks the complete node-local
+  # pool so host processes invisible to Kubernetes still fail closed.
   target-node: "a3-server-00"
   target-node-labels: "kubernetes.io/arch=arm64,kubernetes.io/hostname=a3-server-00,node.kubernetes.io/npu.chip.name=Ascend910,accelerator-type=module-a3-16"
-  target-devices: "Ascend910-8,Ascend910-9"
-  target-device-ids: "8,9"
+  target-devices: "dynamic-safe-pool"
+  target-device-ids: "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"

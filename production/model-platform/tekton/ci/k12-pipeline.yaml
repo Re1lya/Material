@@ -9,271 +9,170 @@ metadata:
 spec:
   description: Validate one exact KCC commit and its app/data_pipeline platform CPU profile.
   params:
-    - name: repository-url
-      type: string
-    - name: revision
-      type: string
+  - name: repository-url
+    type: string
+  - name: revision
+    type: string
   workspaces:
-    - name: source
+  - name: source
   tasks:
-    - name: validate-k12
+  - name: validate-k12
+    params:
+    - name: repository-url
+      value: $(params.repository-url)
+    - name: revision
+      value: $(params.revision)
+    workspaces:
+    - name: source
+      workspace: source
+    taskSpec:
       params:
-        - name: repository-url
-          value: $(params.repository-url)
-        - name: revision
-          value: $(params.revision)
+      - name: repository-url
+        type: string
+      - name: revision
+        type: string
       workspaces:
-        - name: source
-          workspace: source
-      taskSpec:
-        params:
-          - name: repository-url
-            type: string
-          - name: revision
-            type: string
-        workspaces:
-          - name: source
-        steps:
-          - name: clone
-            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
-            imagePullPolicy: IfNotPresent
-            workingDir: $(workspaces.source.path)
-            env:
-              - name: REPOSITORY_URL
-                value: $(params.repository-url)
-              - name: REVISION
-                value: $(params.revision)
-              - name: GITEA_USERNAME
-                valueFrom:
-                  secretKeyRef:
-                    name: gitea-ci-reader
-                    key: username
-              - name: GITEA_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    name: gitea-ci-reader
-                    key: token
-            script: |
-              #!/bin/sh
-              set -eu
-              test "${REPOSITORY_URL}" = \
-                'http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/kcc.git'
-              case "${REVISION}" in
-                *[!0-9a-f]*|'') exit 1 ;;
-              esac
-              test "${#REVISION}" -eq 40
-              test "${#GITEA_TOKEN}" -ge 20
-
-              askpass="$(workspaces.source.path)/git-askpass.sh"
-              checkout="$(workspaces.source.path)/repository"
-              rm -rf "${checkout}"
-              cat > "${askpass}" <<'EOF'
-              #!/bin/sh
-              case "$1" in
-                *Username*) printf '%s' "$GITEA_USERNAME" ;;
-                *Password*) printf '%s' "$GITEA_TOKEN" ;;
-                *) exit 1 ;;
-              esac
-              EOF
-              chmod 0700 "${askpass}"
-              export GIT_ASKPASS="${askpass}" GIT_TERMINAL_PROMPT=0
-              git clone --no-checkout "${REPOSITORY_URL}" "${checkout}"
-              git -C "${checkout}" checkout --detach "${REVISION}"
-              rm -f "${askpass}"
-              test "$(git -C "${checkout}" rev-parse HEAD)" = "${REVISION}"
-              test -d "${checkout}/app/data_pipeline"
-            computeResources:
-              requests: {cpu: 100m, memory: 128Mi}
-              limits: {cpu: 500m, memory: 512Mi}
-            securityContext: &restricted
-              allowPrivilegeEscalation: false
-              capabilities: {drop: [ALL]}
-              runAsNonRoot: true
-              runAsUser: 65532
-              runAsGroup: 65532
-              seccompProfile: {type: RuntimeDefault}
-
-          - name: python-and-dagster
-            image: 110.120.0.3:30670/container-images/platform/kcc-data-pipeline:0.4.0-cpu-528da6f@sha256:f37687ea197794cbeb471505f193c19adbbb5e29133b245dff6c505dc1756718
-            imagePullPolicy: IfNotPresent
-            workingDir: $(workspaces.source.path)
-            env:
-              - name: PYTHONPATH
-                value: $(workspaces.source.path)/repository/app/data_pipeline/src
-              - name: S3_ENDPOINT_URL
-                value: http://127.0.0.1:9
-              - name: K12_PIPELINE_PROFILE
-                value: cpu
-            script: |
-              #!/bin/sh
-              set -eu
-              cd repository/app/data_pipeline
-              python3 -m compileall -q src/clean_qa
-              python3 -m unittest discover -s src/clean_qa/k12_clean_qa_pipeline/common/tests
-              python3 -m unittest discover -s src/clean_qa/k12_clean_qa_pipeline/stage1_clean/tests
-              python3 -m unittest discover -s src/clean_qa/k12_clean_qa_pipeline/stage2_qa/tests
-              python3 -m unittest discover -s src/clean_qa/mineru_dagster/tests
-              python3 - <<'PY'
-              from clean_qa.mineru_dagster.definitions import defs
-
-              names = {job.name for job in defs.resolve_all_job_defs()}
-              required = {"cleaning_smoke_10_job", "cleanjopbstage1_10"}
-              forbidden = {
-                  "qwen_chat_job",
-                  "qwen_vllm_lifecycle_job",
-                  "qa_stage2_8_16",
-                  "k12_e2e_autoscale_nojudge_job",
-              }
-              if not required.issubset(names) or forbidden.intersection(names):
-                  raise SystemExit(f"invalid CPU job catalog: {sorted(names)}")
-              print(f"k12_cpu_job_catalog=PASS count={len(names)}")
-              PY
-            computeResources:
-              requests: {cpu: 250m, memory: 512Mi}
-              limits: {cpu: "1", memory: 1Gi}
-            securityContext: *restricted
-
-          - name: helm-render
-            image: 110.120.0.3:30670/container-images/platform/kcc-ci-tools:0.1.0-helm4@sha256:077ab9d8d8e5f8b1ec52f681a15c2ee9255a0d48245c1e4c9aafb0fb9c54aef6
-            imagePullPolicy: IfNotPresent
-            workingDir: $(workspaces.source.path)
-            script: |
-              #!/bin/sh
-              set -eu
-              cd repository/app/data_pipeline
-              chart=helm/k12-clean-qa-pipeline
-              values="${chart}/values-platform-cpu.yaml"
-              rendered="$(workspaces.source.path)/k12-platform-cpu-rendered.yaml"
-              helm lint "${chart}" -f "${values}"
-              helm template k12-platform-cpu "${chart}" \
-                --namespace k12 -f "${values}" > "${rendered}"
-              test -s "${rendered}"
-              echo 'k12_cpu_helm_render=PASS'
-            computeResources:
-              requests: {cpu: 100m, memory: 128Mi}
-              limits: {cpu: 500m, memory: 512Mi}
-            securityContext: *restricted
-
-          - name: rendered-policy
-            image: 110.120.0.3:30670/container-images/platform/kcc-data-pipeline:0.4.0-cpu-528da6f@sha256:f37687ea197794cbeb471505f193c19adbbb5e29133b245dff6c505dc1756718
-            imagePullPolicy: IfNotPresent
-            workingDir: $(workspaces.source.path)
-            script: |
-              #!/bin/sh
-              set -eu
-              cd repository/app/data_pipeline
-              rendered="$(workspaces.source.path)/k12-platform-cpu-rendered.yaml"
-              python3 scripts/clean_qa/validate_helm_render.py "${rendered}"
-              test "$(grep -c '^kind:' "${rendered}")" -eq 8
-              grep -q 'K12_PIPELINE_PROFILE' "${rendered}"
-              grep -q '@sha256:f37687ea197794cbeb471505f193c19adbbb5e29133b245dff6c505dc1756718' "${rendered}"
-              python3 - "${rendered}" <<'PY'
-              import sys
-              import yaml
-
-              documents = [
-                  document
-                  for document in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8"))
-                  if document
-              ]
-              node_ports = []
-              compatibility = None
-              for document in documents:
-                  if document.get("kind") != "Service":
-                      continue
-                  metadata = document.get("metadata") or {}
-                  spec = document.get("spec") or {}
-                  for port in spec.get("ports") or []:
-                      if port.get("nodePort") is not None:
-                          node_ports.append((metadata.get("name"), port.get("nodePort")))
-                  if metadata.get("name") == "mineru-dagster":
-                      compatibility = document
-
-              if node_ports != [("mineru-dagster", 30080)]:
-                  raise SystemExit(f"invalid CPU NodePort set: {node_ports}")
-              spec = compatibility.get("spec") if compatibility else {}
-              selector = spec.get("selector") or {}
-              if spec.get("type") != "NodePort":
-                  raise SystemExit("mineru-dagster must be a NodePort Service")
-              if selector != {
-                  "app.kubernetes.io/name": "k12-clean-qa-pipeline",
-                  "app.kubernetes.io/instance": "k12-platform-cpu",
-                  "app.kubernetes.io/component": "dagster",
-              }:
-                  raise SystemExit(f"invalid compatibility selector: {selector}")
-              print("k12_cpu_compatibility_service=PASS")
-              PY
-              if grep -Eq 'huawei.com/Ascend|hostPath:|privileged: true|kind: Role$|app.kubernetes.io/component: (mineru|qwen)' "${rendered}"; then
-                echo 'CPU profile rendered a forbidden NPU/host/RBAC field' >&2
-                exit 1
-              fi
-              echo 'k12_cpu_helm_policy=PASS'
-            computeResources:
-              requests: {cpu: 100m, memory: 128Mi}
-              limits: {cpu: 500m, memory: 512Mi}
-            securityContext: *restricted
-  finally:
-    - name: report-k12-status
-      params:
-        - name: revision
+      - name: source
+      steps:
+      - name: clone
+        image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+        imagePullPolicy: IfNotPresent
+        workingDir: $(workspaces.source.path)
+        env:
+        - name: REPOSITORY_URL
+          value: $(params.repository-url)
+        - name: REVISION
           value: $(params.revision)
-        - name: aggregate-status
-          value: $(tasks.status)
-      taskSpec:
-        params:
-          - name: revision
-            type: string
-          - name: aggregate-status
-            type: string
-        steps:
-          - name: report
-            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
-            env:
-              - name: REVISION
-                value: $(params.revision)
-              - name: AGGREGATE_STATUS
-                value: $(params.aggregate-status)
-              - name: GITEA_STATUS_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    name: gitea-ci-status-writer
-                    key: token
-            script: |
-              #!/usr/bin/env python3
-              import json
-              import os
-              import urllib.error
-              import urllib.request
-
-              revision = os.environ["REVISION"]
-              aggregate = os.environ["AGGREGATE_STATUS"]
-              if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
-                  raise SystemExit("malformed revision")
-              state = "success" if aggregate == "Succeeded" else "failure"
-              request = urllib.request.Request(
-                  f"http://gitea-http.gitea.svc.cluster.local:3000/api/v1/repos/gitadmin/kcc/statuses/{revision}",
-                  method="POST",
-                  data=json.dumps(
-                      {
-                          "state": state,
-                          "context": "tekton/k12-data-pipeline-cpu",
-                          "description": f"K12 CPU policy validation: {aggregate}",
-                          "target_url": f"http://110.120.0.3:30081/gitadmin/kcc/commit/{revision}",
-                      }
-                  ).encode(),
-                  headers={
-                      "Authorization": f"token {os.environ['GITEA_STATUS_TOKEN']}",
-                      "Content-Type": "application/json",
-                  },
-              )
-              try:
-                  with urllib.request.urlopen(request, timeout=20) as response:
-                      if response.status != 201:
-                          raise SystemExit(f"Gitea returned HTTP {response.status}")
-              except urllib.error.HTTPError as error:
-                  raise SystemExit(f"Gitea returned HTTP {error.code}") from None
-              print(f"gitea_commit_status={state}")
-            computeResources:
-              requests: {cpu: 100m, memory: 128Mi}
-              limits: {cpu: 500m, memory: 512Mi}
-            securityContext: *restricted
+        - name: GITEA_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: gitea-ci-reader
+              key: username
+        - name: GITEA_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: gitea-ci-reader
+              key: token
+        script: "#!/bin/sh\nset -eu\ntest \"${REPOSITORY_URL}\" = \\\n  'http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/kcc.git'\ncase \"${REVISION}\" in\n  *[!0-9a-f]*|'') exit 1 ;;\nesac\ntest \"${#REVISION}\" -eq 40\ntest \"${#GITEA_TOKEN}\" -ge 20\n\naskpass=\"$(workspaces.source.path)/git-askpass.sh\"\ncheckout=\"$(workspaces.source.path)/repository\"\nrm -rf \"${checkout}\"\ncat > \"${askpass}\" <<'EOF'\n#!/bin/sh\ncase \"$1\" in\n  *Username*) printf '%s' \"$GITEA_USERNAME\" ;;\n  *Password*) printf '%s' \"$GITEA_TOKEN\" ;;\n  *) exit 1 ;;\nesac\nEOF\nchmod 0700 \"${askpass}\"\nexport GIT_ASKPASS=\"${askpass}\" GIT_TERMINAL_PROMPT=0\ngit clone --no-checkout \"${REPOSITORY_URL}\" \"${checkout}\"\ngit -C \"${checkout}\" checkout --detach \"${REVISION}\"\nrm -f \"${askpass}\"\ntest \"$(git -C \"${checkout}\" rev-parse HEAD)\" = \"${REVISION}\"\ntest -d \"${checkout}/app/data_pipeline\"\n"
+        computeResources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        securityContext: &id001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 65532
+          runAsGroup: 65532
+          seccompProfile:
+            type: RuntimeDefault
+      - name: python-and-dagster
+        image: 110.120.0.3:30670/container-images/platform/kcc-data-pipeline:0.4.0-cpu-528da6f@sha256:f37687ea197794cbeb471505f193c19adbbb5e29133b245dff6c505dc1756718
+        imagePullPolicy: IfNotPresent
+        workingDir: $(workspaces.source.path)
+        env:
+        - name: PYTHONPATH
+          value: $(workspaces.source.path)/repository/app/data_pipeline/src
+        - name: S3_ENDPOINT_URL
+          value: http://127.0.0.1:9
+        - name: K12_PIPELINE_PROFILE
+          value: cpu
+        script: "#!/bin/sh\nset -eu\ncd repository/app/data_pipeline\npython3 -m compileall -q src/clean_qa\npython3 -m unittest discover -s src/clean_qa/k12_clean_qa_pipeline/common/tests\npython3 -m unittest discover -s src/clean_qa/k12_clean_qa_pipeline/stage1_clean/tests\npython3 -m unittest discover -s src/clean_qa/k12_clean_qa_pipeline/stage2_qa/tests\npython3 -m unittest discover -s src/clean_qa/mineru_dagster/tests\npython3 - <<'PY'\nfrom clean_qa.mineru_dagster.definitions import defs\n\nnames = {job.name for job in defs.resolve_all_job_defs()}\nrequired = {\"cleaning_smoke_10_job\", \"cleanjopbstage1_10\"}\nforbidden = {\n    \"qwen_chat_job\",\n    \"qwen_vllm_lifecycle_job\",\n    \"qa_stage2_8_16\",\n    \"k12_e2e_autoscale_nojudge_job\",\n}\nif not required.issubset(names) or forbidden.intersection(names):\n    raise SystemExit(f\"invalid CPU job catalog: {sorted(names)}\")\nprint(f\"k12_cpu_job_catalog=PASS count={len(names)}\")\nPY\n"
+        computeResources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext: *id001
+      - name: helm-render
+        image: 110.120.0.3:30670/container-images/platform/kcc-ci-tools:0.1.0-helm4@sha256:077ab9d8d8e5f8b1ec52f681a15c2ee9255a0d48245c1e4c9aafb0fb9c54aef6
+        imagePullPolicy: IfNotPresent
+        workingDir: $(workspaces.source.path)
+        script: "#!/bin/sh\nset -eu\ncd repository/app/data_pipeline\nchart=helm/k12-clean-qa-pipeline\nvalues=\"${chart}/values-platform-cpu.yaml\"\nrendered=\"$(workspaces.source.path)/k12-platform-cpu-rendered.yaml\"\nhelm lint \"${chart}\" -f \"${values}\"\nhelm template k12-platform-cpu \"${chart}\" \\\n  --namespace k12 -f \"${values}\" > \"${rendered}\"\ntest -s \"${rendered}\"\necho 'k12_cpu_helm_render=PASS'\n"
+        computeResources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        securityContext: *id001
+      - name: rendered-policy
+        image: 110.120.0.3:30670/container-images/platform/kcc-data-pipeline:0.4.0-cpu-528da6f@sha256:f37687ea197794cbeb471505f193c19adbbb5e29133b245dff6c505dc1756718
+        imagePullPolicy: IfNotPresent
+        workingDir: $(workspaces.source.path)
+        script: "#!/bin/sh\nset -eu\ncd repository/app/data_pipeline\nrendered=\"$(workspaces.source.path)/k12-platform-cpu-rendered.yaml\"\npython3 scripts/clean_qa/validate_helm_render.py \"${rendered}\"\ntest \"$(grep -c '^kind:' \"${rendered}\")\" -eq 8\ngrep -q 'K12_PIPELINE_PROFILE' \"${rendered}\"\ngrep -q '@sha256:f37687ea197794cbeb471505f193c19adbbb5e29133b245dff6c505dc1756718' \"${rendered}\"\npython3 - \"${rendered}\" <<'PY'\nimport sys\nimport yaml\n\ndocuments = [\n    document\n    for document in yaml.safe_load_all(open(sys.argv[1], encoding=\"utf-8\"))\n    if document\n]\nnode_ports = []\ncompatibility = None\nfor document in documents:\n    if document.get(\"kind\") != \"Service\":\n        continue\n    metadata = document.get(\"metadata\") or {}\n    spec = document.get(\"spec\") or {}\n    for port in spec.get(\"ports\") or []:\n        if port.get(\"nodePort\") is not None:\n            node_ports.append((metadata.get(\"name\"), port.get(\"nodePort\")))\n    if metadata.get(\"\
+          name\") == \"mineru-dagster\":\n        compatibility = document\n\nif node_ports != [(\"mineru-dagster\", 30080)]:\n    raise SystemExit(f\"invalid CPU NodePort set: {node_ports}\")\nspec = compatibility.get(\"spec\") if compatibility else {}\nselector = spec.get(\"selector\") or {}\nif spec.get(\"type\") != \"NodePort\":\n    raise SystemExit(\"mineru-dagster must be a NodePort Service\")\nif selector != {\n    \"app.kubernetes.io/name\": \"k12-clean-qa-pipeline\",\n    \"app.kubernetes.io/instance\": \"k12-platform-cpu\",\n    \"app.kubernetes.io/component\": \"dagster\",\n}:\n    raise SystemExit(f\"invalid compatibility selector: {selector}\")\nprint(\"k12_cpu_compatibility_service=PASS\")\nPY\nif grep -Eq 'huawei.com/Ascend|hostPath:|privileged: true|kind: Role$|app.kubernetes.io/component: (mineru|qwen)' \"${rendered}\"; then\n  echo 'CPU profile rendered a forbidden NPU/host/RBAC field' >&2\n  exit 1\nfi\necho 'k12_cpu_helm_policy=PASS'\n"
+        computeResources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        securityContext: *id001
+      - name: npu-render-policy
+        image: 110.120.0.3:30670/container-images/platform/kcc-ci-tools:0.1.0-helm4@sha256:077ab9d8d8e5f8b1ec52f681a15c2ee9255a0d48245c1e4c9aafb0fb9c54aef6
+        imagePullPolicy: IfNotPresent
+        workingDir: $(workspaces.source.path)
+        script: "#!/bin/sh\nset -u\ncd repository/app/data_pipeline\nrendered=\"$(workspaces.source.path)/k12-platform-npu-smoke-rendered.yaml\"\nrc=0\n{\n  helm lint helm/k12-clean-qa-pipeline \\\n    -f helm/k12-clean-qa-pipeline/values-platform-npu-smoke.yaml &&\n  helm template k12-platform-cpu helm/k12-clean-qa-pipeline \\\n    --namespace k12 \\\n    -f helm/k12-clean-qa-pipeline/values-platform-npu-smoke.yaml \\\n    > \"${rendered}\" &&\n  test -s \"${rendered}\" &&\n  python3 scripts/clean_qa/validate_npu_render.py \"${rendered}\"\n} || rc=$?\nif [ \"$rc\" -eq 0 ]; then\n  printf '%s' SUCCESS > \"$(results.npu-status.path)\"\n  echo \"k12_npu_render_policy_result=SUCCESS\"\nelse\n  printf '%s' FAILURE > \"$(results.npu-status.path)\"\n  echo \"k12_npu_render_policy_result=FAILURE\"\nfi\n"
+        computeResources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        securityContext: *id001
+      results:
+      - name: npu-status
+        type: string
+  finally:
+  - name: report-k12-status
+    params:
+    - name: revision
+      value: $(params.revision)
+    - name: aggregate-status
+      value: $(tasks.status)
+    - name: npu-status
+      value: $(tasks.validate-k12.results.npu-status)
+    taskSpec:
+      params:
+      - name: revision
+        type: string
+      - name: aggregate-status
+        type: string
+      - name: npu-status
+        type: string
+      steps:
+      - name: report
+        image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+        env:
+        - name: REVISION
+          value: $(params.revision)
+        - name: AGGREGATE_STATUS
+          value: $(params.aggregate-status)
+        - name: GITEA_STATUS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: gitea-ci-status-writer
+              key: token
+        - name: NPU_STATUS
+          value: $(params.npu-status)
+        script: "#!/usr/bin/env python3\nimport json\nimport os\nimport urllib.error\nimport urllib.request\n\nrevision = os.environ[\"REVISION\"]\naggregate = os.environ[\"AGGREGATE_STATUS\"]\nnpu_status = os.environ[\"NPU_STATUS\"]\nif len(revision) != 40 or any(ch not in \"0123456789abcdef\" for ch in revision):\n    raise SystemExit(\"malformed revision\")\n\ndef post(context, state, description):\n    request = urllib.request.Request(\n        f\"http://gitea-http.gitea.svc.cluster.local:3000/api/v1/repos/gitadmin/kcc/statuses/{revision}\",\n        method=\"POST\",\n        data=json.dumps(\n            {\n                \"state\": state,\n                \"context\": context,\n                \"description\": description,\n                \"target_url\": f\"http://110.120.0.3:30081/gitadmin/kcc/commit/{revision}\",\n            }\n        ).encode(),\n        headers={\n            \"Authorization\": f\"token {os.environ['GITEA_STATUS_TOKEN']}\",\n            \"Content-Type\": \"\
+          application/json\",\n        },\n    )\n    try:\n        with urllib.request.urlopen(request, timeout=20) as response:\n            if response.status != 201:\n                raise SystemExit(f\"Gitea returned HTTP {response.status}\")\n    except urllib.error.HTTPError as error:\n        raise SystemExit(f\"Gitea returned HTTP {error.code}\") from None\n\nstate_cpu = \"success\" if aggregate == \"Succeeded\" else \"failure\"\npost(\"tekton/k12-data-pipeline-cpu\", state_cpu, f\"K12 CPU policy validation: {aggregate}\")\nprint(f\"gitea_commit_status_cpu={state_cpu}\")\n\nstate_npu = \"success\" if npu_status == \"SUCCESS\" else \"failure\"\npost(\"tekton/k12-npu-smoke\", state_npu, f\"K12 NPU smoke profile validation: {npu_status}\")\nprint(f\"gitea_commit_status_npu={state_npu}\")\n"
+        computeResources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext: *id001

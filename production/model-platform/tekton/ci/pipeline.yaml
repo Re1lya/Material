@@ -322,6 +322,11 @@ spec:
                       "running requests are handled by auto-merge-running-request; skipping"
                   )
                   raise SystemExit(0)
+              if head_ref.startswith("backstage/modeldeployment-stopping-"):
+                  print(
+                      "stop requests are handled by auto-merge-stop-request; skipping"
+                  )
+                  raise SystemExit(0)
 
               if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
                   raise SystemExit("refusing to merge a malformed revision")
@@ -438,6 +443,296 @@ spec:
               runAsGroup: 65532
               seccompProfile:
                 type: RuntimeDefault
+    - name: auto-merge-stop-request
+      runAfter:
+        - clone-and-validate
+      when:
+        - input: $(params.source-provider)
+          operator: in
+          values:
+            - gitea
+        - input: $(params.event-kind)
+          operator: in
+          values:
+            - pull-request
+      params:
+        - name: revision
+          value: $(params.revision)
+        - name: pull-request-number
+          value: $(params.pull-request-number)
+        - name: pull-request-head-ref
+          value: $(params.pull-request-head-ref)
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+          - name: pull-request-number
+            type: string
+          - name: pull-request-head-ref
+            type: string
+        volumes:
+          - name: running-gate-policy
+            configMap:
+              name: model-platform-running-gate-policy
+        steps:
+          - name: merge
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: REVISION
+                value: $(params.revision)
+              - name: PULL_REQUEST_NUMBER
+                value: $(params.pull-request-number)
+              - name: PULL_REQUEST_HEAD_REF
+                value: $(params.pull-request-head-ref)
+              - name: GITEA_MERGE_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-model-deployment-merger
+                    key: token
+            volumeMounts:
+              - name: running-gate-policy
+                mountPath: /var/run/running-gate-policy
+                readOnly: true
+            script: |
+              #!/usr/bin/env python3
+              import base64
+              import copy
+              import json
+              import os
+              import re
+              import urllib.error
+              import urllib.parse
+              import urllib.request
+
+              from ruamel.yaml import YAML
+
+              POLICY_DIR = "/var/run/running-gate-policy"
+              PREFIX = "platform.example.com/"
+              api = "http://gitea-http.gitea.svc.cluster.local:3000/api/v1"
+              repository = "/repos/gitadmin/model-platform-config"
+              revision = os.environ["REVISION"]
+              pull_number = os.environ["PULL_REQUEST_NUMBER"]
+              token = os.environ["GITEA_MERGE_TOKEN"]
+              head_ref = os.environ.get("PULL_REQUEST_HEAD_REF", "")
+              branch_prefix = "backstage/modeldeployment-stopping-"
+
+              if not head_ref.startswith(branch_prefix):
+                  print("stop auto-merge not applicable; skipping")
+                  raise SystemExit(0)
+              deployment = head_ref[len(branch_prefix):]
+              if not re.fullmatch(r"[a-z0-9](?:[-a-z0-9]*[a-z0-9])?", deployment):
+                  raise SystemExit("stop branch does not encode a valid deployment name")
+              if len(deployment) > 40:
+                  raise SystemExit("stop branch deployment name is too long")
+              if len(revision) != 40 or any(ch not in "0123456789abcdef" for ch in revision):
+                  raise SystemExit("refusing to merge a malformed revision")
+              if not pull_number.isdigit() or int(pull_number) < 1:
+                  raise SystemExit("pull-request-number must be a positive integer")
+              if len(token) < 20:
+                  raise SystemExit("merge token is missing or too short")
+
+              def policy(name):
+                  with open(os.path.join(POLICY_DIR, name), encoding="utf-8") as handle:
+                      return handle.read().strip()
+
+              allowlist = [
+                  item.strip()
+                  for item in policy("allowlisted-requested-by").split(",")
+                  if item.strip()
+              ]
+
+              def call(method, path, body=None, accepted=(200,)):
+                  data = None if body is None else json.dumps(body).encode("utf-8")
+                  request = urllib.request.Request(
+                      api + path,
+                      data=data,
+                      method=method,
+                      headers={
+                          "Accept": "application/json",
+                          "Authorization": f"token {token}",
+                          **({} if data is None else {"Content-Type": "application/json"}),
+                      },
+                  )
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          raw = response.read()
+                          status = response.status
+                  except urllib.error.HTTPError as error:
+                      raise SystemExit(
+                          f"Gitea {method} {path} returned HTTP {error.code}"
+                      ) from None
+                  if status not in accepted:
+                      raise SystemExit(f"Gitea {method} {path} returned HTTP {status}")
+                  return None if not raw else json.loads(raw)
+
+              pull = call("GET", f"{repository}/pulls/{pull_number}")
+              if pull.get("state") != "open":
+                  raise SystemExit("pull request is not open")
+              if pull.get("base", {}).get("ref") != "main":
+                  raise SystemExit("pull request base must be main")
+              if pull.get("head", {}).get("sha") != revision:
+                  raise SystemExit("pull request head differs from the validated revision")
+              if pull.get("head", {}).get("repo", {}).get("full_name") != "gitadmin/model-platform-config":
+                  raise SystemExit("pull request head repository is outside the trust boundary")
+              if pull.get("head", {}).get("ref") != head_ref:
+                  raise SystemExit("pull request branch differs from the webhook branch")
+
+              files = call("GET", f"{repository}/pulls/{pull_number}/files")
+              if len(files) != 1:
+                  raise SystemExit("stop auto-merge requires exactly one changed file")
+              changed = files[0]
+              filename = changed.get("filename", "")
+              if changed.get("status") != "changed":
+                  raise SystemExit("stop auto-merge only accepts an update to an existing request")
+              expected_filename = (
+                  f"environments/production/modeldeployments/{deployment}.yaml"
+              )
+              if filename != expected_filename:
+                  raise SystemExit("changed file does not match the stop branch name")
+
+              def load_document(ref):
+                  encoded = "/".join(
+                      urllib.parse.quote(part, safe="") for part in filename.split("/")
+                  )
+                  response = call(
+                      "GET",
+                      f"{repository}/contents/{encoded}?ref={ref}",
+                  )
+                  return YAML(typ="safe").load(
+                      base64.b64decode(response["content"]).decode("utf-8")
+                  )
+
+              base_doc = load_document(pull["base"]["sha"])
+              head_doc = load_document(revision)
+              base_metadata = base_doc.get("metadata", {})
+              head_metadata = head_doc.get("metadata", {})
+              if base_metadata.get("name") != deployment:
+                  raise SystemExit("base request name does not match the stop branch")
+              if head_metadata.get("name") != deployment:
+                  raise SystemExit("head request name does not match the stop branch")
+              if base_metadata.get("namespace") != "model-serving":
+                  raise SystemExit("base request namespace must be model-serving")
+              if head_metadata.get("namespace") != "model-serving":
+                  raise SystemExit("head request namespace must be model-serving")
+
+              requested_by_key = f"{PREFIX}requested-by"
+              requested_by = head_metadata.get("labels", {}).get(requested_by_key, "")
+              if requested_by not in allowlist:
+                  raise SystemExit("requested-by is outside the single-tenant allow-list")
+
+              base_spec = base_doc.get("spec", {})
+              base_runtime = base_spec.get("runtime", {})
+              base_annotations = base_metadata.get("annotations", {})
+              if base_spec.get("desiredState") != "Running":
+                  raise SystemExit("base request must be Running before a stop request")
+              if base_runtime.get("workerReplicas") != 1:
+                  raise SystemExit("base request must have workerReplicas=1")
+              if base_annotations.get(f"{PREFIX}request-mode") != "declarative-running":
+                  raise SystemExit("base request-mode must be declarative-running")
+              expected_npu = policy("expected-npu-per-worker")
+              expected_running = {
+                  f"{PREFIX}effective-tensor-parallel-size": policy(
+                      "expected-tensor-parallel-size"
+                  ),
+                  f"{PREFIX}effective-replicas": "1",
+                  f"{PREFIX}effective-npu-per-replica": expected_npu,
+              }
+              for key, value in expected_running.items():
+                  if base_annotations.get(key) != value:
+                      raise SystemExit(f"base effective annotation {key} must be {value}")
+              start_id = base_annotations.get(f"{PREFIX}requested-start-id", "")
+              if not re.fullmatch(r"[a-z0-9][a-z0-9-]{4,62}", start_id):
+                  raise SystemExit("base requested-start-id is missing or malformed")
+              if base_spec.get("compositionRef", {}).get("name") != policy(
+                  "expected-composition-ref"
+              ):
+                  raise SystemExit("base request composition is not the certified runtime")
+
+              head_spec = head_doc.get("spec", {})
+              head_runtime = head_spec.get("runtime", {})
+              head_annotations = head_metadata.get("annotations", {})
+              if head_spec.get("desiredState") != "Stopped":
+                  raise SystemExit("head request must request desiredState=Stopped")
+              if head_runtime.get("workerReplicas") != 0:
+                  raise SystemExit("stop requests require workerReplicas=0")
+              if head_annotations.get(f"{PREFIX}request-mode") != "declarative-stopped":
+                  raise SystemExit("head request-mode must be declarative-stopped")
+              for key in (
+                  f"{PREFIX}effective-tensor-parallel-size",
+                  f"{PREFIX}effective-replicas",
+                  f"{PREFIX}effective-npu-per-replica",
+              ):
+                  if head_annotations.get(key) != "0":
+                      raise SystemExit(f"stopped effective annotation {key} must be 0")
+              for key in (
+                  f"{PREFIX}requested-start-id",
+                  f"{PREFIX}requested-start-reason",
+              ):
+                  if key in head_annotations:
+                      raise SystemExit(f"stop request must remove {key}")
+              if head_spec.get("compositionRef", {}).get("name") != policy(
+                  "expected-composition-ref"
+              ):
+                  raise SystemExit("head request composition is not the certified runtime")
+              if head_spec.get("crossplane", {}).get("compositionUpdatePolicy") != "Automatic":
+                  raise SystemExit("compositionUpdatePolicy must remain Automatic")
+
+              allowed_annotation_keys = {
+                  f"{PREFIX}request-mode",
+                  f"{PREFIX}effective-tensor-parallel-size",
+                  f"{PREFIX}effective-replicas",
+                  f"{PREFIX}effective-npu-per-replica",
+                  f"{PREFIX}requested-start-id",
+                  f"{PREFIX}requested-start-reason",
+              }
+              projected = copy.deepcopy(base_doc)
+              projected["spec"]["desiredState"] = "Stopped"
+              projected["spec"]["runtime"]["workerReplicas"] = 0
+              projected_annotations = projected["metadata"].setdefault(
+                  "annotations", {}
+              )
+              for key in allowed_annotation_keys:
+                  projected_annotations.pop(key, None)
+              for key, value in head_annotations.items():
+                  if key in allowed_annotation_keys:
+                      projected_annotations[key] = value
+              projected["metadata"].setdefault("labels", {})[requested_by_key] = (
+                  requested_by
+              )
+              if projected != head_doc:
+                  raise SystemExit(
+                      "diff contains changes outside desiredState/workerReplicas/stop lifecycle fields"
+                  )
+
+              call(
+                  "POST",
+                  f"{repository}/pulls/{pull_number}/merge",
+                  {
+                      "Do": "merge",
+                      "head_commit_id": revision,
+                      "delete_branch_after_merge": True,
+                      "force_merge": False,
+                  },
+              )
+              print(f"stop_request_auto_merged_pull_request={pull_number}")
+            computeResources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile:
+                type: RuntimeDefault
     - name: capacity-gate-running
       runAfter:
         - clone-and-validate
@@ -510,6 +805,7 @@ spec:
                       "capacity_gate=FAIL approved running window is closed"
                   )
               expected_npu = policy("expected-npu-per-worker")
+              expected_npu_count = int(expected_npu)
               target_node = policy("target-node")
               target_devices = policy("target-devices")
               device_ids = [d.strip() for d in policy("target-device-ids").split(",") if d.strip()]
@@ -576,22 +872,47 @@ spec:
                   )
 
               pods = k8s("/api/v1/pods")["items"]
-              conflicting = []
+              claimed_device_ids = set()
+              requested_npu_count = 0
               for pod in pods:
                   if pod["spec"].get("nodeName") != target_node:
                       continue
                   if pod["metadata"]["namespace"] == "model-platform-ci":
                       continue
-                  for container in pod["spec"]["containers"] + pod["spec"].get("initContainers", []):
-                      for key in container.get("resources", {}).get("requests", {}):
+                  if pod.get("status", {}).get("phase") in {"Succeeded", "Failed"}:
+                      continue
+                  pod_request = 0
+                  for container in pod["spec"]["containers"]:
+                      for key, value in container.get("resources", {}).get("requests", {}).items():
                           if "ascend" in key.lower() or "npu" in key.lower():
-                              conflicting.append(
-                                  f"{pod['metadata']['namespace']}/{pod['metadata']['name']} requests {key}"
-                              )
-              if conflicting:
+                              pod_request += int(value)
+                  if pod_request == 0:
+                      continue
+                  requested_npu_count += pod_request
+                  annotation = pod["metadata"].get("annotations", {}).get(
+                      "huawei.com/Ascend910", ""
+                  )
+                  assigned = {
+                      item.rsplit("-", 1)[-1]
+                      for item in annotation.split(",")
+                      if item.startswith("Ascend910-")
+                  }
+                  if len(assigned) < pod_request:
+                      raise SystemExit(
+                          "capacity_gate=FAIL existing accelerator pod has no complete "
+                          f"device annotation: {pod['metadata']['namespace']}/"
+                          f"{pod['metadata']['name']}"
+                      )
+                  claimed_device_ids.update(assigned)
+
+              allocatable = int(
+                  k8s(f"/api/v1/nodes/{target_node}")["status"]["allocatable"].get(
+                      "huawei.com/Ascend910", "0"
+                  )
+              )
+              if allocatable - requested_npu_count < expected_npu_count:
                   raise SystemExit(
-                      "capacity_gate=FAIL conflicting accelerator requests: "
-                      + "; ".join(conflicting)
+                      "capacity_gate=FAIL insufficient unclaimed Kubernetes NPU capacity"
                   )
 
               def prometheus_query(query):
@@ -624,6 +945,7 @@ spec:
                   % (target_node, id_regex),
               }
               observations = {name: prometheus_query(query) for name, query in queries.items()}
+              observed = {}
               for name, series in observations.items():
                   if not series:
                       raise SystemExit(
@@ -632,17 +954,39 @@ spec:
                   for entry in series:
                       value = entry["value"][1]
                       chip = entry["metric"].get("id", "?")
-                      if name == "health" and value != "1":
-                          raise SystemExit(
-                              f"capacity_gate=FAIL device {chip} health status is {value}"
-                          )
-                      if name == "processes" and value != "0":
-                          raise SystemExit(
-                              f"capacity_gate=FAIL device {chip} already runs {value} process(es)"
-                          )
+                      observed.setdefault(chip, {})[name] = value
+
+              missing = set(device_ids) - set(observed)
+              if missing:
+                  raise SystemExit(
+                      "capacity_gate=FAIL missing physical telemetry for devices "
+                      + ",".join(sorted(missing, key=int))
+                  )
+              safe_device_ids = []
+              for chip in device_ids:
+                  values = observed[chip]
+                  if values.get("health") != "1":
+                      raise SystemExit(
+                          f"capacity_gate=FAIL device {chip} health status is "
+                          f"{values.get('health', 'missing')}"
+                      )
+                  if chip in claimed_device_ids:
+                      continue
+                  if values.get("processes") != "0":
+                      raise SystemExit(
+                          f"capacity_gate=FAIL unclaimed device {chip} already runs "
+                          f"{values.get('processes', 'missing')} process(es)"
+                      )
+                  safe_device_ids.append(chip)
+              if len(safe_device_ids) < expected_npu_count:
+                  raise SystemExit(
+                      "capacity_gate=FAIL dynamic safe pool has fewer devices than requested"
+                  )
 
               print(
-                  f"capacity_gate=PASS node={target_node} devices={target_devices} "
+                  f"capacity_gate=PASS node={target_node} mode={target_devices} "
+                  f"safe_devices={','.join(safe_device_ids)} "
+                  f"claimed_devices={','.join(sorted(claimed_device_ids, key=int))} "
                   f"npuperworker={expected_npu} deployment={deployment}"
               )
             computeResources:
@@ -791,6 +1135,17 @@ spec:
                   raise SystemExit("pull request head repository is outside the trust boundary")
               if pull.get("head", {}).get("ref") != head_ref:
                   raise SystemExit("pull request branch differs from the webhook branch")
+
+              open_pulls = call("GET", f"{repository}/pulls?state=open")
+              stop_branch = f"backstage/modeldeployment-stopping-{deployment}"
+              if any(
+                  candidate.get("number") != int(pull_number)
+                  and candidate.get("head", {}).get("ref") == stop_branch
+                  for candidate in open_pulls
+              ):
+                  raise SystemExit(
+                      "an open stop request takes priority over this running request"
+                  )
 
               files = call("GET", f"{repository}/pulls/{pull_number}/files")
               if len(files) != 1:

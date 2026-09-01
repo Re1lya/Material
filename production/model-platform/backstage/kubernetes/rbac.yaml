@@ -71,7 +71,10 @@ rules:
     resources: ["modeldeployments"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["ray.io"]
-    resources: ["rayservices"]
+    resources: ["rayservices", "rayclusters"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
@@ -90,6 +93,59 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: backstage-read-only
+---
+# Dashboard pipeline status is read-only and scoped to the model configuration
+# namespace.  The Backstage service account cannot create or modify Tekton runs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-model-platform-ci-read-only
+  namespace: model-platform-ci
+rules:
+  - apiGroups: ["tekton.dev"]
+    resources: ["pipelineruns", "taskruns"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-model-platform-ci-read-only
+  namespace: model-platform-ci
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-model-platform-ci-read-only
+---
+# Argo application state is read-only and is used only to report revision,
+# sync and health; Backstage never requests an Argo sync.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-argocd-read-only
+  namespace: argocd
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    resourceNames: ["model-platform-deployment-requests"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-argocd-read-only
+  namespace: argocd
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-argocd-read-only
 ---
 # Backstage may observe the dedicated artifact-publish PipelineRuns and their
 # TaskRun pods, but it cannot create/delete/patch Tekton or Kubernetes objects.

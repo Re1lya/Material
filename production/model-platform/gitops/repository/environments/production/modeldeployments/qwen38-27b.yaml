@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/managed-by: argocd
     platform.example.com/requested-by: platform-team
   annotations:
+    platform.example.com/lifecycle-controller: enabled
     platform.example.com/request-mode: declarative-stopped
     platform.example.com/requested-tensor-parallel-size: "2"
     platform.example.com/requested-pipeline-parallel-size: "1"
@@ -30,8 +31,8 @@ spec:
   desiredState: Stopped
   placement:
     acceleratorPool: ascend-a3
-    staticDeviceAllocation: Ascend910-8,Ascend910-9
     nodeSelector:
+      accelerator-type: module-a3-16
       kubernetes.io/arch: arm64
       kubernetes.io/hostname: a3-server-00
       node.kubernetes.io/npu.chip.name: Ascend910
@@ -83,6 +84,16 @@ spec:
                 enforce_eager: true
               compilation_config:
                 cudagraph_mode: FULL_DECODE_ONLY
+    # Structured serving fields are the audited source of truth. The validator
+    # parses serveConfigV2 and rejects any divergence from these values.
+    serving:
+      maxModelLen: 32768
+      maxNumSeqs: 64
+      maxNumBatchedTokens: 8192
+      gpuMemoryUtilization: 0.9
+      prefixCaching: true
+      mtpTokens: 3
+      maxOngoingRequests: 64
     headCPU: "2"
     headMemory: 16Gi
     workerCPU: "48"

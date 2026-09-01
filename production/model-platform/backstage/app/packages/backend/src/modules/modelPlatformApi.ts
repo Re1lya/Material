@@ -8,6 +8,11 @@ import type { Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
 import { request as httpsRequest } from 'node:https';
 import { parse } from 'yaml';
+import {
+  aggregateDeployment,
+  type GiteaPull,
+  type PlatformObject,
+} from './modelPlatformStatus';
 
 type GiteaConfig = {
   apiBaseUrl: string;
@@ -32,17 +37,7 @@ type GiteaContentFile = {
   content?: string;
 };
 
-type KubernetesObject = {
-  metadata?: {
-    name?: string;
-    namespace?: string;
-    generation?: number;
-    labels?: Record<string, string>;
-  };
-  spec?: Record<string, any>;
-  status?: Record<string, any>;
-  data?: Record<string, string>;
-};
+type KubernetesObject = PlatformObject;
 
 type KubernetesList = { items?: KubernetesObject[] };
 
@@ -287,29 +282,6 @@ async function kubernetesGet<T>(path: string): Promise<T> {
   });
 }
 
-function deploymentSummary(object: KubernetesObject) {
-  const status = object.status ?? {};
-  const conditions = Array.isArray(status.conditions)
-    ? status.conditions.map((condition: Record<string, any>) => ({
-        type: condition.type,
-        status: condition.status,
-        reason: condition.reason,
-        message: condition.message,
-      }))
-    : [];
-  return {
-    name: object.metadata?.name,
-    namespace: object.metadata?.namespace,
-    generation: object.metadata?.generation,
-    desiredState: object.spec?.desiredState,
-    modelVersionRef: object.spec?.modelVersionRef,
-    runtimeProfileRef: object.spec?.runtimeProfileRef,
-    compositionRef: object.spec?.compositionRef?.name,
-    phase: status.phase,
-    conditions,
-  };
-}
-
 function resourceSummary(object: KubernetesObject) {
   const status = object.status ?? {};
   return {
@@ -332,8 +304,15 @@ function resourceSummary(object: KubernetesObject) {
   };
 }
 
-async function loadDeployments() {
+async function loadDeployments(config: Config) {
   const namespace = 'model-serving';
+  const unavailable: Record<string, string> = {};
+  const argoPath =
+    '/apis/argoproj.io/v1alpha1/namespaces/argocd/applications/model-platform-deployment-requests';
+  const argo = await kubernetesGet<KubernetesObject>(argoPath).catch(error => {
+    unavailable.argo = error instanceof Error ? error.message : 'Unavailable';
+    return undefined;
+  });
   const paths = {
     modeldeployments: `/apis/platform.example.com/v1alpha1/namespaces/${namespace}/modeldeployments`,
     configmaps: `/api/v1/namespaces/${namespace}/configmaps`,
@@ -342,22 +321,60 @@ async function loadDeployments() {
     services: `/api/v1/namespaces/${namespace}/services`,
     deployments: `/apis/apps/v1/namespaces/${namespace}/deployments`,
     rayservices: `/apis/ray.io/v1/namespaces/${namespace}/rayservices`,
+    rayclusters: `/apis/ray.io/v1/namespaces/${namespace}/rayclusters`,
+    pods: `/api/v1/namespaces/${namespace}/pods`,
+    events: `/api/v1/namespaces/${namespace}/events`,
+    pipelineruns:
+      '/apis/tekton.dev/v1/namespaces/model-platform-ci/pipelineruns',
+    taskruns: '/apis/tekton.dev/v1/namespaces/model-platform-ci/taskruns',
   };
   const entries = await Promise.all(
     Object.entries(paths).map(async ([key, path]) => {
       try {
         return [key, await kubernetesGet<KubernetesList>(path)] as const;
       } catch (error) {
-        if (key === 'rayservices') {
-          return [key, { items: [] }] as const;
-        }
-        throw error;
+        unavailable[key] =
+          error instanceof Error ? error.message : 'Unavailable';
+        return [key, { items: [] }] as const;
       }
     }),
   );
   const lists = Object.fromEntries(entries) as Record<string, KubernetesList>;
   const objects = (key: string) => lists[key]?.items ?? [];
-  const deployments = objects('modeldeployments').map(deploymentSummary);
+  const gitea = readGiteaConfig(config);
+  const repositoryPrefix = `/api/v1/repos/${encodeURIComponent(
+    gitea.owner,
+  )}/${encodeURIComponent(gitea.repository)}`;
+  let pulls: GiteaPull[] = [];
+  try {
+    const response = await giteaRequest<GiteaPull[]>(
+      gitea,
+      `${repositoryPrefix}/pulls?state=all&limit=50&sort=recentupdate`,
+    );
+    pulls = response.value ?? [];
+  } catch (error) {
+    unavailable.gitea =
+      error instanceof Error ? error.message : 'Gitea unavailable';
+  }
+  if (unavailable.pipelineruns || unavailable.taskruns) {
+    unavailable.tekton =
+      unavailable.pipelineruns ?? unavailable.taskruns ?? 'Tekton unavailable';
+  }
+  const deployments = objects('modeldeployments').map(deployment =>
+    aggregateDeployment({
+      deployment,
+      rayservices: objects('rayservices'),
+      rayclusters: objects('rayclusters'),
+      pods: objects('pods'),
+      services: objects('services'),
+      events: objects('events'),
+      pipelineRuns: objects('pipelineruns'),
+      taskRuns: objects('taskruns'),
+      pulls,
+      argo,
+      unavailable,
+    }),
+  );
   return {
     namespace,
     observedAt: new Date().toISOString(),
@@ -405,7 +422,26 @@ async function loadDeployments() {
             'model-platform',
         )
         .map(resourceSummary),
+      rayclusters: objects('rayclusters')
+        .filter(
+          object =>
+            object.metadata?.labels?.['app.kubernetes.io/part-of'] ===
+            'model-platform',
+        )
+        .map(resourceSummary),
+      pods: objects('pods')
+        .filter(
+          object =>
+            object.metadata?.labels?.['app.kubernetes.io/part-of'] ===
+            'model-platform',
+        )
+        .map(resourceSummary),
+      events: objects('events')
+        .filter(object => object.involvedObject?.namespace === namespace)
+        .slice(-20)
+        .map(resourceSummary),
     },
+    unavailable,
   };
 }
 
@@ -442,7 +478,7 @@ export default createBackendPlugin({
           '/deployments',
           async (_request: Request, response: Response) => {
             try {
-              response.json(await loadDeployments());
+              response.json(await loadDeployments(config));
             } catch (error) {
               logger.warn(
                 `Model deployment status read failed: ${String(error)}`,

@@ -19,6 +19,7 @@ import ArrowBackIcon from '@material-ui/icons/ArrowBack';
 import ChevronRightIcon from '@material-ui/icons/ChevronRight';
 import PlayArrowIcon from '@material-ui/icons/PlayArrow';
 import SearchIcon from '@material-ui/icons/Search';
+import StopIcon from '@material-ui/icons/Stop';
 import { Content, Page } from '@backstage/core-components';
 import { makeStyles } from '@material-ui/core/styles';
 
@@ -673,11 +674,42 @@ export const ModelDeploymentRecipesPage = () => {
     }),
   );
   const requestHref = `/create/templates/default/request-model-deployment?formData=${requestFormData}`;
-  const liveDeployment = liveStatus?.deployments.find(
-    deployment =>
-      deployment.modelVersionRef === selectedModel.id ||
-      deployment.name === deploymentName,
+  const liveDeployment =
+    liveStatus?.deployments.find(
+      deployment => deployment.name === deploymentName,
+    ) ??
+    liveStatus?.deployments.find(
+      deployment => deployment.modelVersionRef === selectedModel.id,
+    );
+  const lifecycleDeploymentName = liveDeployment?.name ?? deploymentName;
+  const startFormData = encodeURIComponent(
+    JSON.stringify({
+      deploymentName: lifecycleDeploymentName,
+      startReason: 'Started from the model recipes page',
+    }),
   );
+  const stopFormData = encodeURIComponent(
+    JSON.stringify({
+      deploymentName: lifecycleDeploymentName,
+      stopReason: 'Stopped from the model recipes page',
+    }),
+  );
+  let lifecycleAction;
+  if (liveDeployment?.desiredState === 'Stopped') {
+    lifecycleAction = {
+      color: 'primary' as const,
+      href: `/create/templates/default/start-model-inference?formData=${startFormData}`,
+      icon: <PlayArrowIcon />,
+      label: 'Start inference',
+    };
+  } else if (liveDeployment?.desiredState === 'Running') {
+    lifecycleAction = {
+      color: 'secondary' as const,
+      href: `/create/templates/default/stop-model-inference?formData=${stopFormData}`,
+      icon: <StopIcon />,
+      label: 'Stop inference',
+    };
+  }
   const totalNpu = selectedVariant.npuPerWorker * replicas;
   const tpChoices = [1, 2, 4, 8].filter(
     value => value * pipelineParallelSize <= selectedVariant.npuPerWorker,
@@ -757,14 +789,14 @@ export const ModelDeploymentRecipesPage = () => {
           </Box>
           <Button
             className={classes.deployButton}
-            color="primary"
+            color={lifecycleAction?.color ?? 'primary'}
             component="a"
             disabled={!validDeploymentName}
-            href={requestHref}
-            startIcon={<PlayArrowIcon />}
+            href={lifecycleAction?.href ?? requestHref}
+            startIcon={lifecycleAction?.icon ?? <PlayArrowIcon />}
             variant="contained"
           >
-            Deploy model
+            {lifecycleAction?.label ?? 'Deploy model'}
           </Button>
         </Paper>
 
@@ -1010,15 +1042,15 @@ export const ModelDeploymentRecipesPage = () => {
               </Box>
               <Button
                 className={classes.field}
-                color="primary"
+                color={lifecycleAction?.color ?? 'primary'}
                 component="a"
                 disabled={!validDeploymentName}
                 fullWidth
-                href={requestHref}
-                startIcon={<PlayArrowIcon />}
+                href={lifecycleAction?.href ?? requestHref}
+                startIcon={lifecycleAction?.icon ?? <PlayArrowIcon />}
                 variant="contained"
               >
-                Deploy model
+                {lifecycleAction?.label ?? 'Deploy model'}
               </Button>
               {!validDeploymentName && (
                 <Typography className={classes.error} variant="caption">

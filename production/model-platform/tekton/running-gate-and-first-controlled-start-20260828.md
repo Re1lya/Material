@@ -166,3 +166,138 @@ worker 与 head PodGroup 停留 Pending，Volcano 事件：
    （2026-08-19 先例）以完成首次 NPU Running 验收；或
 2. 安排 MindX ClusterInfoManager / volcano-npu 插件兼容性修复窗口；或
 3. 维持 Stopped 基线，将 Volcano 兼容性作为 Running 阶段的正式阻塞项。
+
+## 5. 2026-08-30 A3 selector 探针与 Stopped 合同修复
+
+在确认 A3 物理设备 8/9 健康为 1、进程数为 0，且 Kubernetes 中只有既有
+K12 工作负载占用互不重叠的 14/15 后，执行了两次隔离在
+`model-serving-diagnostics` 的最小 RayCluster 探针。两次探针均不挂载模型、
+不启动 vLLM、不创建推理 Service，并在结束后删除诊断 namespace。
+
+第一轮增加以下调度合同：
+
+- head/worker 均选择 `accelerator-type: module-a3-16`、A3 hostname、ARM64 和
+  Ascend910；
+- CPU-only head 使用 `huawei.com/skip-ascend-plugin: enabled`；
+- worker 请求 2 个 NPU，并声明静态 8/9。
+
+结果：Volcano PodGroup 变为 `Running`，head/worker 均成功绑定 A3，历史
+`npu topology invalid` 不再出现；但 device-plugin 将实际
+`huawei.com/Ascend910`/`AscendReal` 重写为 12/13。探针 head 仅配置 2Gi，随后
+OOMKilled；该问题属于探针资源不足，不影响调度结论。
+
+第二轮将 head 内存提高至 16Gi，并在确认 12/13 双视角空闲后声明静态 12/13。
+head 与 worker 均进入 Running，PodGroup `Running`、available worker=1，证明
+`module-a3-16` selector 与 head skip 能修复 Volcano gang/topology 阻塞；但最终
+实际设备又被改写为 10/11，而 `huawei.com/kltDev` 仍为 8/9。由此确认当前
+Volcano/MindX 路径不能保证请求的静态卡号等于容器实际设备。
+
+随后通过 Gitea PR #23 将 `accelerator-type: module-a3-16` 固化到正式
+`qwen38-27b` Stopped nodeSelector，并同步更新 JSON Schema 与 Python 策略校验。
+PR head `10e4d278461f7dc895b9afb91455c0f28389f901` 和 merge commit
+`1a37781f08c170a15bf9cfe65e805270cb4d59ff` 均通过 Tekton；Argo scoped
+auto-sync 后 Application `Synced/Healthy`。XR 为 Stopped、worker=0、
+Synced/Ready/Responsive=True；新 head-only RayCluster Ready，零 NPU。
+
+剩余 Running 决策：若必须维持固定 8/9 合同，需要批准受控窗口临时移除
+KubeRay Operator 的 `--batch-scheduler=volcano`，复用历史已验证的
+default-scheduler 静态分配路径；若保留 Volcano，则必须把容量门禁重构为动态
+安全设备池，并增加调度后的实际 `AscendReal` 校验和冲突时自动 Stop。在完成其中
+任一方案前，不得把正式 Qwen 切回 Running。
+
+## 6. 2026-08-30 动态安全卡池与 Backstage 状态反馈
+
+用户确认不再要求固定物理卡号，只要求固定到目标空闲节点并将实际状态反馈到
+Backstage。平台据此保留 `a3-server-00/module-a3-16` nodeSelector，移除
+`qwen38-27b.spec.placement.staticDeviceAllocation`，由 Volcano/MindX 动态选择
+拓扑合法的两张卡。
+
+Tekton Pipeline generation 15 将 Running capacity gate 改为动态安全池：读取 A3
+全部 16 卡的 Prometheus health/process 指标，解析节点上现有 NPU Pod 的实际设备
+annotation，允许 K12 等已声明且不冲突的设备，要求所有 Kubernetes 未声明设备均
+health=1 且 process=0，并要求剩余数量至少为 2。现有 NPU Pod 缺少完整设备 annotation
+时 fail-closed。策略 ConfigMap 的 window 继续为 false。
+
+Gitea PR #24 删除固定卡号并同步 validator：head
+`9a0841426eacdc559f55dcc5332beac7e2ccaa64`、merge commit
+`f41ef9b075b2f14a7244dac2a242cfa2635e0d43` 均通过 Tekton；Argo 同步后 XR 为
+Stopped/Synced/Ready、worker=0，渲染后的 Ray worker 不再有静态 Ascend910
+annotation。
+
+Backstage `/api/model-platform/deployments` 首次验收返回 503，根因是生产
+`model-serving/backstage-read-only` Role 落后于源码，缺少 PVC 和 RayService 的
+只读权限。仅补 `persistentvolumeclaims` 与 `rayservices.ray.io` 的
+get/list/watch 后接口返回 HTTP 200；ServiceAccount 仍不能读取 Secret 或创建
+Deployment，Backstage 已能显示 Qwen Stopped/Synced/Ready 和聚合资源计数。
+
+最终 Running 前检发现 A3 device 0 存在两个无 namespace/pod/container ID 的宿主机
+进程（PID 3653702、3654383），而 Kubernetes 只记录 K12 使用 14/15。由于 Volcano
+可能动态选择 device 0，generation 15 会按设计拒绝启动。未开启 Running window、
+未创建 Running PR、未申请 Qwen NPU。只有该宿主占用被责任人确认释放后，才可继续
+Start inference。
+
+## 7. 2026-08-31 Volcano 全链路推理验收
+
+### 7.1 宿主机占用与人工隔离探针
+
+最初复核确认 A3 chip 0 上的两个进程属于实际运行的 Docker/SGLang 服务，不是
+僵尸进程；其中调度进程持续占用 CPU，HBM 约 30.5 GiB。受控探针曾将
+`Ascend910-0,Ascend910-1` 写入 DeviceInfo ConfigMap 的
+`ManuallySeparateNPU`，但下一次 Ascend Device Plugin 上报周期自动将该字段恢复
+为空，且隔离信息没有传播到 ClusterInfo。由此确认：直接编辑该字段不能作为宿主机
+Docker 任务的可靠 Volcano 预留机制。探针未创建任何 NPU Pod，证据保存在
+`server-00:/home/admin/qwen38-volcano-isolation-probe-7vHF4X`。
+
+随后宿主机 Docker/SGLang 任务由其责任方退出。部署前同时通过 Kubernetes Pod
+annotation 和 A3 `npu-smi info` 确认 0–15 全部无运行进程，才开启 Running window。
+
+### 7.2 Running 请求、门禁和自动同步
+
+- Running 请求：Gitea PR #25，head
+  `a6eb1ea667750c6e28933e17a38eb603fa50ec8a`，start ID
+  `start-20260831-full-acceptance-01`。
+- PipelineRun `model-platform-config-validation-qgwbn` 全部成功；容量门禁记录
+  `safe_devices=0..15`、`claimed_devices=`、`npuperworker=2`，Running PR 自动合并。
+- Argo 自动同步 merge commit
+  `c5ab6fa3101608a2f57d33fc360206172cf430fd`；XR 收敛为
+  `Running / workerReplicas=1 / Synced=True / Ready=True`。
+- 生产证据目录：
+  `server-00:/home/admin/qwen38-full-acceptance-OrKXfa`。
+
+### 7.3 Volcano、模型加载和真实请求
+
+停止态遗留的 CPU-only RayCluster 仍被 KubeRay 当作 pending cluster，RayService
+generation 6 没有自动把旧 RayCluster 从 worker 0 更新为 worker 1。按既有受控处理
+方式，仅删除 `model-serving/qwen38-27b-ks9n9`，KubeRay 随即依据当前 Running
+RayService 重建同名 RayCluster：
+
+- Volcano PodGroup `Running`，minMember/running 为 2/2；
+- head 与 worker 均绑定 `a3-server-00`；
+- worker 请求 2 个 Ascend910，最终 `Ascend910`/`AscendReal` 均为
+  `Ascend910-14,Ascend910-15`；
+- 主模型 eager safetensors 10/10、两 TP rank 和 FULL_DECODE_ONLY graph capture
+  完成；
+- Ray Serve Application `RUNNING`，LLMDeployment 与 LLMRouter 均 `HEALTHY`；
+- 两次 `/v1/chat/completions` 返回 HTTP 200，第二次实际输出“测试成功”。
+
+### 7.4 Stop 与最终基线
+
+Running window 在推理成功后立即关闭。Gitea main commit
+`3e4d1f93844e42c37e09ef23dbb7c17059b16ae3` 将同一请求恢复为
+Stopped/worker 0；main PipelineRun `model-platform-config-validation-zlrz7`
+成功，Argo 无人工 Sync 自动更新到该 revision，XR 恢复
+Stopped/Synced/Ready。
+
+KubeRay 在缩容方向同样保留旧 worker 1 RayCluster，因此再次只删除该 Qwen
+RayCluster，使 operator 按停止态模板重建 CPU-only head。最终 worker 不存在，A3
+`npu-smi` 0–15 全部无运行进程，Backstage 状态 API 返回
+`Stopped / Synced=True / Ready=True`，Running window 为 false。
+
+### 7.5 验收结论与自动化缺口
+
+Volcano/MindX 动态选卡、Ray/vLLM 模型加载和真实 HTTP 推理均已通过；原拓扑阻塞在
+`module-a3-16` selector 下未再出现。当前仍不能标记为“完全无人值守”，因为
+Stopped↔Running 时 KubeRay v1.6.0 没有把已存在的 pending RayCluster 随
+RayService workerReplicas 更新，启动和停止各需要一次受控删除当前 Qwen
+RayCluster以触发重建。后续应把该重建动作收敛到专用控制器或经审查的自动化任务，
+并增加调度后 `AscendReal` 冲突检查与自动 Stop；不得依赖人工 kubectl 作为长期流程。

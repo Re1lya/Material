@@ -1,0 +1,24 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: modeldeployment-stopped-v1alpha1
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: deployment-api
+    platform.example.com/stage: stopped
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: ModelDeployment
+  mode: Pipeline
+  pipeline:
+    - step: render-stopped-release
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        # A stopped deployment retains only its Git/XR audit record.  Returning
+        # no composed resources removes the provider Objects, RayService,
+        # RayCluster/head, stable Service, cache and NetworkPolicy.
+        resources: []

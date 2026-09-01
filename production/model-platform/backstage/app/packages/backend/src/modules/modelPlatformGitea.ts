@@ -44,6 +44,7 @@ type GiteaConfig = {
 type GiteaContentFile = {
   type: string;
   path: string;
+  sha?: string;
   encoding?: string;
   content?: string;
 };
@@ -134,7 +135,7 @@ function encodeRepositoryPath(path: string): string {
 async function giteaRequest<T>(options: {
   config: GiteaConfig;
   path: string;
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PUT';
   body?: unknown;
   acceptedStatuses?: number[];
   signal?: AbortSignal;
@@ -567,7 +568,7 @@ function createDeploymentRequestAction(config: Config) {
   });
 }
 
-function createStartInferenceAction(config: Config) {
+export function createStartInferenceAction(config: Config) {
   const gitea = readGiteaConfig(config);
   const repositoryPrefix = `/api/v1/repos/${encodeURIComponent(
     gitea.owner,
@@ -614,17 +615,20 @@ function createStartInferenceAction(config: Config) {
         acceptedStatuses: [200, 404],
         signal: ctx.signal,
       });
-      if (existing.status !== 200 || !existing.value?.content) {
+      if (
+        existing.status !== 200 ||
+        !existing.value?.content ||
+        !existing.value.sha
+      ) {
         throw new Error(
-          `Deployment request ${input.deploymentName} does not exist on ${
-            gitea.baseBranch
-          }; only an existing stopped deployment can be started`,
+          `Deployment request ${input.deploymentName} does not exist on ${gitea.baseBranch}; only an existing stopped deployment can be started`,
         );
       }
+      const existingFile = existing.value;
       let document;
       try {
         document = parse(
-          Buffer.from(existing.value.content, 'base64').toString('utf8'),
+          Buffer.from(existingFile.content!, 'base64').toString('utf8'),
         ) as Record<string, any>;
       } catch {
         throw new Error('Existing deployment request is not valid YAML');
@@ -642,10 +646,7 @@ function createStartInferenceAction(config: Config) {
           'Only a declarative-stopped request with workerReplicas=0 can be started',
         );
       }
-      if (
-        spec.compositionRef?.name !==
-        'modeldeployment-qwen38-ray-v1alpha1'
-      ) {
+      if (spec.compositionRef?.name !== 'modeldeployment-qwen38-ray-v1alpha1') {
         throw new Error(
           'Only a request bound to the certified Ray runtime composition can be started',
         );
@@ -696,13 +697,10 @@ function createStartInferenceAction(config: Config) {
           'runtime npuPerWorker is missing; refusing to generate a running request',
         );
       }
-      annotations[`${prefix}effective-tensor-parallel-size`] = String(
-        npuPerWorker,
-      );
+      annotations[`${prefix}effective-tensor-parallel-size`] =
+        String(npuPerWorker);
       annotations[`${prefix}effective-replicas`] = '1';
-      annotations[`${prefix}effective-npu-per-replica`] = String(
-        npuPerWorker,
-      );
+      annotations[`${prefix}effective-npu-per-replica`] = String(npuPerWorker);
       spec.desiredState = 'Running';
       spec.runtime.workerReplicas = 1;
 
@@ -714,11 +712,12 @@ function createStartInferenceAction(config: Config) {
           const fileWrite = await giteaRequest<GiteaFileWrite>({
             config: gitea,
             path: contentPath,
-            method: 'POST',
-            acceptedStatuses: [201],
+            method: 'PUT',
+            acceptedStatuses: [200, 201],
             body: {
               branch: gitea.baseBranch,
               new_branch: branch,
+              sha: existingFile.sha,
               content: Buffer.from(yaml, 'utf8').toString('base64'),
               message: `request start inference ${input.deploymentName} (${startRequestId})`,
             },
@@ -741,7 +740,7 @@ function createStartInferenceAction(config: Config) {
                 `- Requested-by: \`${initiator}\``,
                 '- Desired state change: `Stopped` -> `Running`',
                 `- workerReplicas change: \`0\` -> \`1\` (${npuPerWorker} NPU per worker)`,
-                '- Runtime profile: ' + profileRef,
+                `- Runtime profile: ${profileRef}`,
                 '- The Tekton capacity gate must pass inside an approved running window before this PR can merge.',
                 '',
                 'Stop requests always take priority over new starts.',
@@ -800,6 +799,224 @@ function createStartInferenceAction(config: Config) {
   });
 }
 
+export function createStopInferenceAction(config: Config) {
+  const gitea = readGiteaConfig(config);
+  const repositoryPrefix = `/api/v1/repos/${encodeURIComponent(
+    gitea.owner,
+  )}/${encodeURIComponent(gitea.repository)}`;
+
+  return createTemplateAction({
+    id: 'model-platform:gitea-stop-inference-pr',
+    description:
+      'Open a constrained Stop update for an existing Running ModelDeployment. Stop requests require no NPU capacity window and take priority over new starts.',
+    supportsDryRun: false,
+    schema: {
+      input: {
+        deploymentName: z => z.string().min(1).max(40).regex(dnsLabel),
+        stopReason: z => z.string().min(1).max(512).optional(),
+      },
+      output: {
+        pullRequestUrl: z => z.string().url(),
+        pullRequestNumber: z => z.number().int().positive(),
+        branch: z => z.string(),
+        manifestPath: z => z.string(),
+        stopRequestId: z => z.string(),
+        executionMode: z => z.string(),
+      },
+    },
+    async handler(ctx) {
+      const input = ctx.input as {
+        deploymentName: string;
+        stopReason?: string;
+      };
+      const initiator = ctx.user?.ref;
+      if (!initiator || !gitea.allowedInitiators.includes(initiator)) {
+        throw new Error(
+          'Current Backstage identity is not approved to stop inference',
+        );
+      }
+
+      const manifestPath = `environments/production/modeldeployments/${input.deploymentName}.yaml`;
+      const contentPath = `${repositoryPrefix}/contents/${encodeRepositoryPath(
+        manifestPath,
+      )}`;
+      const existing = await giteaRequest<GiteaContentFile>({
+        config: gitea,
+        path: `${contentPath}?ref=${encodeURIComponent(gitea.baseBranch)}`,
+        acceptedStatuses: [200, 404],
+        signal: ctx.signal,
+      });
+      if (
+        existing.status !== 200 ||
+        !existing.value?.content ||
+        !existing.value.sha
+      ) {
+        throw new Error(
+          `Deployment request ${input.deploymentName} does not exist on ${gitea.baseBranch}; only an existing running deployment can be stopped`,
+        );
+      }
+      const existingFile = existing.value;
+
+      let document;
+      try {
+        document = parse(
+          Buffer.from(existingFile.content!, 'base64').toString('utf8'),
+        ) as Record<string, any>;
+      } catch {
+        throw new Error('Existing deployment request is not valid YAML');
+      }
+
+      const prefix = 'platform.example.com/';
+      const annotations = document.metadata?.annotations ?? {};
+      const spec = document.spec ?? {};
+      if (
+        annotations[`${prefix}request-mode`] !== 'declarative-running' ||
+        spec.desiredState !== 'Running' ||
+        spec.runtime?.workerReplicas !== 1
+      ) {
+        throw new Error(
+          'Only a declarative-running request with workerReplicas=1 can be stopped',
+        );
+      }
+      if (spec.compositionRef?.name !== 'modeldeployment-qwen38-ray-v1alpha1') {
+        throw new Error(
+          'Only a request bound to the certified Ray runtime composition can be stopped',
+        );
+      }
+      const profileRef = spec.runtimeProfileRef as string;
+      if (!gitea.allowedRuntimeProfiles.includes(profileRef)) {
+        throw new Error(
+          'runtimeProfileRef is outside the approved runtime allow-list',
+        );
+      }
+
+      const stopRequestId = `stop-${ctx.task.id
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 57)}`;
+      const branch = `backstage/modeldeployment-stopping-${input.deploymentName}`;
+      const openPulls = await giteaRequest<
+        { number: number; head?: { ref?: string } }[]
+      >({
+        config: gitea,
+        path: `${repositoryPrefix}/pulls?state=open`,
+        acceptedStatuses: [200],
+        signal: ctx.signal,
+      });
+      const clash = (openPulls.value ?? []).find(
+        pull => pull.head?.ref === branch,
+      );
+      if (clash) {
+        throw new Error(
+          `A stop-inference request for ${input.deploymentName} is already open as PR #${clash.number}`,
+        );
+      }
+
+      annotations[`${prefix}request-mode`] = 'declarative-stopped';
+      annotations[`${prefix}effective-tensor-parallel-size`] = '0';
+      annotations[`${prefix}effective-replicas`] = '0';
+      annotations[`${prefix}effective-npu-per-replica`] = '0';
+      delete annotations[`${prefix}requested-start-id`];
+      delete annotations[`${prefix}requested-start-reason`];
+      document.metadata.labels[`${prefix}requested-by`] = initiator
+        .replace(/^user:[^/]+\//, '')
+        .replace(/[^A-Za-z0-9_.-]/g, '-');
+      spec.desiredState = 'Stopped';
+      spec.runtime.workerReplicas = 0;
+
+      const yaml = stringify(document, { lineWidth: 0 });
+      const pullRequest = await ctx.checkpoint({
+        key: `gitea-stop-pr.${manifestPath}`,
+        fn: async () => {
+          const fileWrite = await giteaRequest<GiteaFileWrite>({
+            config: gitea,
+            path: contentPath,
+            method: 'PUT',
+            acceptedStatuses: [200, 201],
+            body: {
+              branch: gitea.baseBranch,
+              new_branch: branch,
+              sha: existingFile.sha,
+              content: Buffer.from(yaml, 'utf8').toString('base64'),
+              message: `request stop inference ${input.deploymentName} (${stopRequestId})`,
+            },
+            signal: ctx.signal,
+          });
+
+          const created = await giteaRequest<GiteaPullRequest>({
+            config: gitea,
+            path: `${repositoryPrefix}/pulls`,
+            method: 'POST',
+            acceptedStatuses: [201],
+            body: {
+              base: gitea.baseBranch,
+              head: branch,
+              title: `ModelDeployment Stop: ${input.deploymentName}`,
+              body: [
+                'Created by the constrained Backstage stop-inference action.',
+                '',
+                `- Stop request ID: \`${stopRequestId}\``,
+                `- Requested-by: \`${initiator}\``,
+                '- Desired state change: `Running` -> `Stopped`',
+                '- workerReplicas change: `1` -> `0`',
+                `- Stop reason: ${input.stopReason ?? 'not supplied'}`,
+                '- Stop requests bypass the Running capacity window and take priority over new starts.',
+              ].join('\n'),
+            },
+            signal: ctx.signal,
+          });
+          if (!created.value) {
+            throw new Error('Gitea returned no pull request object');
+          }
+          const headSha =
+            created.value.head?.sha ?? fileWrite.value?.commit.sha;
+          try {
+            if (!headSha) {
+              throw new Error('Gitea returned no head commit SHA');
+            }
+            await giteaRequest({
+              config: gitea,
+              path: `${repositoryPrefix}/statuses/${encodeURIComponent(
+                headSha,
+              )}`,
+              method: 'POST',
+              acceptedStatuses: [201],
+              body: {
+                state: 'pending',
+                context: 'tekton/model-platform-policy',
+                description: 'Waiting for Tekton stop validation',
+              },
+              signal: ctx.signal,
+            });
+          } catch {
+            ctx.logger.warn(
+              `PR #${created.value.number} was created, but pending status publication failed`,
+            );
+          }
+          return {
+            number: created.value.number,
+            url: created.value.html_url,
+          };
+        },
+      });
+
+      if (!pullRequest) {
+        throw new Error('Backstage checkpoint returned no pull request result');
+      }
+      ctx.logger.info(
+        `Created stop-inference PR #${pullRequest.number} for ${input.deploymentName} (${stopRequestId})`,
+      );
+      ctx.output('pullRequestUrl', pullRequest.url);
+      ctx.output('pullRequestNumber', pullRequest.number);
+      ctx.output('branch', branch);
+      ctx.output('manifestPath', manifestPath);
+      ctx.output('stopRequestId', stopRequestId);
+      ctx.output('executionMode', 'declarative-stopped');
+    },
+  });
+}
+
 export default createBackendModule({
   pluginId: 'scaffolder',
   moduleId: 'model-platform-gitea-deployment-request',
@@ -812,6 +1029,7 @@ export default createBackendModule({
       async init({ config, scaffolderActions }) {
         scaffolderActions.addActions(createDeploymentRequestAction(config));
         scaffolderActions.addActions(createStartInferenceAction(config));
+        scaffolderActions.addActions(createStopInferenceAction(config));
       },
     });
   },

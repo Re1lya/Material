@@ -59,4 +59,80 @@ describe('ModelDeploymentRecipesPage', () => {
       requestedMtpTokens: 3,
     });
   });
+
+  it('shows the Start inference action for an existing stopped deployment', async () => {
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ models: [] }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            observedAt: '2026-08-31T00:00:00Z',
+            deployments: [
+              {
+                name: 'qwen38-27b',
+                desiredState: 'Stopped',
+                modelVersionRef: 'qwen3.8-27b-w8a8',
+              },
+            ],
+            resources: {},
+          }),
+          { status: 200 },
+        ),
+      ) as typeof fetch;
+
+    renderInTestApp(<ModelDeploymentRecipesPage />);
+    fireEvent.click(screen.getByText('Configure model'));
+    await screen.findByText('Stopped');
+
+    const startLinks = await screen.findAllByRole('link', {
+      name: 'Start inference',
+    });
+    expect(startLinks[0].getAttribute('href')).toContain(
+      '/create/templates/default/start-model-inference',
+    );
+    const formData = new URLSearchParams(
+      (startLinks[0].getAttribute('href') ?? '').split('?')[1],
+    ).get('formData');
+    expect(JSON.parse(formData ?? '{}')).toMatchObject({
+      deploymentName: 'qwen38-27b',
+    });
+  });
+
+  it('shows the Stop inference action for an existing running deployment', async () => {
+    globalThis.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ models: [] }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            observedAt: '2026-08-31T00:00:00Z',
+            deployments: [
+              {
+                name: 'qwen38-27b',
+                desiredState: 'Running',
+                modelVersionRef: 'qwen3.8-27b-w8a8',
+              },
+            ],
+            resources: {},
+          }),
+          { status: 200 },
+        ),
+      ) as typeof fetch;
+
+    renderInTestApp(<ModelDeploymentRecipesPage />);
+    fireEvent.click(screen.getByText('Configure model'));
+    await screen.findByText('Running');
+
+    const stopLinks = await screen.findAllByRole('link', {
+      name: 'Stop inference',
+    });
+    expect(stopLinks[0].getAttribute('href')).toContain(
+      '/create/templates/default/stop-model-inference',
+    );
+  });
 });
