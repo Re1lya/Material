@@ -30,7 +30,7 @@ Material 中的平台文档分为三类：
 | Backstage | `kcc-backstage:0.6.1.2-serving-contract-hotfix-20260901` 1/1 Ready；训练、推理、K12 路由均 HTTP 200 | Start/Stop 支持 stopped ↔ Ray Composition，并保留结构化 serving 合同；Dashboard 候选未部署 |
 | K12 CPU 数据管线 | Dagster 1/1、Ray CPU head/worker Ready；遗留 MinerU NPU smoke 已取消并缩到 0 | CPU 平台集成可用；Application 已恢复 Synced/Healthy |
 | 旧 K12 Dagster | Deployment 0/0，未删除 | 仅作为有界回滚对象 |
-| Qwen3.8 推理 | 零资源 Stop 回归已修复；PR #32 通过 generation 18 门禁后进入 Running，缓存 Job完成，Ray head/worker 已在 `a3-server-00` Running | Running Window 当前为用户批准的开启状态；待模型 Serve Ready 后完成对话与 Stop 验收 |
+| Qwen3.8 推理 | 零资源 Stop、Retain PV自动重绑、结构化 serving和 worker readiness回归均已修复；当前 Stopped/Synced/Ready且无运行资源 | Running Window仍为用户批准的开启状态；下一次 Start将使用修复后的完整链路 |
 | KCC 训练系统 | TrainingRequest XRD/Composition、KCC Controller 2/2、多个 TrainingRequest 已在生产 | Application `OutOfSync/Healthy` 且有 orphaned resources；TrainingRun outputArtifact 与完整源码 provenance 仍需收敛 |
 
 ## 3. 已完成的 K12 CPU 闭环

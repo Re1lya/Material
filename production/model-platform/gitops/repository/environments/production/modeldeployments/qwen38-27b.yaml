@@ -9,28 +9,26 @@ metadata:
     platform.example.com/requested-by: gitadmin
   annotations:
     platform.example.com/lifecycle-controller: enabled
-    platform.example.com/request-mode: declarative-running
+    platform.example.com/request-mode: declarative-stopped
     platform.example.com/requested-tensor-parallel-size: "2"
     platform.example.com/requested-pipeline-parallel-size: "1"
     platform.example.com/requested-replicas: "1"
     platform.example.com/requested-priority: normal
     platform.example.com/effective-runtime-profile: qwen38-w8a8-ray-ascend-910b3-tp2-v1
-    platform.example.com/effective-tensor-parallel-size: "2"
-    platform.example.com/effective-replicas: "1"
-    platform.example.com/effective-npu-per-replica: "2"
-    platform.example.com/requested-start-id: start-6ed781be-d77d-4a71-b6fb-bcafc0fac329
-    platform.example.com/requested-start-reason: Started from the model recipes page
+    platform.example.com/effective-tensor-parallel-size: "0"
+    platform.example.com/effective-replicas: "0"
+    platform.example.com/effective-npu-per-replica: "0"
 spec:
   crossplane:
     compositionRef:
-      name: modeldeployment-qwen38-ray-v1alpha1
+      name: modeldeployment-stopped-v1alpha1
     compositionUpdatePolicy: Automatic
   projectRef: model-serving
   modelVersionRef: qwen3.8-27b-w8a8
   runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-tp2-v1
   compositionRef:
-    name: modeldeployment-qwen38-ray-v1alpha1
-  desiredState: Running
+    name: modeldeployment-stopped-v1alpha1
+  desiredState: Stopped
   placement:
     acceleratorPool: ascend-a3
     nodeSelector:
@@ -99,7 +97,7 @@ spec:
     workerCPU: "48"
     workerMemory: 256Gi
     npuPerWorker: 2
-    workerReplicas: 1
+    workerReplicas: 0
   cache:
     revision: f2afa9e2-r1
     image: 110.120.0.3:30670/container-images/model-cache@sha256:3c2ee21efa53da44ec816fe2581ca35088caba91b3648db64949a2aea428db37

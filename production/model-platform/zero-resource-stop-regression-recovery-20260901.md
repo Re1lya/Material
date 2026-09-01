@@ -43,6 +43,8 @@ resources remained present:
   serving contract restoration.
 - PR #36 / commit `5cd5b49d194fcc31d6a28f2ec42cf78df52dced0`: exact-PV
   retained cache reclaim before Start merge.
+- PR #40 / commit `2389541e21372ea320be509e8b1915d230f82feb`: worker
+  readiness checks only the local raylet instead of requiring head Serve HTTP.
 
 `gitadmin/platform-backstage`:
 
@@ -65,5 +67,9 @@ resources remained present:
 - The retained PV was safely rebound without deleting its local cache. The
   cache Job completed and fresh Ray head/worker Pods entered Running on
   `a3-server-00`.
+- After the user completed the check and stopped the deployment, the XR returned
+  to Stopped/Synced/Ready with no runtime resources. The Ray Composition worker
+  readiness override was then released while stopped and takes effect on the
+  next Start.
 
 The Model Deployment Dashboard candidate was not applied during this recovery.
