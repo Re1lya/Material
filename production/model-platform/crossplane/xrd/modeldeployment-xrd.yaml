@@ -194,6 +194,18 @@ spec:
                         maxOngoingRequests:
                           type: integer
                           enum: [16, 32, 64]
+                        tensorParallelSize:
+                          type: integer
+                          enum: [1, 2, 4, 8]
+                        dataParallelSize:
+                          type: integer
+                          enum: [1, 2, 4]
+                        pipelineParallelSize:
+                          type: integer
+                          enum: [1, 2]
+                        requestedReplicas:
+                          type: integer
+                          enum: [1, 2, 4]
                     headCPU:
                       type: string
                       pattern: "^[0-9]+m?$"
@@ -216,6 +228,8 @@ spec:
                       enum:
                         - 0
                         - 1
+                        - 2
+                        - 4
                 cache:
                   type: object
                   required:
@@ -256,6 +270,8 @@ spec:
                         - modeldeployment-runtime-zero-v1alpha1
                         - modeldeployment-qwen38-ray-v1alpha1
                         - modeldeployment-stopped-v1alpha1
+                        - modeldeployment-qwen38-ray-v2
+                        - modeldeployment-stopped-v2
             status:
               type: object
               properties:

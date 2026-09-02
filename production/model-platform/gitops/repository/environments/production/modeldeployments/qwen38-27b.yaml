@@ -85,6 +85,10 @@ spec:
               compilation_config:
                 cudagraph_mode: FULL_DECODE_ONLY
     serving:
+      tensorParallelSize: 2
+      dataParallelSize: 1
+      pipelineParallelSize: 1
+      requestedReplicas: 1
       maxModelLen: 32768
       maxNumSeqs: 64
       maxNumBatchedTokens: 8192

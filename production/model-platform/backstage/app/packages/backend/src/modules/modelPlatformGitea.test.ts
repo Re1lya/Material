@@ -3,6 +3,7 @@ import { parse } from 'yaml';
 import {
   createStartInferenceAction,
   createStopInferenceAction,
+  renderServingRuntime,
 } from './modelPlatformGitea';
 
 const originalFetch = globalThis.fetch;
@@ -19,7 +20,8 @@ const config = new ConfigReader({
       allowedModelVersions: ['qwen3.8-27b-w8a8'],
       allowedRuntimeProfiles: ['qwen38-w8a8-ray-ascend-910b3-tp2-v1'],
       artifactKeeperBaseUrl: 'http://artifact-keeper.example.test',
-      stoppedCompositionRef: 'modeldeployment-stopped-v1alpha1',
+      stoppedCompositionRef: 'modeldeployment-stopped-v2',
+      runningCompositionRef: 'modeldeployment-qwen38-ray-v2',
     },
   },
 });
@@ -58,14 +60,14 @@ function manifest(state: 'Stopped' | 'Running') {
       runtimeProfileRef: 'qwen38-w8a8-ray-ascend-910b3-tp2-v1',
       compositionRef: {
         name: running
-          ? 'modeldeployment-qwen38-ray-v1alpha1'
-          : 'modeldeployment-stopped-v1alpha1',
+          ? 'modeldeployment-qwen38-ray-v2'
+          : 'modeldeployment-stopped-v2',
       },
       crossplane: {
         compositionRef: {
           name: running
-            ? 'modeldeployment-qwen38-ray-v1alpha1'
-            : 'modeldeployment-stopped-v1alpha1',
+            ? 'modeldeployment-qwen38-ray-v2'
+            : 'modeldeployment-stopped-v2',
         },
         compositionUpdatePolicy: 'Automatic',
       },
@@ -73,6 +75,12 @@ function manifest(state: 'Stopped' | 'Running') {
       runtime: {
         npuPerWorker: 2,
         workerReplicas: running ? 1 : 0,
+        serving: {
+          tensorParallelSize: 2,
+          dataParallelSize: 1,
+          pipelineParallelSize: 1,
+          requestedReplicas: 1,
+        },
       },
     },
   };
@@ -105,6 +113,50 @@ describe('model platform inference lifecycle actions', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     jest.restoreAllMocks();
+  });
+
+  it('derives structured serving and serveConfigV2 from the same approved input', () => {
+    const runtime = {
+      npuPerWorker: 2,
+      serveConfigV2: `applications:
+  - args:
+      llm_configs:
+        - deployment_config: {}
+          engine_kwargs:
+            speculative_config: {}
+`,
+    } as never;
+    const rendered = renderServingRuntime(runtime, {
+      requestedTensorParallelSize: 2,
+      requestedDataParallelSize: 2,
+      requestedPipelineParallelSize: 1,
+      requestedReplicas: 2,
+      requestedMaxModelLen: 16384,
+      requestedMaxNumSeqs: 32,
+      requestedMaxNumBatchedTokens: 4096,
+      requestedGpuMemoryUtilization: 0.85,
+      requestedPrefixCaching: false,
+      requestedMtpTokens: 1,
+      requestedMaxOngoingRequests: 32,
+    });
+    const serveConfig = parse(rendered.serveConfigV2) as Record<string, any>;
+    const llm = serveConfig.applications[0].args.llm_configs[0];
+    expect(rendered.serving).toMatchObject({
+      tensorParallelSize: 2,
+      dataParallelSize: 2,
+      requestedReplicas: 2,
+      maxOngoingRequests: 32,
+    });
+    expect(llm.deployment_config).toMatchObject({
+      num_replicas: 2,
+      max_ongoing_requests: 32,
+    });
+    expect(llm.engine_kwargs).toMatchObject({
+      tensor_parallel_size: 2,
+      data_parallel_size: 2,
+      max_model_len: 16384,
+      enable_prefix_caching: false,
+    });
   });
 
   it('updates an existing stopped manifest with PUT and its current SHA', async () => {
@@ -158,9 +210,9 @@ describe('model platform inference lifecycle actions', () => {
     ) as Record<string, any>;
     expect(updated.spec).toMatchObject({
       desiredState: 'Running',
-      compositionRef: { name: 'modeldeployment-qwen38-ray-v1alpha1' },
+      compositionRef: { name: 'modeldeployment-qwen38-ray-v2' },
       crossplane: {
-        compositionRef: { name: 'modeldeployment-qwen38-ray-v1alpha1' },
+        compositionRef: { name: 'modeldeployment-qwen38-ray-v2' },
       },
       runtime: { workerReplicas: 1 },
     });
@@ -220,9 +272,9 @@ describe('model platform inference lifecycle actions', () => {
     ) as Record<string, any>;
     expect(updated.spec).toMatchObject({
       desiredState: 'Stopped',
-      compositionRef: { name: 'modeldeployment-stopped-v1alpha1' },
+      compositionRef: { name: 'modeldeployment-stopped-v2' },
       crossplane: {
-        compositionRef: { name: 'modeldeployment-stopped-v1alpha1' },
+        compositionRef: { name: 'modeldeployment-stopped-v2' },
       },
       runtime: { workerReplicas: 0 },
     });

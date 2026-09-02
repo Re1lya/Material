@@ -467,6 +467,7 @@ export const ModelDeploymentRecipesPage = () => {
   const [deploymentName, setDeploymentName] = useState('qwen38-27b');
   const [replicas, setReplicas] = useState(1);
   const [tensorParallelSize, setTensorParallelSize] = useState(2);
+  const [dataParallelSize, setDataParallelSize] = useState(1);
   const [pipelineParallelSize, setPipelineParallelSize] = useState(1);
   const [maxModelLen, setMaxModelLen] = useState(32768);
   const [maxNumSeqs, setMaxNumSeqs] = useState(64);
@@ -474,6 +475,7 @@ export const ModelDeploymentRecipesPage = () => {
   const [memoryUtilization, setMemoryUtilization] = useState(0.9);
   const [prefixCaching, setPrefixCaching] = useState(true);
   const [mtpTokens, setMtpTokens] = useState(3);
+  const [maxOngoingRequests, setMaxOngoingRequests] = useState(64);
   const [priority, setPriority] = useState<'low' | 'normal' | 'high'>('normal');
   const [visibility, setVisibility] = useState<'internal' | 'private'>(
     'internal',
@@ -534,6 +536,7 @@ export const ModelDeploymentRecipesPage = () => {
     setTensorParallelSize(
       variant.serving?.tensorParallelSize ?? Math.max(variant.npuPerWorker, 1),
     );
+    setDataParallelSize(variant.serving?.dataParallelSize ?? 1);
     setPipelineParallelSize(variant.serving?.pipelineParallelSize ?? 1);
     setMaxModelLen(variant.serving?.maxModelLen ?? 32768);
     setMaxNumSeqs(variant.serving?.maxNumSeqs ?? 64);
@@ -541,6 +544,9 @@ export const ModelDeploymentRecipesPage = () => {
     setMemoryUtilization(variant.serving?.gpuMemoryUtilization ?? 0.9);
     setPrefixCaching(variant.serving?.prefixCaching ?? true);
     setMtpTokens(variant.serving?.mtpTokens ?? 0);
+    setMaxOngoingRequests(
+      variant.serving?.maxOngoingRequests ?? variant.serving?.maxNumSeqs ?? 64,
+    );
   };
 
   const openModel = (model: ModelRecipe) => {
@@ -649,7 +655,6 @@ export const ModelDeploymentRecipesPage = () => {
     );
   }
 
-  const serving = selectedVariant.serving;
   const validDeploymentName = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(
     deploymentName,
   );
@@ -661,7 +666,7 @@ export const ModelDeploymentRecipesPage = () => {
       runtimeProfileRef: selectedVariant.id,
       visibility,
       requestedTensorParallelSize: tensorParallelSize,
-      requestedDataParallelSize: serving?.dataParallelSize ?? 1,
+      requestedDataParallelSize: dataParallelSize,
       requestedPipelineParallelSize: pipelineParallelSize,
       requestedReplicas: replicas,
       requestedMaxModelLen: maxModelLen,
@@ -670,6 +675,7 @@ export const ModelDeploymentRecipesPage = () => {
       requestedGpuMemoryUtilization: memoryUtilization,
       requestedPrefixCaching: prefixCaching,
       requestedMtpTokens: mtpTokens,
+      requestedMaxOngoingRequests: maxOngoingRequests,
       priority,
     }),
   );
@@ -717,6 +723,7 @@ export const ModelDeploymentRecipesPage = () => {
   const ppChoices = [1, 2].filter(
     value => value * tensorParallelSize <= selectedVariant.npuPerWorker,
   );
+  const dpChoices = [1, 2, 4].filter(value => value <= replicas);
 
   const row = (label: string, content: JSX.Element, help?: string) => (
     <Box className={classes.configRow}>
@@ -827,7 +834,12 @@ export const ModelDeploymentRecipesPage = () => {
                       classes={classes}
                       key={value}
                       label={`${value} replica${value === 1 ? '' : 's'}`}
-                      onSelect={setReplicas}
+                      onSelect={nextReplicas => {
+                        setReplicas(nextReplicas);
+                        if (dataParallelSize > nextReplicas) {
+                          setDataParallelSize(nextReplicas);
+                        }
+                      }}
                       selected={replicas}
                       value={value}
                     />
@@ -855,6 +867,16 @@ export const ModelDeploymentRecipesPage = () => {
                       label={`Pipeline · PP ${value}`}
                       onSelect={setPipelineParallelSize}
                       selected={pipelineParallelSize}
+                      value={value}
+                    />
+                  ))}
+                  {dpChoices.map(value => (
+                    <Choice
+                      classes={classes}
+                      key={`dp-${value}`}
+                      label={`Data parallel · DP ${value}`}
+                      onSelect={setDataParallelSize}
+                      selected={dataParallelSize}
                       value={value}
                     />
                   ))}
@@ -950,6 +972,22 @@ export const ModelDeploymentRecipesPage = () => {
                     />
                   ))}
                 </Box>,
+              )}
+              {row(
+                'Max ongoing requests',
+                <Box className={classes.optionGroup}>
+                  {[16, 32, 64].map(value => (
+                    <Choice
+                      classes={classes}
+                      key={value}
+                      label={`${value} requests`}
+                      onSelect={setMaxOngoingRequests}
+                      selected={maxOngoingRequests}
+                      value={value}
+                    />
+                  ))}
+                </Box>,
+                'A bounded queue limit passed to Ray Serve with the same structured contract.',
               )}
               {row(
                 'Service',

@@ -1,0 +1,59 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: modeldeployment-stopped-v2
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: deployment-api
+    platform.example.com/stage: stopped
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: ModelDeployment
+  mode: Pipeline
+  pipeline:
+    - step: render-stopped-status
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: release-status
+            base:
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                labels:
+                  app.kubernetes.io/part-of: model-platform
+                  app.kubernetes.io/component: model-deployment-status
+              data:
+                phase: Stopped
+                desiredState: Stopped
+                runtimeEnabled: "false"
+                cacheEnabled: "false"
+                npuRequested: "0"
+                message: Runtime, cache and NPU resources are fully removed while stopped.
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.name
+                transforms:
+                  - type: string
+                    string:
+                      type: Format
+                      fmt: "%s-status"
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.namespace
+                toFieldPath: metadata.namespace
+              - type: FromCompositeFieldPath
+                fromFieldPath: metadata.name
+                toFieldPath: metadata.labels[platform.example.com/deployment]
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.modelVersionRef
+                toFieldPath: data.modelVersionRef
+              - type: FromCompositeFieldPath
+                fromFieldPath: spec.runtimeProfileRef
+                toFieldPath: data.runtimeProfileRef
+            readinessChecks:
+              - type: None

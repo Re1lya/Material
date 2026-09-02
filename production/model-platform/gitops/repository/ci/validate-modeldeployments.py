@@ -31,11 +31,15 @@ def validate_stopped_composition(
     """Allow one audited status ConfigMap and forbid stopped runtime resources."""
 
     prefix = f"{path}: stopped Composition"
-    if path.name != "modeldeployment-stopped-composition.yaml":
+    expected_names = {
+        "modeldeployment-stopped-composition.yaml": "modeldeployment-stopped-v1alpha1",
+        "modeldeployment-stopped-v2-composition.yaml": "modeldeployment-stopped-v2",
+    }
+    if path.name not in expected_names:
         errors.append(f"{prefix}: unexpected Composition file")
     if composition.get("apiVersion") != "apiextensions.crossplane.io/v1":
         errors.append(f"{prefix}: apiVersion must be apiextensions.crossplane.io/v1")
-    if composition.get("metadata", {}).get("name") != "modeldeployment-stopped-v1alpha1":
+    if composition.get("metadata", {}).get("name") != expected_names.get(path.name):
         errors.append(f"{prefix}: metadata.name is fixed")
     spec = composition.get("spec", {})
     if spec.get("compositeTypeRef") != {
@@ -207,11 +211,20 @@ def validate_qwen38_release(
             f"{prefix}: crossplane.compositionRef.name must match compositionRef.name"
         )
     control_plane_only = composition == "modeldeployment-control-plane-v1alpha1"
-    stopped_composition = composition == "modeldeployment-stopped-v1alpha1"
+    stopped_composition = composition in {
+        "modeldeployment-stopped-v1alpha1",
+        "modeldeployment-stopped-v2",
+    }
+    candidate_v2 = composition in {
+        "modeldeployment-stopped-v2",
+        "modeldeployment-qwen38-ray-v2",
+    }
     if composition not in {
         "modeldeployment-control-plane-v1alpha1",
         "modeldeployment-qwen38-ray-v1alpha1",
         "modeldeployment-stopped-v1alpha1",
+        "modeldeployment-qwen38-ray-v2",
+        "modeldeployment-stopped-v2",
     }:
         errors.append(
             f"{prefix}: compositionRef must select control-plane or qwen38 Ray Composition"
@@ -309,22 +322,33 @@ def validate_qwen38_release(
         errors.append(
             f"{prefix}: runtime.npuPerWorker must be {expected_npu} for {runtime_ref}"
         )
-    if runtime.get("workerReplicas") not in {0, 1}:
-        errors.append(f"{prefix}: runtime.workerReplicas must be 0 or 1")
+    allowed_workers = {0, 1, 2, 4} if candidate_v2 else {0, 1}
+    if runtime.get("workerReplicas") not in allowed_workers:
+        errors.append(f"{prefix}: runtime.workerReplicas is outside the certified allow-list")
     if runtime_ref == "qwen38-w8a8-ray-ascend-910b3-tp2-v1" and runtime.get("workerCPU") != "48":
         errors.append(f"{prefix}: A3 TP2 runtime.workerCPU must be 48 to preserve node headroom")
     if spec.get("desiredState") == "Stopped" and runtime.get("workerReplicas") != 0:
         errors.append(f"{prefix}: Stopped releases must have workerReplicas=0")
-    if spec.get("desiredState") == "Running" and runtime.get("workerReplicas") != 1:
-        errors.append(f"{prefix}: Running releases must have workerReplicas=1")
+    if spec.get("desiredState") == "Running":
+        expected_workers = (
+            runtime.get("serving", {}).get("requestedReplicas")
+            if candidate_v2
+            else 1
+        )
+        if runtime.get("workerReplicas") != expected_workers:
+            errors.append(f"{prefix}: Running releases must match runtime.serving.requestedReplicas")
     annotations = deployment.get("metadata", {}).get("annotations", {})
     if spec.get("desiredState") == "Stopped":
         expected_effective = ("declarative-stopped", "0", "0", "0")
     else:
         expected_effective = (
             "declarative-running",
-            str(expected_npu),
-            "1",
+            str(runtime.get("serving", {}).get("tensorParallelSize"))
+            if candidate_v2
+            else str(expected_npu),
+            str(runtime.get("serving", {}).get("requestedReplicas"))
+            if candidate_v2
+            else "1",
             str(expected_npu),
         )
     actual_effective = (
@@ -369,10 +393,11 @@ def validate_qwen38_release(
             errors.append(f"{prefix}: XR runtime.modelPath differs from RuntimeProfile catalog")
         if runtime.get("modelName") != profile_runtime.get("modelName"):
             errors.append(f"{prefix}: XR runtime.modelName differs from RuntimeProfile catalog")
-        if runtime.get("serveConfigV2") != profile_runtime.get("serveConfigV2"):
-            errors.append(f"{prefix}: XR runtime.serveConfigV2 differs from RuntimeProfile catalog")
-        if runtime.get("serving") != profile_runtime.get("serving"):
-            errors.append(f"{prefix}: XR runtime.serving differs from RuntimeProfile catalog")
+        if not candidate_v2:
+            if runtime.get("serveConfigV2") != profile_runtime.get("serveConfigV2"):
+                errors.append(f"{prefix}: XR runtime.serveConfigV2 differs from RuntimeProfile catalog")
+            if runtime.get("serving") != profile_runtime.get("serving"):
+                errors.append(f"{prefix}: XR runtime.serving differs from RuntimeProfile catalog")
         for cache_field in (
             "revision",
             "image",
@@ -446,6 +471,10 @@ def validate_qwen38_tp2_serve_config(
         errors.append(f"{prefix}: runtime.serving must be the structured serving source of truth")
         return
     allowed = {
+        "tensorParallelSize": {1, 2, 4, 8},
+        "dataParallelSize": {1, 2, 4},
+        "pipelineParallelSize": {1, 2},
+        "requestedReplicas": {1, 2, 4},
         "maxModelLen": {8192, 16384, 32768},
         "maxNumSeqs": {16, 32, 64},
         "maxNumBatchedTokens": {2048, 4096, 8192},
@@ -457,10 +486,14 @@ def validate_qwen38_tp2_serve_config(
     for field, values in allowed.items():
         if serving.get(field) not in values:
             errors.append(f"{prefix}: runtime.serving.{field} is outside the certified allow-list")
+    if serving.get("tensorParallelSize", 0) * serving.get("pipelineParallelSize", 0) > 2:
+        errors.append(f"{prefix}: TP × PP exceeds the certified two-NPU worker profile")
+    if serving.get("dataParallelSize", 0) > serving.get("requestedReplicas", 0):
+        errors.append(f"{prefix}: DP cannot exceed requested replicas")
 
     deployment = llm_config.get("deployment_config", {})
-    if deployment.get("num_replicas") != 1:
-        errors.append(f"{prefix}: TP2 Ray Serve deployment must keep one replica")
+    if deployment.get("num_replicas") != serving.get("requestedReplicas"):
+        errors.append(f"{prefix}: serveConfigV2 num_replicas must match runtime.serving")
     if deployment.get("max_ongoing_requests") != serving.get("maxOngoingRequests"):
         errors.append(f"{prefix}: serveConfigV2 max_ongoing_requests must match runtime.serving")
 
@@ -471,9 +504,9 @@ def validate_qwen38_tp2_serve_config(
 
     engine = llm_config.get("engine_kwargs", {})
     expected_engine = {
-        "tensor_parallel_size": 2,
-        "data_parallel_size": 1,
-        "pipeline_parallel_size": 1,
+        "tensor_parallel_size": serving.get("tensorParallelSize"),
+        "data_parallel_size": serving.get("dataParallelSize"),
+        "pipeline_parallel_size": serving.get("pipelineParallelSize"),
         "distributed_executor_backend": "ray",
         "quantization": "ascend",
         "trust_remote_code": True,

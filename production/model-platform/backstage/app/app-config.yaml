@@ -118,7 +118,10 @@ modelPlatform:
       - qwen38-w8a8-ray-ascend-910b3-v1
       - qwen38-w8a8-ray-ascend-910b3-tp2-v1
     artifactKeeperBaseUrl: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
-    stoppedCompositionRef: modeldeployment-stopped-v1alpha1
+    # Candidate v2 pair. The installed production v1 pair remains the rollback
+    # baseline until the isolated smoke deployment is accepted.
+    stoppedCompositionRef: modeldeployment-stopped-v2
+    runningCompositionRef: modeldeployment-qwen38-ray-v2
   dataPipeline:
     enabled: true
     namespace: k12

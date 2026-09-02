@@ -25,6 +25,7 @@ type DeploymentRequest = {
   requestedGpuMemoryUtilization: number;
   requestedPrefixCaching: boolean;
   requestedMtpTokens: number;
+  requestedMaxOngoingRequests: number;
   priority: 'low' | 'normal' | 'high';
 };
 
@@ -39,6 +40,21 @@ type GiteaConfig = {
   allowedRuntimeProfiles: string[];
   artifactKeeperBaseUrl: string;
   stoppedCompositionRef: string;
+  runningCompositionRef: string;
+};
+
+type ServingConfig = {
+  tensorParallelSize: number;
+  dataParallelSize: number;
+  pipelineParallelSize: number;
+  requestedReplicas: number;
+  maxModelLen: number;
+  maxNumSeqs: number;
+  maxNumBatchedTokens: number;
+  gpuMemoryUtilization: number;
+  prefixCaching: boolean;
+  mtpTokens: number;
+  maxOngoingRequests: number;
 };
 
 type GiteaContentFile = {
@@ -70,15 +86,7 @@ type DeploymentContract = {
     modelPath: string;
     modelName: string;
     serveConfigV2: string;
-    serving: {
-      maxModelLen: number;
-      maxNumSeqs: number;
-      maxNumBatchedTokens: number;
-      gpuMemoryUtilization: number;
-      prefixCaching: boolean;
-      mtpTokens: number;
-      maxOngoingRequests: number;
-    };
+    serving: ServingConfig;
     headCPU: string;
     headMemory: string;
     workerCPU: string;
@@ -112,8 +120,6 @@ type GiteaFileWrite = {
 };
 
 const dnsLabel = /^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/;
-const runningCompositionRef = 'modeldeployment-qwen38-ray-v1alpha1';
-
 function readGiteaConfig(config: Config): GiteaConfig {
   const section = config.getConfig('modelPlatform.gitea');
   const apiBaseUrl = section.getString('apiBaseUrl').replace(/\/$/, '');
@@ -135,6 +141,89 @@ function readGiteaConfig(config: Config): GiteaConfig {
       .getString('artifactKeeperBaseUrl')
       .replace(/\/$/, ''),
     stoppedCompositionRef: section.getString('stoppedCompositionRef'),
+    runningCompositionRef: section.getString('runningCompositionRef'),
+  };
+}
+
+/**
+ * Derive the only two serving representations from one allow-listed input.
+ * The structured object is the source of truth; serveConfigV2 is rendered from
+ * the certified RuntimeProfile template so the two cannot drift independently.
+ */
+export function renderServingRuntime(
+  runtime: DeploymentContract['runtime'],
+  input: Pick<
+    DeploymentRequest,
+    | 'requestedTensorParallelSize'
+    | 'requestedDataParallelSize'
+    | 'requestedPipelineParallelSize'
+    | 'requestedReplicas'
+    | 'requestedMaxModelLen'
+    | 'requestedMaxNumSeqs'
+    | 'requestedMaxNumBatchedTokens'
+    | 'requestedGpuMemoryUtilization'
+    | 'requestedPrefixCaching'
+    | 'requestedMtpTokens'
+    | 'requestedMaxOngoingRequests'
+  >,
+) {
+  const serving: ServingConfig = {
+    tensorParallelSize: input.requestedTensorParallelSize,
+    dataParallelSize: input.requestedDataParallelSize,
+    pipelineParallelSize: input.requestedPipelineParallelSize,
+    requestedReplicas: input.requestedReplicas,
+    maxModelLen: input.requestedMaxModelLen,
+    maxNumSeqs: input.requestedMaxNumSeqs,
+    maxNumBatchedTokens: input.requestedMaxNumBatchedTokens,
+    gpuMemoryUtilization: input.requestedGpuMemoryUtilization,
+    prefixCaching: input.requestedPrefixCaching,
+    mtpTokens: input.requestedMtpTokens,
+    maxOngoingRequests: input.requestedMaxOngoingRequests,
+  };
+  if (
+    serving.tensorParallelSize * serving.pipelineParallelSize >
+      runtime.npuPerWorker ||
+    serving.dataParallelSize > serving.requestedReplicas
+  ) {
+    throw new Error(
+      'Requested parallelism is outside the certified runtime profile capacity',
+    );
+  }
+
+  let config: Record<string, any>;
+  try {
+    config = parse(runtime.serveConfigV2) as Record<string, any>;
+  } catch {
+    throw new Error('RuntimeProfile serveConfigV2 is not valid YAML');
+  }
+  const llmConfig = config?.applications?.[0]?.args?.llm_configs?.[0];
+  if (!llmConfig || typeof llmConfig !== 'object') {
+    throw new Error('RuntimeProfile serveConfigV2 has no Ray Serve LLM config');
+  }
+  llmConfig.deployment_config = {
+    ...(llmConfig.deployment_config ?? {}),
+    num_replicas: serving.requestedReplicas,
+    max_ongoing_requests: serving.maxOngoingRequests,
+  };
+  llmConfig.engine_kwargs = {
+    ...(llmConfig.engine_kwargs ?? {}),
+    tensor_parallel_size: serving.tensorParallelSize,
+    data_parallel_size: serving.dataParallelSize,
+    pipeline_parallel_size: serving.pipelineParallelSize,
+    max_model_len: serving.maxModelLen,
+    max_num_seqs: serving.maxNumSeqs,
+    max_num_batched_tokens: serving.maxNumBatchedTokens,
+    gpu_memory_utilization: serving.gpuMemoryUtilization,
+    enable_prefix_caching: serving.prefixCaching,
+    speculative_config: {
+      ...(llmConfig.engine_kwargs?.speculative_config ?? {}),
+      num_speculative_tokens: serving.mtpTokens,
+    },
+  };
+  return {
+    ...runtime,
+    serving,
+    serveConfigV2: stringify(config, { lineWidth: 0 }),
   };
 }
 
@@ -346,6 +435,7 @@ function createDeploymentRequestAction(config: Config) {
         requestedGpuMemoryUtilization: z => z.number().min(0.5).max(0.98),
         requestedPrefixCaching: z => z.boolean(),
         requestedMtpTokens: z => z.number().int().min(0).max(8),
+        requestedMaxOngoingRequests: z => z.number().int().min(1).max(1024),
         priority: z => z.enum(['low', 'normal', 'high']),
       },
       output: {
@@ -384,6 +474,7 @@ function createDeploymentRequestAction(config: Config) {
         input.runtimeProfileRef,
         ctx.signal,
       );
+      const runtime = renderServingRuntime(contract.runtime, input);
 
       const manifestPath = `environments/production/modeldeployments/${input.deploymentName}.yaml`;
       const contentPath = `${repositoryPrefix}/contents/${encodeRepositoryPath(
@@ -476,7 +567,7 @@ function createDeploymentRequestAction(config: Config) {
             visibility: input.visibility,
           },
           artifact: contract.artifact,
-          runtime: contract.runtime,
+          runtime,
           cache: contract.cache,
         },
       };
@@ -516,7 +607,7 @@ function createDeploymentRequestAction(config: Config) {
                 '- Execution mode: `declarative-stopped`',
                 `- Requested TP/DP/PP/replicas: ${input.requestedTensorParallelSize}/${input.requestedDataParallelSize}/${input.requestedPipelineParallelSize}/${input.requestedReplicas}`,
                 `- Context/concurrency/batch: ${input.requestedMaxModelLen}/${input.requestedMaxNumSeqs}/${input.requestedMaxNumBatchedTokens}`,
-                `- Memory/prefix cache/MTP: ${input.requestedGpuMemoryUtilization}/${input.requestedPrefixCaching}/${input.requestedMtpTokens}`,
+                `- Memory/prefix cache/MTP/max ongoing: ${input.requestedGpuMemoryUtilization}/${input.requestedPrefixCaching}/${input.requestedMtpTokens}/${input.requestedMaxOngoingRequests}`,
                 `- Runtime profile: ${input.runtimeProfileRef}`,
                 '- Runtime/NPU creation: remains stopped until a reviewed Argo CD sync',
                 '',
@@ -706,19 +797,31 @@ export function createStartInferenceAction(config: Config) {
         .replace(/^user:[^/]+\//, '')
         .replace(/[^A-Za-z0-9_.-]/g, '-');
       const npuPerWorker = spec.runtime?.npuPerWorker;
+      const serving = spec.runtime?.serving as Partial<ServingConfig> | undefined;
+      const requestedReplicas = serving?.requestedReplicas;
       if (typeof npuPerWorker !== 'number' || npuPerWorker <= 0) {
         throw new Error(
           'runtime npuPerWorker is missing; refusing to generate a running request',
         );
       }
+      if (
+        !Number.isInteger(requestedReplicas) ||
+        requestedReplicas === undefined ||
+        requestedReplicas < 1 ||
+        requestedReplicas > 4
+      ) {
+        throw new Error(
+          'runtime.serving.requestedReplicas must be an approved value before Start',
+        );
+      }
       annotations[`${prefix}effective-tensor-parallel-size`] =
-        String(npuPerWorker);
-      annotations[`${prefix}effective-replicas`] = '1';
+        String(serving?.tensorParallelSize);
+      annotations[`${prefix}effective-replicas`] = String(requestedReplicas);
       annotations[`${prefix}effective-npu-per-replica`] = String(npuPerWorker);
       spec.desiredState = 'Running';
-      spec.runtime.workerReplicas = 1;
-      spec.compositionRef = { name: runningCompositionRef };
-      spec.crossplane.compositionRef = { name: runningCompositionRef };
+      spec.runtime.workerReplicas = requestedReplicas;
+      spec.compositionRef = { name: gitea.runningCompositionRef };
+      spec.crossplane.compositionRef = { name: gitea.runningCompositionRef };
 
       const yaml = stringify(document, { lineWidth: 0 });
 
@@ -755,7 +858,7 @@ export function createStartInferenceAction(config: Config) {
                 `- Start request ID: \`${startRequestId}\``,
                 `- Requested-by: \`${initiator}\``,
                 '- Desired state change: `Stopped` -> `Running`',
-                `- workerReplicas change: \`0\` -> \`1\` (${npuPerWorker} NPU per worker)`,
+                `- workerReplicas change: \`0\` -> \`${requestedReplicas}\` (${npuPerWorker} NPU per worker)`,
                 `- Runtime profile: ${profileRef}`,
                 '- The Tekton capacity gate must pass inside an approved running window before this PR can merge.',
                 '',
@@ -895,8 +998,8 @@ export function createStopInferenceAction(config: Config) {
         );
       }
       if (
-        spec.compositionRef?.name !== runningCompositionRef ||
-        spec.crossplane?.compositionRef?.name !== runningCompositionRef
+        spec.compositionRef?.name !== gitea.runningCompositionRef ||
+        spec.crossplane?.compositionRef?.name !== gitea.runningCompositionRef
       ) {
         throw new Error(
           'Only a request bound to the certified Ray runtime composition can be stopped',

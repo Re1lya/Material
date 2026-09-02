@@ -626,16 +626,16 @@ spec:
               base_annotations = base_metadata.get("annotations", {})
               if base_spec.get("desiredState") != "Running":
                   raise SystemExit("base request must be Running before a stop request")
-              if base_runtime.get("workerReplicas") != 1:
-                  raise SystemExit("base request must have workerReplicas=1")
+              base_serving = base_runtime.get("serving", {})
+              base_replicas = base_serving.get("requestedReplicas")
+              if base_replicas not in {1, 2, 4} or base_runtime.get("workerReplicas") != base_replicas:
+                  raise SystemExit("base request workerReplicas must match certified runtime.serving.requestedReplicas")
               if base_annotations.get(f"{PREFIX}request-mode") != "declarative-running":
                   raise SystemExit("base request-mode must be declarative-running")
               expected_npu = policy("expected-npu-per-worker")
               expected_running = {
-                  f"{PREFIX}effective-tensor-parallel-size": policy(
-                      "expected-tensor-parallel-size"
-                  ),
-                  f"{PREFIX}effective-replicas": "1",
+                  f"{PREFIX}effective-tensor-parallel-size": str(base_serving.get("tensorParallelSize")),
+                  f"{PREFIX}effective-replicas": str(base_replicas),
                   f"{PREFIX}effective-npu-per-replica": expected_npu,
               }
               for key, value in expected_running.items():
@@ -1375,17 +1375,17 @@ spec:
               head_annotations = head_metadata.get("annotations", {})
               if head_spec.get("desiredState") != "Running":
                   raise SystemExit("head request must request desiredState=Running")
-              if head_runtime.get("workerReplicas") != 1:
-                  raise SystemExit("running requests require workerReplicas=1")
+              head_serving = head_runtime.get("serving", {})
+              requested_replicas = head_serving.get("requestedReplicas")
+              if requested_replicas not in {1, 2, 4} or head_runtime.get("workerReplicas") != requested_replicas:
+                  raise SystemExit("running requests must match certified runtime.serving.requestedReplicas")
               if str(head_runtime.get("npuPerWorker")) != expected_npu:
                   raise SystemExit("running requests must use the profile npuPerWorker")
               if head_annotations.get(f"{PREFIX}request-mode") != "declarative-running":
                   raise SystemExit("head request-mode must be declarative-running")
               expected_effective = {
-                  f"{PREFIX}effective-tensor-parallel-size": policy(
-                      "expected-tensor-parallel-size"
-                  ),
-                  f"{PREFIX}effective-replicas": "1",
+                  f"{PREFIX}effective-tensor-parallel-size": str(head_serving.get("tensorParallelSize")),
+                  f"{PREFIX}effective-replicas": str(requested_replicas),
                   f"{PREFIX}effective-npu-per-replica": expected_npu,
               }
               for key, value in expected_effective.items():
@@ -1426,7 +1426,7 @@ spec:
               }
               projected = copy.deepcopy(base_doc)
               projected["spec"]["desiredState"] = "Running"
-              projected["spec"]["runtime"]["workerReplicas"] = 1
+              projected["spec"]["runtime"]["workerReplicas"] = requested_replicas
               projected["spec"]["compositionRef"] = {
                   "name": policy("expected-composition-ref")
               }

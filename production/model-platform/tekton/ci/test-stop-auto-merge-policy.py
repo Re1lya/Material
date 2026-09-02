@@ -74,10 +74,10 @@ def running_document():
         "spec": {
             "desiredState": "Running",
             "runtimeProfileRef": "qwen38-w8a8-ray-ascend-910b3-tp2-v1",
-            "compositionRef": {"name": "modeldeployment-qwen38-ray-v1alpha1"},
+            "compositionRef": {"name": "modeldeployment-qwen38-ray-v2"},
             "crossplane": {
                 "compositionRef": {
-                    "name": "modeldeployment-qwen38-ray-v1alpha1"
+                    "name": "modeldeployment-qwen38-ray-v2"
                 },
                 "compositionUpdatePolicy": "Automatic",
             },
@@ -85,6 +85,10 @@ def running_document():
                 "image": "registry.example/qwen@sha256:certified",
                 "npuPerWorker": 2,
                 "workerReplicas": 1,
+                "serving": {
+                    "tensorParallelSize": 2,
+                    "requestedReplicas": 1,
+                },
             },
             "placement": {"acceleratorPool": "ascend-a3"},
         },
@@ -110,10 +114,10 @@ def stopped_document(base):
     result["spec"]["desiredState"] = "Stopped"
     result["spec"]["runtime"]["workerReplicas"] = 0
     result["spec"]["compositionRef"] = {
-        "name": "modeldeployment-stopped-v1alpha1"
+        "name": "modeldeployment-stopped-v2"
     }
     result["spec"]["crossplane"]["compositionRef"] = {
-        "name": "modeldeployment-stopped-v1alpha1"
+        "name": "modeldeployment-stopped-v2"
     }
     return result
 
@@ -167,8 +171,8 @@ class StopAutoMergePolicyTest(unittest.TestCase):
                 "allowlisted-requested-by": "gitadmin",
                 "expected-npu-per-worker": "2",
                 "expected-tensor-parallel-size": "2",
-                "expected-composition-ref": "modeldeployment-qwen38-ray-v1alpha1",
-                "expected-stopped-composition-ref": "modeldeployment-stopped-v1alpha1",
+                "expected-composition-ref": "modeldeployment-qwen38-ray-v2",
+                "expected-stopped-composition-ref": "modeldeployment-stopped-v2",
             }
             for name, value in values.items():
                 (policy_path / name).write_text(value)
@@ -206,11 +210,11 @@ class StopAutoMergePolicyTest(unittest.TestCase):
         head = stopped_document(running_document())
         self.assertEqual(
             head["spec"]["compositionRef"]["name"],
-            "modeldeployment-stopped-v1alpha1",
+            "modeldeployment-stopped-v2",
         )
         self.assertEqual(
             head["spec"]["crossplane"]["compositionRef"]["name"],
-            "modeldeployment-stopped-v1alpha1",
+            "modeldeployment-stopped-v2",
         )
         self.assertEqual(len(self.execute_policy(head)), 1)
 

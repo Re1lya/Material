@@ -616,6 +616,10 @@ export const ModelDeploymentsPage = () => {
                                 }`,
                               ],
                               [
+                                'Composition',
+                                detail.compositionRef ?? 'Unknown',
+                              ],
+                              [
                                 'Ray clusters',
                                 detail.ray?.clusters?.join(', ') || 'None',
                               ],

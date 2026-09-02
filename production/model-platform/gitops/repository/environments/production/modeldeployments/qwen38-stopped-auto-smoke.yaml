@@ -57,6 +57,10 @@ spec:
       \    num_speculative_tokens: 3\n          enforce_eager: true\n        compilation_config:\n\
       \          cudagraph_mode: FULL_DECODE_ONLY\n"
     serving:
+      tensorParallelSize: 2
+      dataParallelSize: 1
+      pipelineParallelSize: 1
+      requestedReplicas: 1
       maxModelLen: 32768
       maxNumSeqs: 64
       maxNumBatchedTokens: 8192

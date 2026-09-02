@@ -20,8 +20,10 @@ data:
   expected-runtime-image: "110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942"
   expected-manifest-digest: "sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f"
   expected-cache-revision: "f2afa9e2-r1"
-  expected-composition-ref: "modeldeployment-qwen38-ray-v1alpha1"
-  expected-stopped-composition-ref: "modeldeployment-stopped-v1alpha1"
+  # v2 is the candidate pair. The prior v1 pair remains installed and is the
+  # rollback baseline together with the previous Tekton generation.
+  expected-composition-ref: "modeldeployment-qwen38-ray-v2"
+  expected-stopped-composition-ref: "modeldeployment-stopped-v2"
   cache-pv-name: "model-cache-a3-qwen38-27b-w8a8"
   cache-pv-local-path: "/home/model-platform/cache/qwen38-27b-w8a8"
   cache-pvc-name: "qwen38-27b-cache"
