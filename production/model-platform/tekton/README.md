@@ -44,7 +44,7 @@ and is not performed here.
 - `model-platform-ci` isolates the listener, Pipeline, ServiceAccounts,
   ResourceQuota, LimitRange, and NetworkPolicies.
 - The Operator event-based `TektonPruner/pruner` removes only terminal
-  PipelineRuns/TaskRuns in `model-platform-ci` after seven days and keeps at
+  PipelineRuns/TaskRuns in `model-platform-ci` after 24 hours and keeps at
   most ten successful and ten failed records. It is not an additional
   old-style Pruner CronJob.
 - The deployed `model-platform-ci-tools:v0.2.0` combines pinned internal
@@ -155,7 +155,7 @@ controller and webhook are both pinned to `server-00`. The retention ConfigMap
 contains only the `model-platform-ci` policy:
 
 ```text
-ttlSecondsAfterFinished: 604800
+ttlSecondsAfterFinished: 86400
 successfulHistoryLimit: 10
 failedHistoryLimit: 10
 ```

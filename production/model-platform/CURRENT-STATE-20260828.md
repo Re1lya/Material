@@ -22,7 +22,7 @@ Material 中的平台文档分为三类：
 | 模块 | 当前状态 | 结论 |
 | --- | --- | --- |
 | K3s | 10 个节点 Ready，`server-00` 为唯一 control-plane | 可用，但仍存在单控制面维护窗口风险 |
-| Artifact Keeper | backend 1.6.4、Web、PostgreSQL Ready | 可用；`container-images` 已超配额 |
+| Artifact Keeper | backend 1.6.4、Web、PostgreSQL Ready；`container-images` 已清理9个旧tag和24个孤立上传临时文件 | 仍高于50GiB配额；磁盘目录约从100GB降至86GB，3个未满24小时的 committing上传会话待安全窗口后复查 |
 | Gitea | 应用与 PostgreSQL Ready | 生产配置事实源可用 |
 | Argo CD | K12、bootstrap、ModelDeployment Application 为 Synced/Healthy；training Application 为 OutOfSync/Healthy | `model-platform-deployment-requests` 已开启受限 automated sync（prune/self-heal/allowEmpty=false）；training 仍有 orphaned resources 待审查 |
 | Tekton | Operator、Pipelines、Triggers、Pruner Ready | 通用模型配置 CI、Running capacity gate 和自动合并已通过生产验收 |

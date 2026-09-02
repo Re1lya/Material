@@ -35,6 +35,39 @@ for safely continuing the deployment.
 7. Use Git as the source of truth for non-secret manifests. Do not commit
    rendered secrets, generated credentials, kubeconfigs or live object dumps.
 
+## Best-effort XRD and Composition versioning guidance
+
+The following guidance is recommended for reducing production regressions, but
+it is not a mandatory release blocker. An urgent repair or a clearly bounded
+low-risk change may use an in-place update when the Agent records the current
+rollback point, reviews the server-side diff and verifies the result.
+
+- Prefer backward-compatible XRD evolution. Add new fields as optional or with
+  safe defaults first; update schemas, existing requests, RuntimeProfiles,
+  Backstage generators and controllers before making a field required.
+- Use a new served API version such as `v1beta1` when an XRD change is genuinely
+  incompatible. Keep the previous version available until stored objects and
+  all producers/consumers have migrated.
+- When practical, publish materially changed Compositions under a new name,
+  for example `modeldeployment-qwen38-ray-v2`, while retaining the last known
+  good Composition. Test a candidate request against the new name before
+  switching the production `compositionRef`.
+- Avoid assuming that a new CompositionRevision is safe merely because it was
+  created successfully. With `compositionUpdatePolicy: Automatic`, an in-place
+  Composition edit can affect existing XRs; review the generated resource diff
+  and runtime lifecycle implications.
+- Record the compatible release set when possible: XRD commit/hash,
+  Composition name or revision, Backstage and controller image digests, Tekton
+  generation and `model-platform-config` commit.
+- Prefer rollback by stopping the workload and switching `compositionRef` back
+  to the last known good Composition, followed by image/Pipeline rollback as
+  needed. Roll back an XRD only when the older schema remains compatible with
+  objects already stored by the API server.
+- For small or urgent in-place changes, best effort means at least preserving
+  the previous manifest/revision, running relevant tests and server-side
+  dry-run, checking that existing XRs still reconcile, and documenting the
+  observed production result.
+
 ## Backstage source-preservation gate (2026-08-31)
 
 Production Backstage currently runs Artifact Keeper image
