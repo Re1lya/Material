@@ -88,6 +88,40 @@ def validate_stopped_composition(
         errors.append(f"{prefix}: status ConfigMap must use readinessChecks None")
 
 
+def validate_modeldeployment_xrd(
+    path: pathlib.Path, xrd: dict, errors: list[str]
+) -> None:
+    """Keep the served v1alpha1 API backward compatible while admitting v2."""
+
+    prefix = f"{path}: ModelDeployment XRD"
+    if path.name != "modeldeployment-xrd.yaml":
+        errors.append(f"{prefix}: unexpected XRD file")
+    if xrd.get("apiVersion") != "apiextensions.crossplane.io/v2":
+        errors.append(f"{prefix}: apiVersion must be apiextensions.crossplane.io/v2")
+    if xrd.get("metadata", {}).get("name") != "modeldeployments.platform.example.com":
+        errors.append(f"{prefix}: metadata.name must be modeldeployments.platform.example.com")
+    versions = xrd.get("spec", {}).get("versions", [])
+    version = next((item for item in versions if item.get("name") == "v1alpha1"), {})
+    schema = version.get("schema", {}).get("openAPIV3Schema", {})
+    composition_names = (
+        schema.get("properties", {})
+        .get("spec", {})
+        .get("properties", {})
+        .get("compositionRef", {})
+        .get("properties", {})
+        .get("name", {})
+        .get("enum", [])
+    )
+    required = {
+        "modeldeployment-stopped-v1alpha1",
+        "modeldeployment-qwen38-ray-v1alpha1",
+        "modeldeployment-stopped-v2",
+        "modeldeployment-qwen38-ray-v2",
+    }
+    if not required.issubset(set(composition_names)):
+        errors.append(f"{prefix}: v1 and v2 composition names must be allowed")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--requests-dir", type=pathlib.Path, required=True)
@@ -135,8 +169,11 @@ def main() -> int:
         if document.get("kind") == "Composition":
             validate_stopped_composition(path, document, errors)
             continue
+        if document.get("kind") == "CompositeResourceDefinition":
+            validate_modeldeployment_xrd(path, document, errors)
+            continue
         if document.get("kind") != "ModelDeployment":
-            errors.append(f"{path}: only ModelDeployment or the stopped Composition is allowed")
+            errors.append(f"{path}: only ModelDeployment, the stopped Composition, or the XRD is allowed")
             continue
         deployment_count += 1
 

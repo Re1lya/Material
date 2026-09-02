@@ -159,6 +159,28 @@ describe('model platform inference lifecycle actions', () => {
     });
   });
 
+  it('rejects a serving value outside the certified allow-list', () => {
+    const runtime = {
+      npuPerWorker: 2,
+      serveConfigV2: 'applications: []',
+    } as never;
+    expect(() =>
+      renderServingRuntime(runtime, {
+        requestedTensorParallelSize: 2,
+        requestedDataParallelSize: 1,
+        requestedPipelineParallelSize: 1,
+        requestedReplicas: 1,
+        requestedMaxModelLen: 8192,
+        requestedMaxNumSeqs: 16,
+        requestedMaxNumBatchedTokens: 2048,
+        requestedGpuMemoryUtilization: 0.8,
+        requestedPrefixCaching: true,
+        requestedMtpTokens: 0,
+        requestedMaxOngoingRequests: 17,
+      }),
+    ).toThrow('outside the certified allow-list');
+  });
+
   it('updates an existing stopped manifest with PUT and its current SHA', async () => {
     const fetchMock = jest
       .fn()

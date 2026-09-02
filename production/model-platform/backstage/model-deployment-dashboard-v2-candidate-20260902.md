@@ -2,10 +2,9 @@
 
 ## Scope
 
-This Material-only candidate adds the dashboard/recipe integration needed for
-versioned inference requests. It is **not deployed** and must be transplanted
-onto the verified current `gitadmin/platform-backstage` main commit before any
-image build or production review.
+This candidate has been transplanted onto verified production Gitea main
+`gitadmin/platform-backstage@9485ecfc4ca83876e36842e81bdf1612a5c5b9fd`.
+It is **not deployed**.
 
 ## Candidate contract
 
@@ -29,11 +28,23 @@ image build or production review.
   `localhost:52365/api/local_raylet_healthz` contract.
 - Lifecycle policy tests passed for the v2 pair.
 
+## Candidate provenance
+
+- Backstage feature branch: `feat/model-deployments-v2-dashboard`, head
+  `dff07544dc392e4ce07c1b3b4f34c228a8cd7b10`.
+- Config feature branch: `feat/modeldeployment-v2-serving`, head
+  `8eb6dc9dfa4af9dab994e0179775480a0f569333`.
+- AMD64 image: `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.11-model-deployments-v2-dff0754@sha256:1de628a4c0e73636089ce66fb0f2029a8630e94bea5792ec5052ece9238ba82c`.
+- Image labels bind the source repository, the Backstage feature commit and
+  version `0.6.11-model-deployments-v2-dff0754`.
+
 ## Release blockers
 
-No authenticated read access is available from this session to production
-Gitea or `server-00`; consequently the current source provenance, production
-image digest, cluster state, Gitea branch/PR, Artifact Keeper digest, Tekton
-generation and real authenticated route screenshot have not been verified.
-Do not publish, apply, merge, switch `qwen38-27b`, open a Running Window, or
-create a smoke workload from this Material candidate.
+The Gitea feature branches are pushed, but Gitea API creation requires an API
+token: its account password works for Git-over-HTTP but is rejected by the API.
+The external proxy returns 502 for authenticated API requests, and the direct
+Gitea endpoint returns 401 for Basic/token credentials. A PR must therefore be
+opened from the branch URL by an authenticated Gitea browser session or with a
+repository-scoped API token. Do not publish, apply, merge, switch
+`qwen38-27b`, open a Running Window, or create a smoke workload from this
+candidate.

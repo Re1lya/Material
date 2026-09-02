@@ -57,6 +57,20 @@ type ServingConfig = {
   maxOngoingRequests: number;
 };
 
+const certifiedServingValues: Record<keyof ServingConfig, readonly unknown[]> = {
+  tensorParallelSize: [1, 2, 4, 8],
+  dataParallelSize: [1, 2, 4],
+  pipelineParallelSize: [1, 2],
+  requestedReplicas: [1, 2, 4],
+  maxModelLen: [8192, 16384, 32768],
+  maxNumSeqs: [16, 32, 64],
+  maxNumBatchedTokens: [2048, 4096, 8192],
+  gpuMemoryUtilization: [0.8, 0.85, 0.9],
+  prefixCaching: [true, false],
+  mtpTokens: [0, 1, 3],
+  maxOngoingRequests: [16, 32, 64],
+};
+
 type GiteaContentFile = {
   type: string;
   path: string;
@@ -180,6 +194,13 @@ export function renderServingRuntime(
     mtpTokens: input.requestedMtpTokens,
     maxOngoingRequests: input.requestedMaxOngoingRequests,
   };
+  for (const [field, allowed] of Object.entries(certifiedServingValues)) {
+    if (!allowed.includes(serving[field as keyof ServingConfig])) {
+      throw new Error(
+        `runtime.serving.${field} is outside the certified allow-list`,
+      );
+    }
+  }
   if (
     serving.tensorParallelSize * serving.pipelineParallelSize >
       runtime.npuPerWorker ||
