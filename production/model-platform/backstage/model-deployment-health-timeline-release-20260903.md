@@ -57,3 +57,8 @@ described as a prerequisite or as production evidence for this image.
   was never applied. The corrected RBAC bundle now passes server-side dry-run
   after removing obsolete declarations for the absent `artifact-publish`
   namespace.
+- `platform-backstage` now expects the v2 stopped/running Composition pair, but
+  the GitOps source and live `qwen38-27b` still reference
+  `modeldeployment-stopped-v1alpha1`. Before Start, both composition references
+  must be migrated while the request remains Stopped/workerReplicas=0, then
+  reconciled successfully against `modeldeployment-stopped-v2`.
