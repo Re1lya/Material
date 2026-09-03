@@ -147,39 +147,6 @@ roleRef:
   kind: Role
   name: backstage-argocd-read-only
 ---
-# Backstage may observe the dedicated artifact-publish PipelineRuns and their
-# TaskRun pods, but it cannot create/delete/patch Tekton or Kubernetes objects.
-# Creation is mediated by the EventListener and its own narrowly scoped SA.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: backstage-artifact-publish-read-only
-  namespace: artifact-publish
-rules:
-  - apiGroups: ["tekton.dev"]
-    resources: ["pipelineruns", "taskruns"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["pods/log"]
-    verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: backstage-artifact-publish-read-only
-  namespace: artifact-publish
-subjects:
-  - kind: ServiceAccount
-    name: backstage
-    namespace: backstage
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: backstage-artifact-publish-read-only
----
 # Read-only discovery of the platform-managed K12 release. Run launch goes to
 # the allow-listed Dagster GraphQL endpoint and never writes Kubernetes.
 apiVersion: rbac.authorization.k8s.io/v1

@@ -33,12 +33,27 @@ status. The previous experimental Backstage CI objects and failed runs were
 removed. A smaller non-blocking PR CI is prepared separately and must not be
 described as a prerequisite or as production evidence for this image.
 
-## Production changes awaiting approval
+## Production result
 
-1. Apply the updated read-only EndpointSlice RBAC in `model-serving`.
-2. Apply the two narrowly scoped TCP/8000 NetworkPolicies between Backstage and
-   platform model-serving Pods.
-3. Roll out the candidate Backstage digest.
+- The EndpointSlice-only Role/RoleBinding and two narrowly scoped TCP/8000
+  NetworkPolicies were applied.
+- Backstage rolled out successfully to the candidate digest with one Ready Pod
+  and zero restarts.
+- The in-Pod `/api/model-platform/deployments` request returned HTTP 200 and
+  exposed the new timeline/health fields while both known deployments remained
+  Stopped.
+- The Backstage ServiceAccount can list EndpointSlices but cannot create them.
+- No ModelDeployment, Composition, Running Window or NPU workload was changed
+  by this release.
 
-These changes do not switch a ModelDeployment, install or edit a Composition,
-open the Running Window, or create an NPU workload.
+## Remaining v2 smoke gates
+
+- The live cluster has `modeldeployment-stopped-v2`, but the reviewed
+  `modeldeployment-qwen38-ray-v2` Composition is not installed yet. Its exact
+  Gitea-main source passed server-side dry-run and still requires a separate
+  apply approval.
+- The Dashboard API currently reports 403 degradation for RayCluster/Event,
+  Tekton and Argo reads because the previously prepared read-only status RBAC
+  was never applied. The corrected RBAC bundle now passes server-side dry-run
+  after removing obsolete declarations for the absent `artifact-publish`
+  namespace.
