@@ -25,11 +25,18 @@
 
 ```text
 Request -> Git PR -> Tekton -> Argo -> Crossplane
-        -> RayCluster -> Model loading -> Healthy
+        -> RayCluster -> Pods Running -> Model loading
+        -> Serving Ready -> Healthy
 ```
 
 部署状态使用：`Pending`、`Validating`、`Deploying`、`Running`、`Stopping`、
 `Stopped`、`Failed`。右侧同时显示阶段原因，避免只有 Pod 状态而不知道流程卡点。
+
+`Running` 不能只由 Pod phase、RayCluster 存在或 Service 对象存在得出。最终
+`Healthy` 至少要求：预期 worker 全部 Ready、Ray Serve application 为
+`RUNNING`、Serve EndpointSlice 有 Ready endpoint，并且对 `/v1/models` 或约定
+健康接口的有界请求成功且返回目标模型。完成该合同前，页面必须使用
+`Pods Running`、`Model loading` 或 `Serving pending`，不能提前显示健康。
 
 ## 3. 操作规则
 
@@ -55,6 +62,10 @@ Request -> Git PR -> Tekton -> Argo -> Crossplane
 前端每 5–10 秒刷新，并保留当前选中卡片。第一版继续使用已有 Scaffolder
 Start/Stop action，不从页面直接调用 Kubernetes。
 
+聚合接口还应为主要阶段返回 `startedAt`、`completedAt`、`durationSeconds` 和
+最近一次状态变化时间，用于区分实际模型加载耗时与 Gitea、Tekton、Argo、
+Crossplane、KubeRay 之间的等待时间。
+
 ## 5. 实施顺序
 
 1. 先实现列表/详情静态布局和状态组件。
@@ -62,6 +73,9 @@ Start/Stop action，不从页面直接调用 Kubernetes。
 3. 接入现有 Start/Stop 模板链接。
 4. 接入 Pipeline 阶段、失败原因和事件。
 5. 增加 Update/Rollback 后再开放对应按钮。
+
+页面发布后的后续实施顺序、部署耗时优化、真实健康判定和操作链路迁移见
+`model-deployment-runtime-optimization-plan-20260903.md`。
 
 HTML 原型见 `prototypes/model-deployment-dashboard-v1.html`。
 

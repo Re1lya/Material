@@ -28,6 +28,8 @@
 | 停止态全自动 | In progress | PR #11 全自动合并与 scoped auto-sync 均已生产验收：`qwen38-stopped-auto-smoke` 经自动同步收敛为 control-plane-only XR，仅生成状态 ConfigMap，零 NPU；prune/selfHeal/allowEmpty 保持 false | 实际演练一键关闭 automated sync 后转 Complete | 推理平台 |
 | 推理 Running 受控自动 | In progress | Volcano 动态分配、真实 HTTP 200、Start/Stop action、Stop 自动合并和 stale RayCluster 生命周期控制器均已上线；当前 Stopped/零 NPU | 从 Backstage 完成 window-closed 负向 Start 与正向 Start/Stop UI 验收，再完成 Restart/Rollback | 推理平台 |
 | Backstage 推理状态聚合 | In progress | 已有目录和请求入口，运行阶段/失败原因尚未完整 | request ID 贯通 Git/Tekton/Argo/XR/RayService/health | 推理平台 |
+| 推理部署体验优化 | Prepared | Dashboard v2、动态参数和 v2 Composition 候选已准备；部署耗时、真实 Serve 健康与日志合同待分阶段验收 | 完成阶段时间线、v2 基线、控制面提速、真实推理健康和日志入口 | 推理平台 |
+| 模型操作控制 API | Prepared | 已确定采用混合模式：运行期操作直达 ModelDeployment CR，平台定义继续 GitOps | Start/Stop/有界参数/回滚具备幂等、审计、最小 RBAC，并保留 GitOps 回滚路径 | 推理平台 |
 | 训练集成 | In progress | TrainingRequest XRD/Composition、KCC Controller 2/2 与多个 TrainingRequest 已在生产；Argo OutOfSync/Healthy 并有 orphaned resources | 收敛 orphan、TrainingRun outputArtifact、终态语义与完整 source provenance | 平台/训练团队 |
 | Gateway 集成 | External | 推理平台尚无对外 Gateway 资源 | 平台输出稳定 Service/健康合同，网关团队完成路由/TLS/认证 | Gateway 团队 |
 | Artifact Keeper 容量 | Blocked | `container-images` 使用超配额约 31% | 扩容或安全清理后保留当前和上一可回滚版本 | 平台/运维 |
@@ -81,6 +83,11 @@
 - 镜像 SBOM、扫描、签名与入场验证。
 - request ID 端到端日志、告警、SLO 和审计保留。
 - 自动化身份轮换、未使用凭据撤销和最小权限复核。
+
+推理 Dashboard 发布后的专项顺序见
+`backstage/model-deployment-runtime-optimization-plan-20260903.md`。该顺序先建立
+真实时间线和最低健康语义，再优化部署速度，最后将高频模型操作从 PR/GitOps
+迁移到受限 Deployment API；数据库只保存历史和审计，不取代 Kubernetes CR。
 
 ## 8. 外部集成门禁
 
