@@ -41,10 +41,12 @@ replacement production Tekton run remains the merge gate.
 ## Candidate provenance
 
 - Backstage feature branch: `feat/model-deployments-v2-dashboard`, head
-  `dff07544dc392e4ce07c1b3b4f34c228a8cd7b10`.
+  `175944de36f13633bc6f76f22e142249c7032bf1`, rebased onto current main
+  `85fbdcf`.
 - Config feature branch: `feat/modeldeployment-v2-serving`, head
-  `8eb6dc9dfa4af9dab994e0179775480a0f569333`.
-- AMD64 image: `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.11-model-deployments-v2-dff0754@sha256:1de628a4c0e73636089ce66fb0f2029a8630e94bea5792ec5052ece9238ba82c`.
+  `8b9b41d3f7ee53f330adf8262745338b46ad94f7` (a no-op CI retrigger commit
+  after the schema correction `88f7a26`).
+- AMD64 image: `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.11-model-deployments-v2-175944d@sha256:7f3e338cc96d56411fbe6b908174e15e5b1fa6f3647772ab024438d61a918537`.
 - Image labels bind the source repository, the Backstage feature commit and
   version `0.6.11-model-deployments-v2-dff0754`.
 
