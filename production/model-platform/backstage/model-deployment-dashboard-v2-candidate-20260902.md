@@ -28,6 +28,16 @@ It is **not deployed**.
   `localhost:52365/api/local_raylet_healthz` contract.
 - Lifecycle policy tests passed for the v2 pair.
 
+## Catalog schema correction
+
+The initial v2 candidate added structured parallelism defaults to the
+RuntimeProfile but did not add those optional fields to
+`modelruntimeprofile.schema.json`. PR #46 therefore failed its first Tekton
+catalog validation. Commit `88f7a26` adds the four backward-compatible enum
+fields (`tensorParallelSize`, `dataParallelSize`, `pipelineParallelSize`, and
+`requestedReplicas`). The complete local catalog validation now passes; the
+replacement production Tekton run remains the merge gate.
+
 ## Candidate provenance
 
 - Backstage feature branch: `feat/model-deployments-v2-dashboard`, head
