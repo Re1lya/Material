@@ -1,0 +1,251 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: platform-backstage-pull-request
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: revision
+      value: $(body.pull_request.head.sha)
+    - name: pull-request-number
+      value: $(body.pull_request.number)
+    - name: pull-request-head-ref
+      value: $(body.pull_request.head.ref)
+---
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: platform-backstage-pr-validation
+  namespace: model-platform-ci
+spec:
+  params:
+    - name: revision
+    - name: pull-request-number
+    - name: pull-request-head-ref
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: platform-backstage-pr-
+        namespace: model-platform-ci
+        labels:
+          app.kubernetes.io/part-of: model-platform
+          app.kubernetes.io/component: backstage-ci
+          ci.model-platform.io/source: gitea
+          ci.model-platform.io/repository: gitadmin-platform-backstage
+          ci.model-platform.io/event: pull-request
+          ci.model-platform.io/pull-request: $(tt.params.pull-request-number)
+      spec:
+        pipelineRef:
+          name: validate-platform-backstage-pr
+        params:
+          - name: revision
+            value: $(tt.params.revision)
+          - name: pull-request-number
+            value: $(tt.params.pull-request-number)
+          - name: pull-request-head-ref
+            value: $(tt.params.pull-request-head-ref)
+        taskRunTemplate:
+          serviceAccountName: model-platform-ci-runner
+          podTemplate:
+            imagePullSecrets:
+              - name: artifact-keeper-image-pull
+            nodeSelector:
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: server-00
+            securityContext:
+              fsGroup: 65532
+              fsGroupChangePolicy: OnRootMismatch
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
+        timeouts:
+          pipeline: 30m
+        workspaces:
+          - name: source
+            emptyDir:
+              sizeLimit: 3Gi
+---
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: validate-platform-backstage-pr
+  namespace: model-platform-ci
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: backstage-ci
+spec:
+  description: >-
+    Non-blocking mechanical validation for one exact same-repository
+    platform-backstage pull-request head. It never merges, publishes an image,
+    writes Kubernetes resources, or validates model runtime configuration.
+  params:
+    - name: revision
+      type: string
+    - name: pull-request-number
+      type: string
+    - name: pull-request-head-ref
+      type: string
+  workspaces:
+    - name: source
+  tasks:
+    - name: validate
+      params:
+        - name: revision
+          value: $(params.revision)
+      workspaces:
+        - name: source
+          workspace: source
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+        workspaces:
+          - name: source
+        steps:
+          - name: clone-exact-head
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            workingDir: $(workspaces.source.path)
+            env:
+              - name: REVISION
+                value: $(params.revision)
+              - name: GITEA_USERNAME
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-ci-reader
+                    key: username
+              - name: GITEA_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-ci-reader
+                    key: token
+            script: |
+              #!/bin/sh
+              set -eu
+              case "${REVISION}" in *[!0-9a-f]*|'') exit 1 ;; esac
+              test "${#REVISION}" -eq 40
+              checkout="$(workspaces.source.path)/repository"
+              askpass="$(workspaces.source.path)/git-askpass.sh"
+              cat > "${askpass}" <<'EOF'
+              #!/bin/sh
+              case "$1" in
+                *Username*) printf '%s' "$GITEA_USERNAME" ;;
+                *Password*) printf '%s' "$GITEA_TOKEN" ;;
+                *) exit 1 ;;
+              esac
+              EOF
+              chmod 0700 "${askpass}"
+              export GIT_ASKPASS="${askpass}" GIT_TERMINAL_PROMPT=0
+              git clone --no-checkout \
+                "http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/platform-backstage.git" \
+                "${checkout}"
+              git -C "${checkout}" checkout --detach "${REVISION}"
+              rm -f "${askpass}"
+              test "$(git -C "${checkout}" rev-parse HEAD)" = "${REVISION}"
+              chmod -R u+rwX,g+rwX "${checkout}"
+            computeResources:
+              requests: { cpu: 100m, memory: 128Mi }
+              limits: { cpu: 500m, memory: 512Mi }
+            securityContext: &restricted
+              allowPrivilegeEscalation: false
+              capabilities: { drop: [ALL] }
+              runAsNonRoot: true
+              runAsUser: 65532
+              runAsGroup: 65532
+              seccompProfile: { type: RuntimeDefault }
+          - name: test-build-policy
+            image: 110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.0-training-eval-db6038f@sha256:b8053654f42dddfcb83c628e20770241601b8e56c141b85e2c841c0d7e82181b
+            imagePullPolicy: IfNotPresent
+            workingDir: $(workspaces.source.path)/repository
+            env:
+              - name: HOME
+                value: /tmp
+              - name: NODE_OPTIONS
+                value: --max-old-space-size=1280
+            script: |
+              #!/bin/sh
+              set -eu
+              YARN='node .yarn/releases/yarn-4.13.0.cjs'
+              $YARN install --immutable --mode=skip-build
+              $YARN workspace app test --runInBand
+              $YARN workspace backend test --runInBand
+              $YARN workspace app build
+              $YARN workspace backend build
+              grep -Eq '^ARG BASE_IMAGE=.*@sha256:[0-9a-f]{64}$' Dockerfile
+              grep -Fq 'org.opencontainers.image.revision="${SOURCE_REVISION}"' Dockerfile
+              grep -Fq 'org.opencontainers.image.version="${IMAGE_VERSION}"' Dockerfile
+              test -f .dockerignore
+              grep -Fqx '.git' .dockerignore
+              ! git ls-files | grep -Eiq \
+                '(^|/)(\.env|\.env\..*|id_(rsa|ed25519)|.*\.(pem|key|p12|pfx))$'
+              echo 'platform_backstage_pr_validation=PASS'
+            computeResources:
+              requests: { cpu: 500m, memory: 1Gi }
+              limits: { cpu: "2", memory: 2Gi }
+            securityContext: *restricted
+  finally:
+    - name: report-gitea-status
+      params:
+        - name: revision
+          value: $(params.revision)
+        - name: aggregate-status
+          value: $(tasks.status)
+      taskSpec:
+        params:
+          - name: revision
+            type: string
+          - name: aggregate-status
+            type: string
+        steps:
+          - name: report
+            image: 110.120.0.3:30670/container-images/model-platform-ci-tools:v0.2.0@sha256:e83607f17953aa25e94b3f3f071eae057f67adc77f600f0a492741c8fd58a7bd
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: REVISION
+                value: $(params.revision)
+              - name: AGGREGATE_STATUS
+                value: $(params.aggregate-status)
+              - name: GITEA_STATUS_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: gitea-platform-backstage-status-writer
+                    key: token
+            script: |
+              #!/usr/bin/env python3
+              import json
+              import os
+              import urllib.error
+              import urllib.request
+
+              revision = os.environ["REVISION"]
+              if len(revision) != 40 or any(c not in "0123456789abcdef" for c in revision):
+                  raise SystemExit("refusing malformed revision")
+              state = "success" if os.environ["AGGREGATE_STATUS"] == "Succeeded" else "failure"
+              request = urllib.request.Request(
+                  "http://gitea-http.gitea.svc.cluster.local:3000/api/v1/repos/"
+                  f"gitadmin/platform-backstage/statuses/{revision}",
+                  method="POST",
+                  data=json.dumps({
+                      "state": state,
+                      "context": "tekton/platform-backstage-pr",
+                      "description": f"Backstage mechanical validation: {state}",
+                      "target_url": "http://110.120.0.3:30081/gitadmin/platform-backstage/commit/" + revision,
+                  }).encode("utf-8"),
+                  headers={
+                      "Accept": "application/json",
+                      "Authorization": f"token {os.environ['GITEA_STATUS_TOKEN']}",
+                      "Content-Type": "application/json",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      if response.status != 201:
+                          raise SystemExit(f"Gitea commit status returned HTTP {response.status}")
+              except urllib.error.HTTPError as error:
+                  raise SystemExit(f"Gitea commit status returned HTTP {error.code}") from None
+              print(f"gitea_commit_status={state}")
+            computeResources:
+              requests: { cpu: 100m, memory: 128Mi }
+              limits: { cpu: 500m, memory: 512Mi }
+            securityContext: *restricted

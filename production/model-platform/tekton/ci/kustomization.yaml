@@ -7,6 +7,7 @@ resources:
   - network-policy.yaml
   - pipeline.yaml
   - triggers.yaml
+  - backstage-pr-ci.yaml
   - k12-pipeline.yaml
   - k12-triggers.yaml
   - k12-gitops-validation.yaml

@@ -223,6 +223,24 @@ spec:
         - ref: model-platform-config-pull-request
       template:
         ref: model-platform-config-validation
+    - name: validate-platform-backstage-pull-request
+      interceptors:
+        - ref:
+            name: cel
+          params:
+            - name: filter
+              value: >-
+                (header.match('X-Gitea-Event', 'pull_request') ||
+                 header.match('X-Gitea-Event', 'pull_request_sync')) &&
+                body.action in ['opened', 'reopened', 'synchronized'] &&
+                body.repository.full_name == 'gitadmin/platform-backstage' &&
+                body.pull_request.base.ref == 'main' &&
+                body.pull_request.head.repo.full_name == 'gitadmin/platform-backstage' &&
+                body.pull_request.head.sha.matches('^[0-9a-f]{40}$')
+      bindings:
+        - ref: platform-backstage-pull-request
+      template:
+        ref: platform-backstage-pr-validation
 ---
 apiVersion: triggers.tekton.dev/v1beta1
 kind: EventListener
