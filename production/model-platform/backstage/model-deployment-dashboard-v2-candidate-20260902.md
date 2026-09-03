@@ -48,15 +48,14 @@ replacement production Tekton run remains the merge gate.
   after the schema correction `88f7a26`).
 - AMD64 image: `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.11-model-deployments-v2-175944d@sha256:7f3e338cc96d56411fbe6b908174e15e5b1fa6f3647772ab024438d61a918537`.
 - Image labels bind the source repository, the Backstage feature commit and
-  version `0.6.11-model-deployments-v2-dff0754`.
+  version `0.6.11-model-deployments-v2-175944d`.
 
 ## Release blockers
 
-The Gitea feature branches are pushed, but Gitea API creation requires an API
-token: its account password works for Git-over-HTTP but is rejected by the API.
-The external proxy returns 502 for authenticated API requests, and the direct
-Gitea endpoint returns 401 for Basic/token credentials. A PR must therefore be
-opened from the branch URL by an authenticated Gitea browser session or with a
-repository-scoped API token. Do not publish, apply, merge, switch
-`qwen38-27b`, open a Running Window, or create a smoke workload from this
-candidate.
+Both Gitea PRs now exist: `platform-backstage` PR #1 and
+`model-platform-config` PR #46. PR #46's exact retrigger head
+`8b9b41d3f7ee53f330adf8262745338b46ad94f7` passed Tekton PipelineRun
+`model-platform-config-validation-h62nd`. The remaining gates are human PR
+review, a server-side dry-run of the v2 control-plane objects, and isolated
+v2 smoke acceptance. Do not apply, merge, switch `qwen38-27b`, open a Running
+Window, or create a smoke workload until those gates are explicitly approved.
