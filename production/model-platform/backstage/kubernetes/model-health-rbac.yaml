@@ -1,0 +1,29 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: backstage-model-health-read-only
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: backstage-model-health
+rules:
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: backstage-model-health-read-only
+  namespace: model-serving
+  labels:
+    app.kubernetes.io/part-of: model-platform
+    app.kubernetes.io/component: backstage-model-health
+subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: backstage-model-health-read-only

@@ -6,4 +6,5 @@ resources:
   - postgres.yaml
   - backstage.yaml
   - rbac.yaml
+  - model-health-rbac.yaml
   - network-policy.yaml

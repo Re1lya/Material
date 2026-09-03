@@ -65,12 +65,17 @@ function conditions(object: PlatformObject) {
         status: entry.status,
         reason: entry.reason,
         message: entry.message,
+        lastTransitionTime: entry.lastTransitionTime,
       }))
     : [];
 }
 
 function condition(object: PlatformObject, type: string) {
   return conditions(object).find(value => value.type === type);
+}
+
+function conditionTransitionTime(object: PlatformObject, type: string) {
+  return condition(object, type)?.lastTransitionTime;
 }
 
 function labels(object: PlatformObject) {
@@ -369,15 +374,24 @@ export function aggregateDeployment(input: AggregationInput) {
       : undefined;
     return ready?.lastTransitionTime;
   });
+  // A ModelDeployment can have existed through multiple Start/Stop lifecycles.
+  // Its creationTimestamp is therefore not evidence for the current reconcile.
+  const crossplaneStartedAt =
+    conditionTransitionTime(deployment, 'Synced') ??
+    conditionTransitionTime(deployment, 'Ready');
+  const modelLoadingAt =
+    conditionTransitionTime(rayservice ?? {}, 'Ready') ??
+    conditionTransitionTime(rayservice ?? {}, 'ServiceReady') ??
+    undefined;
   const timeline = [
     timelineEntry('Request', pull?.created_at),
     timelineEntry('Git PR', pull?.created_at, pull?.merged_at ?? pull?.updated_at),
     timelineEntry('Tekton', pipelineRun?.status?.startTime, pipelineRun?.status?.completionTime),
     timelineEntry('Argo', argo.operationState?.startedAt, argo.operationState?.finishedAt),
-    timelineEntry('Crossplane', deployment.metadata?.creationTimestamp),
+    timelineEntry('Crossplane', crossplaneStartedAt),
     timelineEntry('RayCluster', newest(relatedRayclusters, item => item.metadata?.creationTimestamp)?.metadata?.creationTimestamp),
     timelineEntry('Pod Ready', podReadyAt?.status?.conditions?.find((item: Record<string, any>) => item.type === 'Ready' && item.status === 'True')?.lastTransitionTime),
-    timelineEntry('Model loading', rayservice?.metadata?.creationTimestamp),
+    timelineEntry('Model loading', modelLoadingAt),
     timelineEntry('First /v1/models', input.modelProbe?.attemptedAt, input.modelProbe?.ok ? input.modelProbe.attemptedAt : undefined),
   ];
 

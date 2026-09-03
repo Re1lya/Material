@@ -221,6 +221,27 @@ describe('model platform deployment aggregation', () => {
     expect(result.recentEvents[0].reason).toBe('Scheduled');
   });
 
+  it('does not use the original ModelDeployment creation time for a new lifecycle', () => {
+    const current = deployment();
+    current.metadata!.creationTimestamp = '2026-08-01T00:00:00Z';
+    current.status!.conditions = [
+      {
+        type: 'Synced',
+        status: 'True',
+        lastTransitionTime: '2026-09-03T02:00:00Z',
+      },
+      {
+        type: 'Ready',
+        status: 'True',
+        lastTransitionTime: '2026-09-03T02:01:00Z',
+      },
+    ];
+    const result = aggregate({ deployment: current });
+    const crossplane = result.timeline.find(item => item.name === 'Crossplane');
+    expect(crossplane?.startedAt).toBe('2026-09-03T02:00:00Z');
+    expect(crossplane?.startedAt).not.toBe('2026-08-01T00:00:00Z');
+  });
+
   it('reports Stopping while stopped intent still has a ready worker', () => {
     const result = aggregate({ deployment: deployment('Stopped'), pulls: [] });
     expect(result.status).toBe('Stopping');
