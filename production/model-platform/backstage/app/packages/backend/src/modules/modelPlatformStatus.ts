@@ -15,6 +15,7 @@ export type PlatformObject = {
     namespace?: string;
   };
   spec?: Record<string, any>;
+  endpoints?: Array<Record<string, any>>;
   status?: Record<string, any>;
   data?: Record<string, string>;
   type?: string;
@@ -44,11 +45,13 @@ type AggregationInput = {
   rayclusters: PlatformObject[];
   pods: PlatformObject[];
   services: PlatformObject[];
+  endpointSlices?: PlatformObject[];
   events: PlatformObject[];
   pipelineRuns: PlatformObject[];
   taskRuns: PlatformObject[];
   pulls: GiteaPull[];
   argo?: PlatformObject;
+  modelProbe?: { attemptedAt: string; ok: boolean; message?: string };
   unavailable?: Record<string, string>;
 };
 
@@ -113,6 +116,21 @@ function pipelineCondition(run?: PlatformObject) {
   return Array.isArray(values) ? values[0] : undefined;
 }
 
+function durationSeconds(startedAt?: string, completedAt?: string) {
+  if (!startedAt || !completedAt) return undefined;
+  const seconds = (Date.parse(completedAt) - Date.parse(startedAt)) / 1000;
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
+}
+
+function timelineEntry(name: string, startedAt?: string, completedAt?: string) {
+  return {
+    name,
+    startedAt,
+    completedAt,
+    durationSeconds: durationSeconds(startedAt, completedAt),
+  };
+}
+
 function actualDevices(pods: PlatformObject[]) {
   const devices = new Set<string>();
   pods.forEach(pod => {
@@ -154,6 +172,8 @@ function normalizedPhase(input: {
   rayclusters: PlatformObject[];
   modelStatus: string;
   serviceStatus: string;
+  readyEndpoint: boolean;
+  modelProbeOk?: boolean;
   actualWorkerReplicas: number;
 }) {
   const { desiredState, synced, ready, pull, pipelineStatus } = input;
@@ -190,10 +210,14 @@ function normalizedPhase(input: {
   if (input.modelStatus !== 'Healthy') {
     return { status: 'Deploying', phase: 'Model load', phaseIndex: 6 };
   }
-  if (input.serviceStatus !== 'Ready') {
+  if (input.serviceStatus !== 'Ready' || !input.readyEndpoint) {
     return { status: 'Deploying', phase: 'Service pending', phaseIndex: 7 };
   }
-  return { status: 'Running', phase: 'Healthy', phaseIndex: 7 };
+  if (input.modelProbeOk) {
+    return { status: 'Running', phase: 'Healthy', phaseIndex: 7 };
+  }
+  // Never infer model readiness from Pods, Ray, or Service objects alone.
+  return { status: 'Deploying', phase: 'Serving pending', phaseIndex: 7 };
 }
 
 export function aggregateDeployment(input: AggregationInput) {
@@ -313,6 +337,14 @@ export function aggregateDeployment(input: AggregationInput) {
   } else if (stableService || serveService) {
     serviceStatus = 'Pending';
   }
+  const readyEndpoint = (input.endpointSlices ?? []).some(slice => {
+    const serviceName = labels(slice)['kubernetes.io/service-name'];
+    if (serviceName !== serveService?.metadata?.name) return false;
+    const endpoints = slice.endpoints;
+    return Array.isArray(endpoints) && endpoints.some(
+      (endpoint: Record<string, any>) => endpoint.conditions?.ready === true,
+    );
+  });
   const argo = input.argo?.status ?? {};
   const synced = condition(deployment, 'Synced');
   const ready = condition(deployment, 'Ready');
@@ -326,8 +358,28 @@ export function aggregateDeployment(input: AggregationInput) {
     rayclusters: relatedRayclusters,
     modelStatus,
     serviceStatus,
+    readyEndpoint,
+    modelProbeOk: input.modelProbe?.ok,
     actualWorkerReplicas: workerPods.length,
   });
+  const podReadyAt = newest(workerPods, pod => {
+    const values = pod.status?.conditions;
+    const ready = Array.isArray(values)
+      ? values.find((item: Record<string, any>) => item.type === 'Ready' && item.status === 'True')
+      : undefined;
+    return ready?.lastTransitionTime;
+  });
+  const timeline = [
+    timelineEntry('Request', pull?.created_at),
+    timelineEntry('Git PR', pull?.created_at, pull?.merged_at ?? pull?.updated_at),
+    timelineEntry('Tekton', pipelineRun?.status?.startTime, pipelineRun?.status?.completionTime),
+    timelineEntry('Argo', argo.operationState?.startedAt, argo.operationState?.finishedAt),
+    timelineEntry('Crossplane', deployment.metadata?.creationTimestamp),
+    timelineEntry('RayCluster', newest(relatedRayclusters, item => item.metadata?.creationTimestamp)?.metadata?.creationTimestamp),
+    timelineEntry('Pod Ready', podReadyAt?.status?.conditions?.find((item: Record<string, any>) => item.type === 'Ready' && item.status === 'True')?.lastTransitionTime),
+    timelineEntry('Model loading', rayservice?.metadata?.creationTimestamp),
+    timelineEntry('First /v1/models', input.modelProbe?.attemptedAt, input.modelProbe?.ok ? input.modelProbe.attemptedAt : undefined),
+  ];
 
   return {
     name,
@@ -339,6 +391,7 @@ export function aggregateDeployment(input: AggregationInput) {
     phase: normalized.phase,
     phaseIndex: normalized.phaseIndex,
     modelVersionRef: deployment.spec?.modelVersionRef,
+    expectedModelName: deployment.spec?.runtime?.modelName,
     runtimeProfileRef: deployment.spec?.runtimeProfileRef,
     compositionRef: deployment.spec?.compositionRef?.name,
     requestedBy: labels(deployment)['platform.example.com/requested-by'],
@@ -347,6 +400,7 @@ export function aggregateDeployment(input: AggregationInput) {
       annotations(deployment)['platform.example.com/requested-update-id'] ??
       annotations(deployment)['platform.example.com/requested-start-id'],
     conditions: conditions(deployment),
+    timeline,
     git: pull
       ? {
           available: true,
@@ -406,10 +460,19 @@ export function aggregateDeployment(input: AggregationInput) {
       gatewayStatus: 'NotConfigured',
       stableService: stableService?.metadata?.name,
       serveService: serveService?.metadata?.name,
+      readyEndpoint,
       endpoint:
         serviceStatus === 'Ready'
           ? `http://${name}.${deployment.metadata?.namespace}.svc.cluster.local`
           : null,
+      modelProbe: input.modelProbe,
+      probeEligible:
+        deployment.spec?.desiredState === 'Running' &&
+        readyWorkers === requestedWorkers &&
+        requestedWorkers > 0 &&
+        modelStatus === 'Healthy' &&
+        serviceStatus === 'Ready' &&
+        readyEndpoint,
     },
     recentEvents: events,
     unavailable: input.unavailable ?? {},

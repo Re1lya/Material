@@ -36,6 +36,12 @@ export type Deployment = {
     reason?: string;
     message?: string;
   }>;
+  timeline?: Array<{
+    name: string;
+    startedAt?: string;
+    completedAt?: string;
+    durationSeconds?: number;
+  }>;
   git?: {
     available?: boolean;
     pullRequest?: number;
@@ -82,6 +88,9 @@ export type Deployment = {
     stableService?: string;
     serveService?: string;
     endpoint?: string | null;
+    readyEndpoint?: boolean;
+    probeEligible?: boolean;
+    modelProbe?: { attemptedAt: string; ok: boolean; message?: string };
   };
   recentEvents?: DeploymentEvent[];
   unavailable?: Record<string, string>;

@@ -7,6 +7,7 @@ import Router from 'express-promise-router';
 import type { Request, Response } from 'express';
 import { readFile } from 'node:fs/promises';
 import { request as httpsRequest } from 'node:https';
+import { request as httpRequest } from 'node:http';
 import { parse } from 'yaml';
 import {
   aggregateDeployment,
@@ -40,6 +41,91 @@ type GiteaContentFile = {
 type KubernetesObject = PlatformObject;
 
 type KubernetesList = { items?: KubernetesObject[] };
+
+type ModelProbe = { attemptedAt: string; ok: boolean; message?: string };
+type CachedProbe = { result: ModelProbe; expiresAt: number };
+const modelProbeCache = new Map<string, CachedProbe>();
+const inFlightModelProbes = new Map<string, Promise<ModelProbe>>();
+const maxProbeCacheEntries = 256;
+const failedProbeTtlMs = 7_500;
+const successfulProbeTtlMs = 6 * 60 * 60 * 1000;
+const maxProbeResponseBytes = 256 * 1024;
+
+function rememberProbe(key: string, result: ModelProbe) {
+  modelProbeCache.set(key, {
+    result,
+    expiresAt: Date.now() + (result.ok ? successfulProbeTtlMs : failedProbeTtlMs),
+  });
+  while (modelProbeCache.size > maxProbeCacheEntries) {
+    const oldest = modelProbeCache.keys().next().value;
+    if (!oldest) break;
+    modelProbeCache.delete(oldest);
+  }
+}
+
+export async function probeModelOnce(deployment: any): Promise<ModelProbe> {
+  const generation = deployment.generation ?? 'unknown';
+  const endpoint = deployment.serve?.endpoint;
+  const expectedModel = deployment.expectedModelName;
+  const key = `${deployment.namespace}/${deployment.name}/${generation}`;
+  const cached = modelProbeCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.result;
+  modelProbeCache.delete(key);
+  const inFlight = inFlightModelProbes.get(key);
+  if (inFlight) return inFlight;
+  const probe = new Promise<ModelProbe>(resolve => {
+    if (!endpoint || !expectedModel) {
+      resolve({ attemptedAt: new Date().toISOString(), ok: false, message: 'Probe prerequisites are incomplete' });
+      return;
+    }
+    const url = new URL('/v1/models', endpoint);
+    const request = httpRequest(
+      { hostname: url.hostname, port: Number(url.port || 80), path: url.pathname, method: 'GET', timeout: 3000 },
+      response => {
+        const chunks: Buffer[] = [];
+        let bytes = 0;
+        response.on('data', chunk => {
+          bytes += chunk.length;
+          if (bytes > maxProbeResponseBytes) {
+            request.destroy(new Error('Probe response exceeded 256KiB'));
+            return;
+          }
+          chunks.push(Buffer.from(chunk));
+        });
+        response.on('end', () => {
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { data?: Array<{ id?: string }> };
+            const found = body.data?.some(model => model.id === expectedModel) ?? false;
+            resolve({ attemptedAt: new Date().toISOString(), ok: response.statusCode === 200 && found, message: found ? undefined : 'Target model was not returned by /v1/models' });
+          } catch {
+            resolve({ attemptedAt: new Date().toISOString(), ok: false, message: 'Invalid /v1/models response' });
+          }
+        });
+      },
+    );
+    request.on('timeout', () => request.destroy(new Error('Probe timeout')));
+    request.on('error', error => resolve({ attemptedAt: new Date().toISOString(), ok: false, message: error.message }));
+    request.end();
+  });
+  inFlightModelProbes.set(key, probe);
+  try {
+    const result = await probe;
+    rememberProbe(key, result);
+    return result;
+  } finally {
+    inFlightModelProbes.delete(key);
+  }
+}
+
+export function resetModelProbeCacheForTests() {
+  modelProbeCache.clear();
+  inFlightModelProbes.clear();
+}
+
+export function expireModelProbeForTests(key: string) {
+  const entry = modelProbeCache.get(key);
+  if (entry) entry.expiresAt = 0;
+}
 
 function readGiteaConfig(config: Config): GiteaConfig {
   const section = config.getConfig('modelPlatform.gitea');
@@ -319,6 +405,7 @@ async function loadDeployments(config: Config) {
     pvcs: `/api/v1/namespaces/${namespace}/persistentvolumeclaims`,
     jobs: `/apis/batch/v1/namespaces/${namespace}/jobs`,
     services: `/api/v1/namespaces/${namespace}/services`,
+    endpointslices: `/apis/discovery.k8s.io/v1/namespaces/${namespace}/endpointslices`,
     deployments: `/apis/apps/v1/namespaces/${namespace}/deployments`,
     rayservices: `/apis/ray.io/v1/namespaces/${namespace}/rayservices`,
     rayclusters: `/apis/ray.io/v1/namespaces/${namespace}/rayclusters`,
@@ -360,21 +447,27 @@ async function loadDeployments(config: Config) {
     unavailable.tekton =
       unavailable.pipelineruns ?? unavailable.taskruns ?? 'Tekton unavailable';
   }
-  const deployments = objects('modeldeployments').map(deployment =>
-    aggregateDeployment({
+  const deployments = await Promise.all(objects('modeldeployments').map(async deployment => {
+    const aggregation = {
       deployment,
       rayservices: objects('rayservices'),
       rayclusters: objects('rayclusters'),
       pods: objects('pods'),
       services: objects('services'),
+      endpointSlices: objects('endpointslices'),
       events: objects('events'),
       pipelineRuns: objects('pipelineruns'),
       taskRuns: objects('taskruns'),
       pulls,
       argo,
       unavailable,
-    }),
-  );
+    };
+    const initial = aggregateDeployment(aggregation);
+    const modelProbe = initial.serve?.probeEligible
+      ? await probeModelOnce(initial)
+      : undefined;
+    return aggregateDeployment({ ...aggregation, modelProbe });
+  }));
   return {
     namespace,
     observedAt: new Date().toISOString(),

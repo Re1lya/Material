@@ -162,6 +162,44 @@ describe('model platform deployment aggregation', () => {
     expect(result.status).toBe('Deploying');
   });
 
+  it('does not mark Pods, Ray Serve, and Services Healthy without a ready EndpointSlice', () => {
+    const stable = labelled('qwen38-27b', 'stable-service-uid');
+    const serve = labelled('qwen38-27b-serve-svc', 'serve-service-uid');
+    serve.spec = { ports: [{ name: 'serve', port: 8000 }] };
+    const result = aggregate({
+      pulls: [{ number: 27, state: 'closed', merged: true }],
+      pipelineRuns: [],
+      services: [stable, serve],
+      endpointSlices: [
+        {
+          metadata: {
+            labels: { 'kubernetes.io/service-name': 'qwen38-27b-serve-svc' },
+          },
+          endpoints: [{ conditions: { ready: false } }],
+        },
+      ],
+    });
+    expect(result.serve.readyEndpoint).toBe(false);
+    expect(result.status).toBe('Deploying');
+    expect(result.phase).toBe('Service pending');
+  });
+
+  it('requires a successful bounded model probe before reporting Healthy', () => {
+    const stable = labelled('qwen38-27b', 'stable-service-uid');
+    const serve = labelled('qwen38-27b-serve-svc', 'serve-service-uid');
+    serve.spec = { ports: [{ name: 'serve', port: 8000 }] };
+    const shared = {
+      pulls: [{ number: 27, state: 'closed', merged: true }],
+      pipelineRuns: [],
+      services: [stable, serve],
+      endpointSlices: [{ metadata: { labels: { 'kubernetes.io/service-name': 'qwen38-27b-serve-svc' } }, endpoints: [{ conditions: { ready: true } }] }],
+    };
+    expect(aggregate(shared).phase).toBe('Serving pending');
+    const healthy = aggregate({ ...shared, modelProbe: { attemptedAt: '2026-09-03T00:00:00Z', ok: true } });
+    expect(healthy.status).toBe('Running');
+    expect(healthy.phase).toBe('Healthy');
+  });
+
   it('filters events to related object identities', () => {
     const result = aggregate({
       events: [

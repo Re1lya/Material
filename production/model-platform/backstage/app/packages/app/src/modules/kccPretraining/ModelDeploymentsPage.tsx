@@ -579,6 +579,22 @@ export const ModelDeploymentsPage = () => {
                         })}
                       </Box>
                     </Box>
+                    <Box className={classes.section}>
+                      <Typography variant="h6">Stage timeline</Typography>
+                      {(detail.timeline ?? []).map(entry => (
+                        <Typography color="textSecondary" key={entry.name} variant="body2">
+                          {entry.name}: {entry.startedAt ?? 'Waiting'}
+                          {entry.durationSeconds === undefined
+                            ? ''
+                            : ` · ${entry.durationSeconds}s`}
+                        </Typography>
+                      ))}
+                      {(detail.timeline?.length ?? 0) === 0 && (
+                        <Typography color="textSecondary" variant="body2">
+                          Timeline data is not available yet.
+                        </Typography>
+                      )}
+                    </Box>
                     <Grid className={classes.detailsGrid} container spacing={2}>
                       <Grid item md={7} xs={12}>
                         <Paper className={classes.subcard} elevation={0}>

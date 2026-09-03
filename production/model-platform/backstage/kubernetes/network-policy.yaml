@@ -165,3 +165,49 @@ spec:
       ports:
         - protocol: TCP
           port: 3000
+---
+# Bounded read-only model health probe path. Backstage can reach only model
+# serving Pods selected as part of this platform, and only TCP/8000.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backstage-to-model-serving-probe
+  namespace: backstage
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backstage
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: model-serving
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: model-platform
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: model-serving-allow-backstage-probe
+  namespace: model-serving
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: model-platform
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: backstage
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backstage
+      ports:
+        - protocol: TCP
+          port: 8000
