@@ -44,11 +44,15 @@ apply, ModelDeployment patch or NPU workload was performed by building it.
   Jobs, and ships suspended until a manually created shadow Job is inspected;
 - the capacity checker fails closed unless it receives one fresh timestamped
   process-count metric for every A3 device `0` through `15`; empty, partial,
-  duplicate, malformed and stale responses are rejected (4 unit tests passed);
+  duplicate, malformed and stale responses are rejected. Since Kubernetes does
+  not yet receive a reviewed `staticDeviceAllocation`, any detected host NPU
+  process blocks the entire dynamic pool rather than allowing an unsafe partial
+  allocation (5 unit tests passed, including the HTTP handler);
 - the migration now creates all tables and its lock row inside one PostgreSQL
   transaction. The release uses the dedicated one-shot Job manifest, which
-  imports only the existing `backstage-secrets` values and performs no inline
-  credential handling.
+  references only `POSTGRES_USER` and `POSTGRES_PASSWORD` from the existing
+  `backstage-secrets`; database name and host are non-secret explicit values,
+  and no unrelated Gitea, OIDC or session credentials are injected.
 
 ## Post-release operating boundary
 

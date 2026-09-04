@@ -86,6 +86,24 @@ def host_processes():
     metrics = kube_text(f"/api/v1/namespaces/npu-exporter/pods/{name}:8082/proxy/metrics")
     return parse_process_metrics(metrics)
 
+def capacity_result(requested, devices, active):
+    # Kubernetes/Volcano has no contract for this response's safeDevices list.
+    # Until Direct Start writes a reviewed staticDeviceAllocation, any host
+    # process makes dynamic allocation unsafe: the scheduler could still choose
+    # that occupied device. Refuse rather than infer partial-card placement.
+    if active:
+        return {
+            "allowed": False,
+            "requestedNpu": requested,
+            "hostProcessesOnDevices": active,
+            "reason": "dynamic allocation is blocked while host NPU processes exist",
+        }
+    return {
+        "allowed": len(devices) >= requested,
+        "requestedNpu": requested,
+        "hostProcessesOnDevices": [],
+    }
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path != "/check":
@@ -100,8 +118,7 @@ class Handler(BaseHTTPRequestHandler):
             devices = sorted(EXPECTED_DEVICE_IDS, key=int) if body.get("targetDevices") == "dynamic-safe-pool" else []
             if requested <= 0 or requested > len(devices): raise ValueError("invalid requested NPU count")
             active = host_processes()
-            safe = [device for device in devices if device not in active]
-            payload = {"allowed": len(safe) >= requested, "requestedNpu": requested, "safeDevices": safe, "hostProcessesOnDevices": active}
+            payload = capacity_result(requested, devices, active)
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(json.dumps(payload).encode())
         except Exception as error:
             self.send_response(503); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(json.dumps({"allowed": False, "error": str(error)}).encode())

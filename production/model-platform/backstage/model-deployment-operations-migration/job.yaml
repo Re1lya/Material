@@ -41,9 +41,18 @@ spec:
               value: backstage-postgres.backstage.svc.cluster.local
             - name: POSTGRES_PORT
               value: "5432"
-          envFrom:
-            - secretRef:
-                name: backstage-secrets
+            - name: POSTGRES_DB
+              value: backstage
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-secrets
+                  key: POSTGRES_PASSWORD
           resources:
             requests: { cpu: 25m, memory: 64Mi }
             limits: { cpu: 250m, memory: 256Mi }

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
+import json
+import threading
 import unittest
+import urllib.request
 
-from capacity_checker import CapacityEvidenceError, parse_process_metrics
+import capacity_checker
+from capacity_checker import CapacityEvidenceError, Handler, ThreadingHTTPServer, parse_process_metrics
 
 
 NOW_MS = 1_788_511_200_000
@@ -37,6 +41,35 @@ class ProcessMetricsTest(unittest.TestCase):
         stale = '\n'.join(sample(index, timestamp=NOW_MS - 120_001) for index in range(16))
         with self.assertRaises(CapacityEvidenceError):
             parse_process_metrics(stale, now_ms=NOW_MS)
+
+    def test_http_check_rejects_any_active_device_without_static_allocation(self):
+        original = capacity_checker.host_processes
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        capacity_checker.host_processes = lambda: ['0']
+        thread.start()
+        try:
+            payload = json.dumps({
+                'deploymentName': 'qwen38-27b',
+                'targetNode': 'a3-server-00',
+                'targetDevices': 'dynamic-safe-pool',
+                'requestedReplicas': 1,
+                'npuPerWorker': 2,
+            }).encode()
+            request = urllib.request.Request(
+                f'http://127.0.0.1:{server.server_port}/check',
+                data=payload,
+                method='POST',
+                headers={'Content-Type': 'application/json'},
+            )
+            with urllib.request.urlopen(request, timeout=2) as response:
+                result = json.loads(response.read())
+            self.assertFalse(result['allowed'])
+            self.assertEqual(result['hostProcessesOnDevices'], ['0'])
+        finally:
+            capacity_checker.host_processes = original
+            server.shutdown()
+            server.server_close()
 
 
 if __name__ == '__main__':
