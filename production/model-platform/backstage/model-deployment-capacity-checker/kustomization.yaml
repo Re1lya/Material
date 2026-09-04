@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - kubernetes.yaml
+configMapGenerator:
+  - name: model-deployment-capacity-checker
+    namespace: model-serving
+    files:
+      - capacity_checker.py
+generatorOptions:
+  disableNameSuffixHash: true
