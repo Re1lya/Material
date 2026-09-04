@@ -48,17 +48,17 @@ described as a prerequisite or as production evidence for this image.
 
 ## Remaining v2 smoke gates
 
-- The live cluster has `modeldeployment-stopped-v2`, but the reviewed
-  `modeldeployment-qwen38-ray-v2` Composition is not installed yet. Its exact
-  Gitea-main source passed server-side dry-run and still requires a separate
-  apply approval.
-- The Dashboard API currently reports 403 degradation for RayCluster/Event,
-  Tekton and Argo reads because the previously prepared read-only status RBAC
-  was never applied. The corrected RBAC bundle now passes server-side dry-run
-  after removing obsolete declarations for the absent `artifact-publish`
-  namespace.
-- `platform-backstage` now expects the v2 stopped/running Composition pair, but
-  the GitOps source and live `qwen38-27b` still reference
-  `modeldeployment-stopped-v1alpha1`. Before Start, both composition references
-  must be migrated while the request remains Stopped/workerReplicas=0, then
-  reconciled successfully against `modeldeployment-stopped-v2`.
+The control-plane gates for a v2 smoke are now closed:
+
+- `modeldeployment-stopped-v2` and `modeldeployment-qwen38-ray-v2` both exist.
+- The complete Dashboard status RBAC is applied; the deployment aggregation
+  reports no unavailable modules.
+- Config commit `a41247dbf409b8b0c7df230f007b26204dafd0fc` migrated both
+  `qwen38-27b` composition references to `modeldeployment-stopped-v2` while
+  preserving Stopped/workerReplicas=0. Its main-push PipelineRun completed
+  successfully and Argo synchronized the same revision.
+- The live XR is Stopped, Synced/Ready=True, requests zero NPU and composes no
+  Pod, RayService, RayCluster, PVC or Job.
+- Tekton Pipeline generation 19 and the running-gate ConfigMap now use the v2
+  stopped/running pair. The Running Window is deliberately `false` and must be
+  opened only immediately before the approved NPU smoke.
