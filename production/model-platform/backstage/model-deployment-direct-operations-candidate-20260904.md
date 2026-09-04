@@ -3,12 +3,12 @@
 ## Source and image provenance
 
 - Backstage PR: `gitadmin/platform-backstage#3`
-- Candidate source head: `30a4c5e01945e0448538dcf4ae27c62c9142eba7`
+- Candidate source head: `9b3e7c6a5bdd7add98a82726f6ee80d460c1445f`
 - Candidate image:
-  `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.12-direct-operations-30a4c5e@sha256:0ec784647f3f80e39083a31343e04e56067c94500e36c8beb5d4cbc2956fcd02`
+  `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.12-direct-operations-9b3e7c6@sha256:305b61c8648a9503036f98252db454cfa6f5a174660f2db0420b56f9de4f9ea7`
 - Architecture: `linux/amd64`
 - OCI source label: `http://110.120.0.3:30081/gitadmin/platform-backstage`
-- OCI revision label: `30a4c5e01945e0448538dcf4ae27c62c9142eba7`
+- OCI revision label: `9b3e7c6a5bdd7add98a82726f6ee80d460c1445f`
 
 ## Candidate scope
 
