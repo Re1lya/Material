@@ -69,7 +69,9 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["platform.example.com"]
     resources: ["modeldeployments"]
-    verbs: ["get", "list", "watch"]
+    # Direct operations can patch only the namespaced ModelDeployment CR. They
+    # cannot write Pods, Ray objects, Secrets, PVCs, Compositions or manifests.
+    verbs: ["get", "list", "watch", "patch"]
   - apiGroups: ["ray.io"]
     resources: ["rayservices", "rayclusters"]
     verbs: ["get", "list", "watch"]

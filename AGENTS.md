@@ -9,6 +9,33 @@ for safely continuing the deployment.
 
 ## Mandatory operating rules
 
+### Approved ModelDeployment control-plane boundary (2026-09-04)
+
+For the single-instance `qwen38-27b` migration, the user has approved the
+following boundary. This takes precedence over older wording in this handoff
+that treated every instance Start/Stop as a GitOps request:
+
+```text
+GitOps/Gitea: XRD, Composition, RuntimeProfile, parameter schema, image digest
+and platform policy
+
+Backstage PostgreSQL: versioned instance configuration, operation lock/history
+and audit record
+
+Model Deployment API: validates a DB configuration snapshot and atomically
+patches the namespaced ModelDeployment CR
+
+Crossplane/KubeRay: reconciles the CR into runtime resources
+```
+
+Do not create a Gitea branch, PR or manifest write for routine Start, Stop or
+allowed parameter Update. Keep the prior GitOps actions behind a feature flag
+as the rollback path while direct operations are shadow-tested. Kubernetes CR
+status is the runtime source of truth; the database is the configuration and
+operation-history source of truth. This exception is limited to the approved
+single-instance deployment API: it does not authorize direct Pod, RayCluster,
+Secret, PVC, Composition or arbitrary manifest writes.
+
 1. Never store, echo, commit or reproduce SSH passwords, Kubernetes
    tokens, Gitea credentials, Artifact Keeper tokens, private keys or other
    secrets in repository files, scripts, command output or documentation. Use
