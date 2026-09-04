@@ -42,6 +42,36 @@ spec:
       port: 8080
       targetPort: http
 ---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: model-deployment-capacity-checker-egress
+  namespace: model-serving
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: model-deployment-capacity-checker
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - ipBlock: { cidr: 10.43.0.1/32 }
+      ports:
+        - { protocol: TCP, port: 443 }
+    - to:
+        - ipBlock: { cidr: 110.120.0.3/32 }
+      ports:
+        - { protocol: TCP, port: 6443 }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
