@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-deployment-operations-migration
+  namespace: backstage
+  labels:
+    app.kubernetes.io/component: model-deployment-operations-migration
+    app.kubernetes.io/part-of: model-platform
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: model-deployment-operations-migration
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/hostname: server-00
+      imagePullSecrets:
+        - name: artifact-keeper-image-pull
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: 110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.12-direct-operations-b73365e-r1@sha256:f2c1c17f3cff391012c46ce20d1aa9f4f838ac48ae9a6cba348022b9880b8954
+          imagePullPolicy: IfNotPresent
+          command:
+            - node
+            - /app/packages/backend/migrations/run_model_deployment_operations_migration.js
+          env:
+            - name: MODEL_DEPLOYMENT_MIGRATION_APPROVED
+              value: "1"
+            - name: POSTGRES_HOST
+              value: backstage-postgres.backstage.svc.cluster.local
+            - name: POSTGRES_PORT
+              value: "5432"
+          envFrom:
+            - secretRef:
+                name: backstage-secrets
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true

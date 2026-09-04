@@ -4,12 +4,13 @@
 
 - Backstage implementation PR: `gitadmin/platform-backstage#3` (merged as `2978642c7aca85f23f34c2bd9270262c8ea11047`)
 - Backstage migration-runner PR: `gitadmin/platform-backstage#4` (merged as `cb7a9fd93cb1dd025dafa13d6c1975e51ae2c678`)
-- Candidate source head: `cb7a9fd93cb1dd025dafa13d6c1975e51ae2c678`
+- Backstage atomic-migration PR: `gitadmin/platform-backstage#5` (merged as `b73365e68518d69f98e2b607378994f9bfb0e1a6`)
+- Candidate source head: `b73365e68518d69f98e2b607378994f9bfb0e1a6`
 - Candidate image:
-  `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.12-direct-operations-cb7a9fd-r1@sha256:0b8f9ca4a22c741c80c58502f21ecfff554e923e78c4599a2a24e52a2c4ead80`
+  `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.12-direct-operations-b73365e-r1@sha256:f2c1c17f3cff391012c46ce20d1aa9f4f838ac48ae9a6cba348022b9880b8954`
 - Architecture: `linux/amd64`
 - OCI source label: `http://110.120.0.3:30081/gitadmin/platform-backstage`
-- OCI revision label: `cb7a9fd93cb1dd025dafa13d6c1975e51ae2c678`
+- OCI revision label: `b73365e68518d69f98e2b607378994f9bfb0e1a6`
 
 ## Candidate scope
 
@@ -36,3 +37,25 @@ apply, ModelDeployment patch or NPU workload was performed by building it.
   NetworkPolicies, capacity-checker and cache-reaper manifests;
 - server-side dry-run passed for the ModelDeployment XRD plus both retained v1
   and v2 stopped Compositions.
+
+## P0 hardening added after review
+
+- the cache reaper reads every Kubernetes API body once, uses `batch` RBAC for
+  Jobs, and ships suspended until a manually created shadow Job is inspected;
+- the capacity checker fails closed unless it receives one fresh timestamped
+  process-count metric for every A3 device `0` through `15`; empty, partial,
+  duplicate, malformed and stale responses are rejected (4 unit tests passed);
+- the migration now creates all tables and its lock row inside one PostgreSQL
+  transaction. The release uses the dedicated one-shot Job manifest, which
+  imports only the existing `backstage-secrets` values and performs no inline
+  credential handling.
+
+## Post-release operating boundary
+
+Direct operations stay disabled in `app-config.production.yaml` for this
+release. Since the qwen38 instance file is no longer an Argo request source,
+there is intentionally no enabled Start path until the next approved phase:
+apply this release, run the suspended reaper as one manually created shadow
+Job, perform capacity-checker shadow validation in an approved Running Window,
+then enable `modelPlatform.directOperations.enabled` by an explicit audited
+configuration rollout. No feature flag is enabled by this release itself.

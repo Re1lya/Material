@@ -14,8 +14,11 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list"]
   - apiGroups: [""]
-    resources: ["jobs", "persistentvolumeclaims"]
+    resources: ["persistentvolumeclaims"]
     verbs: ["get", "list"]
   - apiGroups: ["ray.io"]
     resources: ["rayservices", "rayclusters"]
@@ -46,6 +49,9 @@ metadata:
   namespace: model-serving
 spec:
   schedule: "*/5 * * * *"
+  # First release is deliberately inert. Create one Job manually from this
+  # CronJob and inspect its shadow result before enabling the schedule.
+  suspend: true
   concurrencyPolicy: Forbid
   jobTemplate:
     spec:

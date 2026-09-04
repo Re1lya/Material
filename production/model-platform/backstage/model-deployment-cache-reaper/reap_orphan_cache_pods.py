@@ -21,7 +21,8 @@ def request(method, path, body=None):
         **({} if data is None else {"Content-Type": "application/json"}),
     })
     with urllib.request.urlopen(req, context=context, timeout=15) as response:
-        return None if not response.read() else json.loads(response.read())
+        raw = response.read()
+        return None if not raw else json.loads(raw)
 
 xr = request("GET", f"/apis/platform.example.com/v1alpha1/namespaces/{NAMESPACE}/modeldeployments/{DEPLOYMENT}")
 conditions = {item.get("type"): item.get("status") for item in xr.get("status", {}).get("conditions", [])}
