@@ -31,8 +31,7 @@ Repository: `gitadmin/platform-backstage`
 - Branch: `recovery/production-c937370`
 - Commit: `230dd6246f2df96657d1d4d737ec8f7842284141`
 - Base: current Gitea `main` commit `b73365e68518d69f98e2b607378994f9bfb0e1a6`
-- Pull request creation URL:
-  `http://110.120.0.3:30081/gitadmin/platform-backstage/pulls/new/recovery/production-c937370`
+- Pull request: `http://110.120.0.3:30081/gitadmin/platform-backstage/pulls/6`
 
 Recovered behavior:
 
@@ -64,8 +63,7 @@ Repository: `gitadmin/model-platform-config`
 - Branch: `recovery/production-training-c937370`
 - Commit: `659f19ed53b8f8a7ed5d1a666e26e0a760fcf999`
 - Base: current Gitea `main` commit `6085fb9e891a065bfd2e74290680e4177ad4237a`
-- Pull request creation URL:
-  `http://110.120.0.3:30081/gitadmin/model-platform-config/pulls/new/recovery/production-training-c937370`
+- Pull request: `http://110.120.0.3:30081/gitadmin/model-platform-config/pulls/50`
 
 Recovered live drift:
 
@@ -120,4 +118,3 @@ gates. It must not be treated as a training-only hotfix image.
    validation, server-side dry-run, and the Direct Operations release gates.
 5. Run training creation/W&B smoke only in a separately approved window; do
    not use an NPU training run merely to validate source recovery.
-
