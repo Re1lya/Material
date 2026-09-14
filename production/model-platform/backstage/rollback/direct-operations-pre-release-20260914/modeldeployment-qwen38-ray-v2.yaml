@@ -1,0 +1,857 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apiextensions.crossplane.io/v1","kind":"Composition","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"deployment-api","app.kubernetes.io/part-of":"model-platform","platform.example.com/stage":"qwen38-ray"},"name":"modeldeployment-qwen38-ray-v2"},"spec":{"compositeTypeRef":{"apiVersion":"platform.example.com/v1alpha1","kind":"ModelDeployment"},"mode":"Pipeline","pipeline":[{"functionRef":{"name":"function-patch-and-transform"},"input":{"apiVersion":"pt.fn.crossplane.io/v1beta1","kind":"Resources","resources":[{"base":{"apiVersion":"v1","data":{"cacheReadyFile":"/cache/model/READY","desiredState":"Stopped","manifestDigest":"","message":"The Crossplane release unit is reconciled. The cache Job must complete before the worker replica is changed from zero.","modelVersionRef":"","npuRequested":"0","phase":"Stopped","runtimeProfileRef":""},"kind":"ConfigMap","metadata":{"labels":{"app.kubernetes.io/component":"model-deployment-status","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-release-status","namespace":"model-serving"}},"name":"release-status","patches":[{"fromFieldPath":"metadata.name","toFieldPath":"metadata.name","transforms":[{"string":{"fmt":"%s-status","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.desiredState","toFieldPath":"data.desiredState","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.modelVersionRef","toFieldPath":"data.modelVersionRef","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtimeProfileRef","toFieldPath":"data.runtimeProfileRef","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.artifact.manifestDigest","toFieldPath":"data.manifestDigest","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.workerReplicas","toFieldPath":"data.npuRequested","transforms":[{"string":{"fmt":"%s","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"}],"readinessChecks":[{"type":"None"}]},{"base":{"apiVersion":"kubernetes.m.crossplane.io/v1alpha1","kind":"Object","metadata":{"labels":{"app.kubernetes.io/component":"model-cache","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-cache-pvc","namespace":"model-serving"},"spec":{"forProvider":{"manifest":{"apiVersion":"v1","kind":"PersistentVolumeClaim","metadata":{"labels":{"app.kubernetes.io/component":"model-cache","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-cache","namespace":"model-serving"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"1Gi"}},"storageClassName":"model-cache-gpu-local","volumeMode":"Filesystem"}}},"providerConfigRef":{"kind":"ProviderConfig","name":"model-serving"}}},"name":"model-cache-pvc","patches":[{"fromFieldPath":"metadata.name","toFieldPath":"metadata.name","transforms":[{"string":{"fmt":"%s-cache-pvc","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.metadata.name","transforms":[{"string":{"fmt":"%s-cache","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"spec.forProvider.manifest.metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.storageClassName","toFieldPath":"spec.forProvider.manifest.spec.storageClassName","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.size","toFieldPath":"spec.forProvider.manifest.spec.resources.requests.storage","type":"FromCompositeFieldPath"}],"readinessChecks":[{"type":"None"}]},{"base":{"apiVersion":"kubernetes.m.crossplane.io/v1alpha1","kind":"Object","metadata":{"labels":{"app.kubernetes.io/component":"model-cache","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-cache-job","namespace":"model-serving"},"spec":{"forProvider":{"manifest":{"apiVersion":"batch/v1","kind":"Job","metadata":{"labels":{"app.kubernetes.io/component":"model-cache","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-cache","namespace":"model-serving"},"spec":{"activeDeadlineSeconds":7200,"backoffLimit":2,"template":{"metadata":{"labels":{"app.kubernetes.io/component":"model-cache","app.kubernetes.io/part-of":"model-platform"}},"spec":{"automountServiceAccountToken":false,"containers":[{"command":["python3","/opt/model-cache/model-cache-fetch.py"],"env":[{"name":"AK_BASE_URL","value":"http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080"},{"name":"AK_REPOSITORY","value":"model-artifacts"},{"name":"AK_ARTIFACT_PREFIX","value":""},{"name":"MODEL_ID","value":"qwen3.8-27b"},{"name":"MANIFEST_DIGEST","value":""},{"name":"CACHE_ROOT","value":"/cache"},{"name":"TOKEN_FILE","value":"/var/run/secrets/artifact-keeper/token"},{"name":"CACHE_TARGET_RELATIVE","value":"model"}],"imagePullPolicy":"IfNotPresent","name":"fetch","resources":{"limits":{"cpu":"8","ephemeral-storage":"1Gi","memory":"8Gi"},"requests":{"cpu":"2","ephemeral-storage":"256Mi","memory":"2Gi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true,"runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532},"volumeMounts":[{"mountPath":"/cache","name":"cache"},{"mountPath":"/var/run/secrets/artifact-keeper","name":"runtime-token","readOnly":true},{"mountPath":"/tmp","name":"tmp"}]}],"imagePullSecrets":[{"name":"artifact-keeper-image-pull"}],"nodeSelector":{"kubernetes.io/arch":"arm64","kubernetes.io/hostname":"gpu-server-00"},"restartPolicy":"Never","securityContext":{"fsGroup":65532,"fsGroupChangePolicy":"OnRootMismatch"},"serviceAccountName":"model-cache","volumes":[{"name":"cache","persistentVolumeClaim":{"claimName":"qwen38-cache"}},{"name":"runtime-token","secret":{"items":[{"key":"token","path":"token"}],"secretName":"artifact-keeper-model-runtime"}},{"emptyDir":{"sizeLimit":"256Mi"},"name":"tmp"}]}}}}},"providerConfigRef":{"kind":"ProviderConfig","name":"model-serving"}}},"name":"model-cache-job","patches":[{"combine":{"strategy":"string","string":{"fmt":"%s-cache-%s"},"variables":[{"fromFieldPath":"metadata.name"},{"fromFieldPath":"spec.cache.revision"}]},"toFieldPath":"metadata.name","type":"CombineFromComposite"},{"fromFieldPath":"metadata.namespace","toFieldPath":"metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.revision","toFieldPath":"metadata.labels[platform.example.com/cache-revision]","type":"FromCompositeFieldPath"},{"combine":{"strategy":"string","string":{"fmt":"%s-cache-%s"},"variables":[{"fromFieldPath":"metadata.name"},{"fromFieldPath":"spec.cache.revision"}]},"toFieldPath":"spec.forProvider.manifest.metadata.name","type":"CombineFromComposite"},{"fromFieldPath":"metadata.namespace","toFieldPath":"spec.forProvider.manifest.metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.revision","toFieldPath":"spec.forProvider.manifest.metadata.labels[platform.example.com/cache-revision]","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.spec.template.metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.revision","toFieldPath":"spec.forProvider.manifest.spec.template.metadata.labels[platform.example.com/cache-revision]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.placement.nodeSelector","toFieldPath":"spec.forProvider.manifest.spec.template.spec.nodeSelector","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.spec.template.spec.volumes[0].persistentVolumeClaim.claimName","transforms":[{"string":{"fmt":"%s-cache","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.image","toFieldPath":"spec.forProvider.manifest.spec.template.spec.containers[0].image","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.baseURL","toFieldPath":"spec.forProvider.manifest.spec.template.spec.containers[0].env[0].value","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.artifact.path","toFieldPath":"spec.forProvider.manifest.spec.template.spec.containers[0].env[2].value","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.modelName","toFieldPath":"spec.forProvider.manifest.spec.template.spec.containers[0].env[3].value","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.artifact.manifestDigest","toFieldPath":"spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.readerSecret","toFieldPath":"spec.forProvider.manifest.spec.template.spec.volumes[1].secret.secretName","type":"FromCompositeFieldPath"}],"readinessChecks":[{"type":"None"}]},{"base":{"apiVersion":"kubernetes.m.crossplane.io/v1alpha1","kind":"Object","metadata":{"labels":{"app.kubernetes.io/component":"rayservice","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-rayservice","namespace":"model-serving"},"spec":{"forProvider":{"manifest":{"apiVersion":"ray.io/v1","kind":"RayService","metadata":{"labels":{"app.kubernetes.io/component":"rayservice","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-27b","namespace":"model-serving"},"spec":{"deploymentUnhealthySecondThreshold":300,"rayClusterConfig":{"headGroupSpec":{"rayStartParams":{"dashboard-host":"0.0.0.0"},"serviceType":"ClusterIP","template":{"metadata":{"annotations":{"huawei.com/skip-ascend-plugin":"enabled"},"labels":{"app.kubernetes.io/component":"rayservice","app.kubernetes.io/part-of":"model-platform"}},"spec":{"containers":[{"env":[{"name":"VLLM_PLUGINS","value":""},{"name":"TORCH_DEVICE_BACKEND_AUTOLOAD","value":"0"}],"name":"ray-head","ports":[{"containerPort":6379,"name":"gcs"},{"containerPort":8265,"name":"dashboard"},{"containerPort":8000,"name":"serve","protocol":"TCP"}],"resources":{"limits":{"cpu":"2","memory":"8Gi"},"requests":{"cpu":"2","memory":"8Gi"}},"volumeMounts":[{"mountPath":"/models/Qwen3.8-27B-w8a8","name":"model-cache","readOnly":true,"subPath":"model"},{"mountPath":"/usr/local/Ascend/driver","name":"ascend-driver","readOnly":true}]}],"imagePullSecrets":[{"name":"artifact-keeper-image-pull"}],"initContainers":[{"args":["until [ -f /cache/model/READY ]; do sleep 5; done"],"command":["/bin/sh","-ec"],"imagePullPolicy":"IfNotPresent","name":"wait-for-model-cache","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true,"runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532},"volumeMounts":[{"mountPath":"/cache","name":"model-cache","readOnly":true}]}],"nodeSelector":{"accelerator-type":"module-a3-16","kubernetes.io/arch":"arm64","kubernetes.io/hostname":"a3-server-00"},"schedulerName":"default-scheduler","volumes":[{"name":"model-cache","persistentVolumeClaim":{"claimName":"qwen38-cache"}},{"hostPath":{"path":"/usr/local/Ascend/driver","type":"Directory"},"name":"ascend-driver"}]}}},"rayVersion":"2.43.0","workerGroupSpecs":[{"groupName":"worker","maxReplicas":4,"minReplicas":0,"rayStartParams":{"num-gpus":"8","resources":"'{\"NPU\":8}'"},"replicas":0,"template":{"metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"rayservice","app.kubernetes.io/part-of":"model-platform"}},"spec":{"containers":[{"env":[{"name":"MODEL_PATH","value":"/models/Qwen3.8-27B-w8a8"},{"name":"MODEL_NAME","value":"qwen3.8-27b-w8a8"},{"name":"MODEL_MANIFEST_DIGEST","value":""},{"name":"RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES","value":"1"},{"name":"PYTORCH_NPU_ALLOC_CONF","value":"expandable_segments:True"},{"name":"HCCL_BUFFSIZE","value":"512"},{"name":"OMP_PROC_BIND","value":"false"},{"name":"OMP_NUM_THREADS","value":"1"}],"name":"ray-worker","readinessProbe":{"exec":{"command":["bash","-c","wget --tries 1 -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz | grep success"]},"failureThreshold":12,"initialDelaySeconds":10,"periodSeconds":5,"successThreshold":1,"timeoutSeconds":2},"resources":{"limits":{"cpu":"64","huawei.com/Ascend910":"0","memory":"256Gi"},"requests":{"cpu":"64","huawei.com/Ascend910":"0","memory":"256Gi"}},"volumeMounts":[{"mountPath":"/models/Qwen3.8-27B-w8a8","name":"model-cache","readOnly":true,"subPath":"model"},{"mountPath":"/usr/local/Ascend/driver","name":"ascend-driver","readOnly":true}]}],"imagePullSecrets":[{"name":"artifact-keeper-image-pull"}],"initContainers":[{"args":["until [ -f /cache/model/READY ]; do sleep 5; done"],"command":["/bin/sh","-ec"],"imagePullPolicy":"IfNotPresent","name":"wait-for-model-cache","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true,"runAsGroup":65532,"runAsNonRoot":true,"runAsUser":65532},"volumeMounts":[{"mountPath":"/cache","name":"model-cache","readOnly":true}]}],"nodeSelector":{"kubernetes.io/arch":"arm64","kubernetes.io/hostname":"gpu-server-00"},"runtimeClassName":"ascend","schedulerName":"default-scheduler","volumes":[{"name":"model-cache","persistentVolumeClaim":{"claimName":"qwen38-cache"}},{"hostPath":{"path":"/usr/local/Ascend/driver","type":"Directory"},"name":"ascend-driver"}]}}}]},"serveConfigV2":"applications:\n- name: default\n  route_prefix: /\n  import_path: qwen_serve:app\n","serviceUnhealthySecondThreshold":900}}},"providerConfigRef":{"kind":"ProviderConfig","name":"model-serving"}}},"name":"rayservice","patches":[{"fromFieldPath":"metadata.name","toFieldPath":"metadata.name","transforms":[{"string":{"fmt":"%s-rayservice","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.metadata.name","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"spec.forProvider.manifest.metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.rayVersion","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.rayVersion","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.placement.nodeSelector","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.nodeSelector","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.image","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].image","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.image","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].image","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.image","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.initContainers[0].image","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.cache.image","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.initContainers[0].image","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.modelPath","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].volumeMounts[0].mountPath","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.volumes[0].persistentVolumeClaim.claimName","transforms":[{"string":{"fmt":"%s-cache","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.headCPU","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.requests.cpu","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.headCPU","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.limits.cpu","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.headMemory","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.requests.memory","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.headMemory","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.limits.memory","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.workerCPU","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests.cpu","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.workerCPU","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits.cpu","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.workerMemory","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests.memory","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.workerMemory","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits.memory","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.npuPerWorker","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests[\"huawei.com/Ascend910\"]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.npuPerWorker","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits[\"huawei.com/Ascend910\"]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.npuPerWorker","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].rayStartParams.resources","transforms":[{"convert":{"toType":"string"},"type":"convert"},{"string":{"fmt":"'{\"NPU\":%s}'","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.npuPerWorker","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].rayStartParams.num-gpus","transforms":[{"convert":{"toType":"string"},"type":"convert"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.workerReplicas","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].replicas","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.workerReplicas","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].minReplicas","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.placement.nodeSelector","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.nodeSelector","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.placement.staticDeviceAllocation","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.metadata.annotations[huawei.com/Ascend910]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.modelPath","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[0].value","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.modelName","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[1].value","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.artifact.manifestDigest","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[2].value","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.modelPath","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].volumeMounts[0].mountPath","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.volumes[0].persistentVolumeClaim.claimName","transforms":[{"string":{"fmt":"%s-cache","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtime.serveConfigV2","toFieldPath":"spec.forProvider.manifest.spec.serveConfigV2","type":"FromCompositeFieldPath"}],"readinessChecks":[{"type":"None"}]},{"base":{"apiVersion":"kubernetes.m.crossplane.io/v1alpha1","kind":"Object","metadata":{"labels":{"app.kubernetes.io/component":"model-service","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-service","namespace":"model-serving"},"spec":{"forProvider":{"manifest":{"apiVersion":"v1","kind":"Service","metadata":{"labels":{"app.kubernetes.io/component":"model-service","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-27b","namespace":"model-serving"},"spec":{"externalName":"qwen38-27b-serve-svc.model-serving.svc.cluster.local","ports":[{"name":"serve","port":8000,"protocol":"TCP","targetPort":8000}],"type":"ExternalName"}}},"providerConfigRef":{"kind":"ProviderConfig","name":"model-serving"}}},"name":"stable-service","patches":[{"fromFieldPath":"metadata.name","toFieldPath":"metadata.name","transforms":[{"string":{"fmt":"%s-service","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.metadata.name","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"spec.forProvider.manifest.metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.spec.externalName","transforms":[{"string":{"fmt":"%s-serve-svc.model-serving.svc.cluster.local","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"}],"readinessChecks":[{"type":"None"}]},{"base":{"apiVersion":"kubernetes.m.crossplane.io/v1alpha1","kind":"Object","metadata":{"labels":{"app.kubernetes.io/component":"model-network-policy","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-network-policy","namespace":"model-serving"},"spec":{"forProvider":{"manifest":{"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"labels":{"app.kubernetes.io/component":"model-network-policy","app.kubernetes.io/part-of":"model-platform"},"name":"qwen38-default-deny","namespace":"model-serving"},"spec":{"egress":[{"to":[{"podSelector":{"matchLabels":{"app.kubernetes.io/part-of":"model-platform","platform.example.com/deployment":"qwen38-27b"}}}]},{"ports":[{"port":8080,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"artifact-keeper"}},"podSelector":{"matchLabels":{"app.kubernetes.io/component":"backend"}}}]},{"ports":[{"port":53,"protocol":"UDP"},{"port":53,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}}}]}],"ingress":[{"from":[{"podSelector":{"matchLabels":{"app.kubernetes.io/part-of":"model-platform","platform.example.com/deployment":"qwen38-27b"}}}]},{"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"ray-mangement"}}}],"ports":[{"port":8265,"protocol":"TCP"}]},{"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"model-serving"}}}],"ports":[{"port":8000,"protocol":"TCP"}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/part-of":"model-platform","platform.example.com/deployment":"qwen38-27b"}},"policyTypes":["Ingress","Egress"]}}},"providerConfigRef":{"kind":"ProviderConfig","name":"model-serving"}}},"name":"network-policy","patches":[{"fromFieldPath":"metadata.name","toFieldPath":"metadata.name","transforms":[{"string":{"fmt":"%s-network-policy","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.spec.podSelector.matchLabels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"spec.forProvider.manifest.metadata.name","transforms":[{"string":{"fmt":"%s-default-deny","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"spec.forProvider.manifest.metadata.namespace","type":"FromCompositeFieldPath"}],"readinessChecks":[{"type":"None"}]}]},"step":"render-qwen38-ray-release"}]}}
+  creationTimestamp: "2026-09-04T01:14:21Z"
+  generation: 2
+  labels:
+    app.kubernetes.io/component: deployment-api
+    app.kubernetes.io/part-of: model-platform
+    platform.example.com/stage: qwen38-ray
+  name: modeldeployment-qwen38-ray-v2
+  resourceVersion: "37250099"
+  uid: 5f3c4b23-818f-4996-b426-1d7d370ae3ee
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: ModelDeployment
+  mode: Pipeline
+  pipeline:
+  - functionRef:
+      name: function-patch-and-transform
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - base:
+          apiVersion: v1
+          data:
+            cacheReadyFile: /cache/model/READY
+            desiredState: Stopped
+            manifestDigest: ""
+            message: The Crossplane release unit is reconciled. The cache Job must
+              complete before the worker replica is changed from zero.
+            modelVersionRef: ""
+            npuRequested: "0"
+            phase: Stopped
+            runtimeProfileRef: ""
+          kind: ConfigMap
+          metadata:
+            labels:
+              app.kubernetes.io/component: model-deployment-status
+              app.kubernetes.io/part-of: model-platform
+            name: qwen38-release-status
+            namespace: model-serving
+        name: release-status
+        patches:
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - string:
+              fmt: '%s-status'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.desiredState
+          toFieldPath: data.desiredState
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.modelVersionRef
+          toFieldPath: data.modelVersionRef
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtimeProfileRef
+          toFieldPath: data.runtimeProfileRef
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.artifact.manifestDigest
+          toFieldPath: data.manifestDigest
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.workerReplicas
+          toFieldPath: data.npuRequested
+          transforms:
+          - string:
+              fmt: '%s'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        readinessChecks:
+        - type: None
+      - base:
+          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+          kind: Object
+          metadata:
+            labels:
+              app.kubernetes.io/component: model-cache
+              app.kubernetes.io/part-of: model-platform
+            name: qwen38-cache-pvc
+            namespace: model-serving
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: PersistentVolumeClaim
+                metadata:
+                  labels:
+                    app.kubernetes.io/component: model-cache
+                    app.kubernetes.io/part-of: model-platform
+                  name: qwen38-cache
+                  namespace: model-serving
+                spec:
+                  accessModes:
+                  - ReadWriteOnce
+                  resources:
+                    requests:
+                      storage: 1Gi
+                  storageClassName: model-cache-gpu-local
+                  volumeMode: Filesystem
+            providerConfigRef:
+              kind: ProviderConfig
+              name: model-serving
+        name: model-cache-pvc
+        patches:
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - string:
+              fmt: '%s-cache-pvc'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+          - string:
+              fmt: '%s-cache'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.storageClassName
+          toFieldPath: spec.forProvider.manifest.spec.storageClassName
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.size
+          toFieldPath: spec.forProvider.manifest.spec.resources.requests.storage
+          type: FromCompositeFieldPath
+        readinessChecks:
+        - type: None
+      - base:
+          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+          kind: Object
+          metadata:
+            labels:
+              app.kubernetes.io/component: model-cache
+              app.kubernetes.io/part-of: model-platform
+            name: qwen38-cache-job
+            namespace: model-serving
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: batch/v1
+                kind: Job
+                metadata:
+                  labels:
+                    app.kubernetes.io/component: model-cache
+                    app.kubernetes.io/part-of: model-platform
+                  name: qwen38-cache
+                  namespace: model-serving
+                spec:
+                  activeDeadlineSeconds: 7200
+                  backoffLimit: 2
+                  template:
+                    metadata:
+                      labels:
+                        app.kubernetes.io/component: model-cache
+                        app.kubernetes.io/part-of: model-platform
+                    spec:
+                      automountServiceAccountToken: false
+                      containers:
+                      - command:
+                        - python3
+                        - /opt/model-cache/model-cache-fetch.py
+                        env:
+                        - name: AK_BASE_URL
+                          value: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+                        - name: AK_REPOSITORY
+                          value: model-artifacts
+                        - name: AK_ARTIFACT_PREFIX
+                          value: ""
+                        - name: MODEL_ID
+                          value: qwen3.8-27b
+                        - name: MANIFEST_DIGEST
+                          value: ""
+                        - name: CACHE_ROOT
+                          value: /cache
+                        - name: TOKEN_FILE
+                          value: /var/run/secrets/artifact-keeper/token
+                        - name: CACHE_TARGET_RELATIVE
+                          value: model
+                        imagePullPolicy: IfNotPresent
+                        name: fetch
+                        resources:
+                          limits:
+                            cpu: "8"
+                            ephemeral-storage: 1Gi
+                            memory: 8Gi
+                          requests:
+                            cpu: "2"
+                            ephemeral-storage: 256Mi
+                            memory: 2Gi
+                        securityContext:
+                          allowPrivilegeEscalation: false
+                          capabilities:
+                            drop:
+                            - ALL
+                          readOnlyRootFilesystem: true
+                          runAsGroup: 65532
+                          runAsNonRoot: true
+                          runAsUser: 65532
+                        volumeMounts:
+                        - mountPath: /cache
+                          name: cache
+                        - mountPath: /var/run/secrets/artifact-keeper
+                          name: runtime-token
+                          readOnly: true
+                        - mountPath: /tmp
+                          name: tmp
+                      imagePullSecrets:
+                      - name: artifact-keeper-image-pull
+                      nodeSelector:
+                        kubernetes.io/arch: arm64
+                        kubernetes.io/hostname: gpu-server-00
+                      restartPolicy: Never
+                      securityContext:
+                        fsGroup: 65532
+                        fsGroupChangePolicy: OnRootMismatch
+                      serviceAccountName: model-cache
+                      volumes:
+                      - name: cache
+                        persistentVolumeClaim:
+                          claimName: qwen38-cache
+                      - name: runtime-token
+                        secret:
+                          items:
+                          - key: token
+                            path: token
+                          secretName: artifact-keeper-model-runtime
+                      - emptyDir:
+                          sizeLimit: 256Mi
+                        name: tmp
+            providerConfigRef:
+              kind: ProviderConfig
+              name: model-serving
+        name: model-cache-job
+        patches:
+        - combine:
+            strategy: string
+            string:
+              fmt: '%s-cache-%s'
+            variables:
+            - fromFieldPath: metadata.name
+            - fromFieldPath: spec.cache.revision
+          toFieldPath: metadata.name
+          type: CombineFromComposite
+        - fromFieldPath: metadata.namespace
+          toFieldPath: metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.revision
+          toFieldPath: metadata.labels[platform.example.com/cache-revision]
+          type: FromCompositeFieldPath
+        - combine:
+            strategy: string
+            string:
+              fmt: '%s-cache-%s'
+            variables:
+            - fromFieldPath: metadata.name
+            - fromFieldPath: spec.cache.revision
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          type: CombineFromComposite
+        - fromFieldPath: metadata.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.revision
+          toFieldPath: spec.forProvider.manifest.metadata.labels[platform.example.com/cache-revision]
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.revision
+          toFieldPath: spec.forProvider.manifest.spec.template.metadata.labels[platform.example.com/cache-revision]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.placement.nodeSelector
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.nodeSelector
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          transforms:
+          - string:
+              fmt: '%s-cache'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.image
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].image
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.baseURL
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[0].value
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.artifact.path
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[2].value
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.modelName
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[3].value
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.artifact.manifestDigest
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.containers[0].env[4].value
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.readerSecret
+          toFieldPath: spec.forProvider.manifest.spec.template.spec.volumes[1].secret.secretName
+          type: FromCompositeFieldPath
+        readinessChecks:
+        - type: None
+      - base:
+          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+          kind: Object
+          metadata:
+            labels:
+              app.kubernetes.io/component: rayservice
+              app.kubernetes.io/part-of: model-platform
+            name: qwen38-rayservice
+            namespace: model-serving
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: ray.io/v1
+                kind: RayService
+                metadata:
+                  labels:
+                    app.kubernetes.io/component: rayservice
+                    app.kubernetes.io/part-of: model-platform
+                  name: qwen38-27b
+                  namespace: model-serving
+                spec:
+                  deploymentUnhealthySecondThreshold: 300
+                  rayClusterConfig:
+                    headGroupSpec:
+                      rayStartParams:
+                        dashboard-host: 0.0.0.0
+                      serviceType: ClusterIP
+                      template:
+                        metadata:
+                          annotations:
+                            huawei.com/skip-ascend-plugin: enabled
+                          labels:
+                            app.kubernetes.io/component: rayservice
+                            app.kubernetes.io/part-of: model-platform
+                        spec:
+                          containers:
+                          - env:
+                            - name: VLLM_PLUGINS
+                              value: ""
+                            - name: TORCH_DEVICE_BACKEND_AUTOLOAD
+                              value: "0"
+                            name: ray-head
+                            ports:
+                            - containerPort: 6379
+                              name: gcs
+                            - containerPort: 8265
+                              name: dashboard
+                            - containerPort: 8000
+                              name: serve
+                              protocol: TCP
+                            resources:
+                              limits:
+                                cpu: "2"
+                                memory: 8Gi
+                              requests:
+                                cpu: "2"
+                                memory: 8Gi
+                            volumeMounts:
+                            - mountPath: /models/Qwen3.8-27B-w8a8
+                              name: model-cache
+                              readOnly: true
+                              subPath: model
+                            - mountPath: /usr/local/Ascend/driver
+                              name: ascend-driver
+                              readOnly: true
+                          imagePullSecrets:
+                          - name: artifact-keeper-image-pull
+                          initContainers:
+                          - args:
+                            - until [ -f /cache/model/READY ]; do sleep 5; done
+                            command:
+                            - /bin/sh
+                            - -ec
+                            imagePullPolicy: IfNotPresent
+                            name: wait-for-model-cache
+                            securityContext:
+                              allowPrivilegeEscalation: false
+                              capabilities:
+                                drop:
+                                - ALL
+                              readOnlyRootFilesystem: true
+                              runAsGroup: 65532
+                              runAsNonRoot: true
+                              runAsUser: 65532
+                            volumeMounts:
+                            - mountPath: /cache
+                              name: model-cache
+                              readOnly: true
+                          nodeSelector:
+                            accelerator-type: module-a3-16
+                            kubernetes.io/arch: arm64
+                            kubernetes.io/hostname: a3-server-00
+                          schedulerName: default-scheduler
+                          volumes:
+                          - name: model-cache
+                            persistentVolumeClaim:
+                              claimName: qwen38-cache
+                          - hostPath:
+                              path: /usr/local/Ascend/driver
+                              type: Directory
+                            name: ascend-driver
+                    rayVersion: 2.43.0
+                    workerGroupSpecs:
+                    - groupName: worker
+                      maxReplicas: 4
+                      minReplicas: 0
+                      rayStartParams:
+                        num-gpus: "8"
+                        resources: '''{"NPU":8}'''
+                      replicas: 0
+                      template:
+                        metadata:
+                          annotations: {}
+                          labels:
+                            app.kubernetes.io/component: rayservice
+                            app.kubernetes.io/part-of: model-platform
+                        spec:
+                          containers:
+                          - env:
+                            - name: MODEL_PATH
+                              value: /models/Qwen3.8-27B-w8a8
+                            - name: MODEL_NAME
+                              value: qwen3.8-27b-w8a8
+                            - name: MODEL_MANIFEST_DIGEST
+                              value: ""
+                            - name: RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES
+                              value: "1"
+                            - name: PYTORCH_NPU_ALLOC_CONF
+                              value: expandable_segments:True
+                            - name: HCCL_BUFFSIZE
+                              value: "512"
+                            - name: OMP_PROC_BIND
+                              value: "false"
+                            - name: OMP_NUM_THREADS
+                              value: "1"
+                            name: ray-worker
+                            readinessProbe:
+                              exec:
+                                command:
+                                - bash
+                                - -c
+                                - wget --tries 1 -T 2 -q -O- http://localhost:52365/api/local_raylet_healthz
+                                  | grep success
+                              failureThreshold: 12
+                              initialDelaySeconds: 10
+                              periodSeconds: 5
+                              successThreshold: 1
+                              timeoutSeconds: 2
+                            resources:
+                              limits:
+                                cpu: "64"
+                                huawei.com/Ascend910: "0"
+                                memory: 256Gi
+                              requests:
+                                cpu: "64"
+                                huawei.com/Ascend910: "0"
+                                memory: 256Gi
+                            volumeMounts:
+                            - mountPath: /models/Qwen3.8-27B-w8a8
+                              name: model-cache
+                              readOnly: true
+                              subPath: model
+                            - mountPath: /usr/local/Ascend/driver
+                              name: ascend-driver
+                              readOnly: true
+                          imagePullSecrets:
+                          - name: artifact-keeper-image-pull
+                          initContainers:
+                          - args:
+                            - until [ -f /cache/model/READY ]; do sleep 5; done
+                            command:
+                            - /bin/sh
+                            - -ec
+                            imagePullPolicy: IfNotPresent
+                            name: wait-for-model-cache
+                            securityContext:
+                              allowPrivilegeEscalation: false
+                              capabilities:
+                                drop:
+                                - ALL
+                              readOnlyRootFilesystem: true
+                              runAsGroup: 65532
+                              runAsNonRoot: true
+                              runAsUser: 65532
+                            volumeMounts:
+                            - mountPath: /cache
+                              name: model-cache
+                              readOnly: true
+                          nodeSelector:
+                            kubernetes.io/arch: arm64
+                            kubernetes.io/hostname: gpu-server-00
+                          runtimeClassName: ascend
+                          schedulerName: default-scheduler
+                          volumes:
+                          - name: model-cache
+                            persistentVolumeClaim:
+                              claimName: qwen38-cache
+                          - hostPath:
+                              path: /usr/local/Ascend/driver
+                              type: Directory
+                            name: ascend-driver
+                  serveConfigV2: |
+                    applications:
+                    - name: default
+                      route_prefix: /
+                      import_path: qwen_serve:app
+                  serviceUnhealthySecondThreshold: 900
+            providerConfigRef:
+              kind: ProviderConfig
+              name: model-serving
+        name: rayservice
+        patches:
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - string:
+              fmt: '%s-rayservice'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.rayVersion
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.rayVersion
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.placement.nodeSelector
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.nodeSelector
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.image
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].image
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.image
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].image
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.image
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.initContainers[0].image
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.cache.image
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.initContainers[0].image
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.modelPath
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].volumeMounts[0].mountPath
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          transforms:
+          - string:
+              fmt: '%s-cache'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.headCPU
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.requests.cpu
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.headCPU
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.limits.cpu
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.headMemory
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.requests.memory
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.headMemory
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.headGroupSpec.template.spec.containers[0].resources.limits.memory
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.workerCPU
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests.cpu
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.workerCPU
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits.cpu
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.workerMemory
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests.memory
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.workerMemory
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits.memory
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.npuPerWorker
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.requests["huawei.com/Ascend910"]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.npuPerWorker
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].resources.limits["huawei.com/Ascend910"]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.npuPerWorker
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].rayStartParams.resources
+          transforms:
+          - convert:
+              toType: string
+            type: convert
+          - string:
+              fmt: '''{"NPU":%s}'''
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.npuPerWorker
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].rayStartParams.num-gpus
+          transforms:
+          - convert:
+              toType: string
+            type: convert
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.workerReplicas
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].replicas
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.workerReplicas
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].minReplicas
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.placement.nodeSelector
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.nodeSelector
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.placement.staticDeviceAllocation
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.metadata.annotations[huawei.com/Ascend910]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.modelPath
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[0].value
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.modelName
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[1].value
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.artifact.manifestDigest
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].env[2].value
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.modelPath
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.containers[0].volumeMounts[0].mountPath
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.rayClusterConfig.workerGroupSpecs[0].template.spec.volumes[0].persistentVolumeClaim.claimName
+          transforms:
+          - string:
+              fmt: '%s-cache'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtime.serveConfigV2
+          toFieldPath: spec.forProvider.manifest.spec.serveConfigV2
+          type: FromCompositeFieldPath
+        readinessChecks:
+        - type: None
+      - base:
+          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+          kind: Object
+          metadata:
+            labels:
+              app.kubernetes.io/component: model-service
+              app.kubernetes.io/part-of: model-platform
+            name: qwen38-service
+            namespace: model-serving
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: v1
+                kind: Service
+                metadata:
+                  labels:
+                    app.kubernetes.io/component: model-service
+                    app.kubernetes.io/part-of: model-platform
+                  name: qwen38-27b
+                  namespace: model-serving
+                spec:
+                  externalName: qwen38-27b-serve-svc.model-serving.svc.cluster.local
+                  ports:
+                  - name: serve
+                    port: 8000
+                    protocol: TCP
+                    targetPort: 8000
+                  type: ExternalName
+            providerConfigRef:
+              kind: ProviderConfig
+              name: model-serving
+        name: stable-service
+        patches:
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - string:
+              fmt: '%s-service'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.externalName
+          transforms:
+          - string:
+              fmt: '%s-serve-svc.model-serving.svc.cluster.local'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        readinessChecks:
+        - type: None
+      - base:
+          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+          kind: Object
+          metadata:
+            labels:
+              app.kubernetes.io/component: model-network-policy
+              app.kubernetes.io/part-of: model-platform
+            name: qwen38-network-policy
+            namespace: model-serving
+          spec:
+            forProvider:
+              manifest:
+                apiVersion: networking.k8s.io/v1
+                kind: NetworkPolicy
+                metadata:
+                  labels:
+                    app.kubernetes.io/component: model-network-policy
+                    app.kubernetes.io/part-of: model-platform
+                  name: qwen38-default-deny
+                  namespace: model-serving
+                spec:
+                  egress:
+                  - to:
+                    - podSelector:
+                        matchLabels:
+                          app.kubernetes.io/part-of: model-platform
+                          platform.example.com/deployment: qwen38-27b
+                  - ports:
+                    - port: 8080
+                      protocol: TCP
+                    to:
+                    - namespaceSelector:
+                        matchLabels:
+                          kubernetes.io/metadata.name: artifact-keeper
+                      podSelector:
+                        matchLabels:
+                          app.kubernetes.io/component: backend
+                  - ports:
+                    - port: 53
+                      protocol: UDP
+                    - port: 53
+                      protocol: TCP
+                    to:
+                    - namespaceSelector:
+                        matchLabels:
+                          kubernetes.io/metadata.name: kube-system
+                  ingress:
+                  - from:
+                    - podSelector:
+                        matchLabels:
+                          app.kubernetes.io/part-of: model-platform
+                          platform.example.com/deployment: qwen38-27b
+                  - from:
+                    - namespaceSelector:
+                        matchLabels:
+                          kubernetes.io/metadata.name: ray-mangement
+                    ports:
+                    - port: 8265
+                      protocol: TCP
+                  - from:
+                    - namespaceSelector:
+                        matchLabels:
+                          kubernetes.io/metadata.name: model-serving
+                    ports:
+                    - port: 8000
+                      protocol: TCP
+                  podSelector:
+                    matchLabels:
+                      app.kubernetes.io/part-of: model-platform
+                      platform.example.com/deployment: qwen38-27b
+                  policyTypes:
+                  - Ingress
+                  - Egress
+            providerConfigRef:
+              kind: ProviderConfig
+              name: model-serving
+        name: network-policy
+        patches:
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - string:
+              fmt: '%s-network-policy'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.spec.podSelector.matchLabels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: spec.forProvider.manifest.metadata.name
+          transforms:
+          - string:
+              fmt: '%s-default-deny'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: spec.forProvider.manifest.metadata.namespace
+          type: FromCompositeFieldPath
+        readinessChecks:
+        - type: None
+    step: render-qwen38-ray-release

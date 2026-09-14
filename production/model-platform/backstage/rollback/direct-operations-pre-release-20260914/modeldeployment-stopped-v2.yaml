@@ -1,0 +1,67 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  annotations:
+    argocd.argoproj.io/tracking-id: model-platform-deployment-requests:apiextensions.crossplane.io/Composition:model-serving/modeldeployment-stopped-v2
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apiextensions.crossplane.io/v1","kind":"Composition","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"model-platform-deployment-requests:apiextensions.crossplane.io/Composition:model-serving/modeldeployment-stopped-v2"},"labels":{"app.kubernetes.io/component":"deployment-api","app.kubernetes.io/part-of":"model-platform","platform.example.com/stage":"stopped"},"name":"modeldeployment-stopped-v2"},"spec":{"compositeTypeRef":{"apiVersion":"platform.example.com/v1alpha1","kind":"ModelDeployment"},"mode":"Pipeline","pipeline":[{"functionRef":{"name":"function-patch-and-transform"},"input":{"apiVersion":"pt.fn.crossplane.io/v1beta1","kind":"Resources","resources":[{"base":{"apiVersion":"v1","data":{"cacheEnabled":"false","desiredState":"Stopped","message":"Runtime, cache and NPU resources are fully removed while stopped.","npuRequested":"0","phase":"Stopped","runtimeEnabled":"false"},"kind":"ConfigMap","metadata":{"labels":{"app.kubernetes.io/component":"model-deployment-status","app.kubernetes.io/part-of":"model-platform"}}},"name":"release-status","patches":[{"fromFieldPath":"metadata.name","toFieldPath":"metadata.name","transforms":[{"string":{"fmt":"%s-status","type":"Format"},"type":"string"}],"type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.namespace","toFieldPath":"metadata.namespace","type":"FromCompositeFieldPath"},{"fromFieldPath":"metadata.name","toFieldPath":"metadata.labels[platform.example.com/deployment]","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.modelVersionRef","toFieldPath":"data.modelVersionRef","type":"FromCompositeFieldPath"},{"fromFieldPath":"spec.runtimeProfileRef","toFieldPath":"data.runtimeProfileRef","type":"FromCompositeFieldPath"}],"readinessChecks":[{"type":"None"}]}]},"step":"render-stopped-status"}]}}
+  creationTimestamp: "2026-09-03T03:15:55Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/component: deployment-api
+    app.kubernetes.io/part-of: model-platform
+    platform.example.com/stage: stopped
+  name: modeldeployment-stopped-v2
+  resourceVersion: "30235524"
+  uid: 6abdb4f6-4763-4ec9-bbd1-b1782e05c75c
+spec:
+  compositeTypeRef:
+    apiVersion: platform.example.com/v1alpha1
+    kind: ModelDeployment
+  mode: Pipeline
+  pipeline:
+  - functionRef:
+      name: function-patch-and-transform
+    input:
+      apiVersion: pt.fn.crossplane.io/v1beta1
+      kind: Resources
+      resources:
+      - base:
+          apiVersion: v1
+          data:
+            cacheEnabled: "false"
+            desiredState: Stopped
+            message: Runtime, cache and NPU resources are fully removed while stopped.
+            npuRequested: "0"
+            phase: Stopped
+            runtimeEnabled: "false"
+          kind: ConfigMap
+          metadata:
+            labels:
+              app.kubernetes.io/component: model-deployment-status
+              app.kubernetes.io/part-of: model-platform
+        name: release-status
+        patches:
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.name
+          transforms:
+          - string:
+              fmt: '%s-status'
+              type: Format
+            type: string
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.namespace
+          toFieldPath: metadata.namespace
+          type: FromCompositeFieldPath
+        - fromFieldPath: metadata.name
+          toFieldPath: metadata.labels[platform.example.com/deployment]
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.modelVersionRef
+          toFieldPath: data.modelVersionRef
+          type: FromCompositeFieldPath
+        - fromFieldPath: spec.runtimeProfileRef
+          toFieldPath: data.runtimeProfileRef
+          type: FromCompositeFieldPath
+        readinessChecks:
+        - type: None
+    step: render-stopped-status

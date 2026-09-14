@@ -1,0 +1,361 @@
+apiVersion: v1
+items:
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"annotations":{},"name":"backstage-read-only","namespace":"backstage"},"rules":[{"apiGroups":[""],"resources":["pods","pods/log","configmaps","services"],"verbs":["get","list","watch"]},{"apiGroups":["apps"],"resources":["deployments","replicasets","statefulsets"],"verbs":["get","list","watch"]}]}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    name: backstage-read-only
+    namespace: backstage
+    resourceVersion: "17015628"
+    uid: 1f879bc2-fa66-48a5-90df-01fe48bdbac4
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - pods
+    - pods/log
+    - configmaps
+    - services
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - apps
+    resources:
+    - deployments
+    - replicasets
+    - statefulsets
+    verbs:
+    - get
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"annotations":{},"name":"backstage-read-only","namespace":"backstage"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"backstage-read-only"},"subjects":[{"kind":"ServiceAccount","name":"backstage","namespace":"backstage"}]}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    name: backstage-read-only
+    namespace: backstage
+    resourceVersion: "17015631"
+    uid: d8fbe26c-df7e-41a8-a60e-af9ff97dbe34
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: backstage-read-only
+  subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"backstage-default-deny","namespace":"backstage"},"spec":{"podSelector":{},"policyTypes":["Ingress","Egress"]}}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    generation: 1
+    name: backstage-default-deny
+    namespace: backstage
+    resourceVersion: "17015651"
+    uid: 4e703bd8-f084-433b-9a87-ec8e7e44a090
+  spec:
+    podSelector: {}
+    policyTypes:
+    - Ingress
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"backstage-dns-and-kubernetes-api","namespace":"backstage"},"spec":{"egress":[{"ports":[{"port":53,"protocol":"UDP"},{"port":53,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}]},{"ports":[{"port":443,"protocol":"TCP"}],"to":[{"ipBlock":{"cidr":"10.43.0.1/32"}}]},{"ports":[{"port":6443,"protocol":"TCP"}],"to":[{"ipBlock":{"cidr":"110.120.0.3/32"}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    generation: 2
+    name: backstage-dns-and-kubernetes-api
+    namespace: backstage
+    resourceVersion: "26336816"
+    uid: d690042c-f97c-458d-aae0-23bb7dd98ccf
+  spec:
+    egress:
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+        podSelector:
+          matchLabels:
+            k8s-app: kube-dns
+    - ports:
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 10.43.0.1/32
+    - ports:
+      - port: 6443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 110.120.0.3/32
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"backstage-ingress","namespace":"backstage"},"spec":{"ingress":[{"ports":[{"port":7007,"protocol":"TCP"}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Ingress"]}}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    generation: 1
+    name: backstage-ingress
+    namespace: backstage
+    resourceVersion: "17015657"
+    uid: 95871854-12fa-44e4-a952-a383214e423a
+  spec:
+    ingress:
+    - ports:
+      - port: 7007
+        protocol: TCP
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Ingress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"backstage-to-gitea","namespace":"backstage"},"spec":{"egress":[{"ports":[{"port":3000,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"gitea"}},"podSelector":{"matchLabels":{"app.kubernetes.io/name":"gitea"}}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    generation: 1
+    name: backstage-to-gitea
+    namespace: backstage
+    resourceVersion: "17015658"
+    uid: 62cda45d-3967-47ea-9965-115a0a36d46f
+  spec:
+    egress:
+    - ports:
+      - port: 3000
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gitea
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: gitea
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"backstage-to-gitea-oidc-nodeport","namespace":"backstage"},"spec":{"egress":[{"ports":[{"port":30081,"protocol":"TCP"}],"to":[{"ipBlock":{"cidr":"110.120.0.3/32"}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    generation: 1
+    name: backstage-to-gitea-oidc-nodeport
+    namespace: backstage
+    resourceVersion: "17015659"
+    uid: 5791044e-4c8e-43f7-9c04-28f4aa0e9aed
+  spec:
+    egress:
+    - ports:
+      - port: 30081
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 110.120.0.3/32
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"backstage-to-k12-dagster","namespace":"backstage"},"spec":{"egress":[{"ports":[{"port":3000,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"k12"}}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-08-28T02:44:23Z"
+    generation: 1
+    name: backstage-to-k12-dagster
+    namespace: backstage
+    resourceVersion: "26330796"
+    uid: 87f37170-23b7-4e7c-8e4f-cadc00486b73
+  spec:
+    egress:
+    - ports:
+      - port: 3000
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: k12
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"training-api","app.kubernetes.io/part-of":"model-platform"},"name":"backstage-to-kcc-training-ray","namespace":"backstage"},"spec":{"egress":[{"ports":[{"port":8265,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kcc-training"}}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-09-02T03:10:25Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: training-api
+      app.kubernetes.io/part-of: model-platform
+    name: backstage-to-kcc-training-ray
+    namespace: backstage
+    resourceVersion: "29589336"
+    uid: 3ff215f4-059e-4585-bb0b-eb9a15297ee9
+  spec:
+    egress:
+    - ports:
+      - port: 8265
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kcc-training
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"model-deployment-operations","app.kubernetes.io/part-of":"model-platform"},"name":"backstage-to-model-deployment-capacity-checker","namespace":"backstage"},"spec":{"egress":[{"ports":[{"port":8080,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"model-serving"}},"podSelector":{"matchLabels":{"app.kubernetes.io/component":"model-deployment-capacity-checker"}}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-09-14T03:11:45Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: model-deployment-operations
+      app.kubernetes.io/part-of: model-platform
+    name: backstage-to-model-deployment-capacity-checker
+    namespace: backstage
+    resourceVersion: "37249242"
+    uid: 2438d8b2-fa12-4e92-b999-e69767a6261c
+  spec:
+    egress:
+    - ports:
+      - port: 8080
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: model-serving
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/component: model-deployment-capacity-checker
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"backstage-to-model-serving-probe","namespace":"backstage"},"spec":{"egress":[{"ports":[{"port":8000,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"model-serving"}},"podSelector":{"matchLabels":{"app.kubernetes.io/part-of":"model-platform"}}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-09-03T10:52:45Z"
+    generation: 1
+    name: backstage-to-model-serving-probe
+    namespace: backstage
+    resourceVersion: "30442388"
+    uid: 08a96d4d-bcf9-4051-a2a3-10796cea8dbf
+  spec:
+    egress:
+    - ports:
+      - port: 8000
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: model-serving
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/part-of: model-platform
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"backstage-to-postgres","namespace":"backstage"},"spec":{"egress":[{"ports":[{"port":5432,"protocol":"TCP"}],"to":[{"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage-postgres"}}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    generation: 1
+    name: backstage-to-postgres
+    namespace: backstage
+    resourceVersion: "17015670"
+    uid: ba748780-d7fc-4fca-9e54-46fb3eae50a8
+  spec:
+    egress:
+    - ports:
+      - port: 5432
+        protocol: TCP
+      to:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: backstage-postgres
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"postgres-from-backstage","namespace":"backstage"},"spec":{"ingress":[{"from":[{"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}}}],"ports":[{"port":5432,"protocol":"TCP"}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage-postgres"}},"policyTypes":["Ingress"]}}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    generation: 1
+    name: postgres-from-backstage
+    namespace: backstage
+    resourceVersion: "17015682"
+    uid: 36c1e067-d19c-42df-ac9d-113787ef6ed4
+  spec:
+    ingress:
+    - from:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: backstage
+      ports:
+      - port: 5432
+        protocol: TCP
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/name: backstage-postgres
+    policyTypes:
+    - Ingress
+kind: List
+metadata:
+  resourceVersion: ""

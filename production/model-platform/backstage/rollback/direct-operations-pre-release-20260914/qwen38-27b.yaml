@@ -1,0 +1,146 @@
+apiVersion: platform.example.com/v1alpha1
+kind: ModelDeployment
+metadata:
+  annotations:
+    argocd.argoproj.io/tracking-id: model-platform-deployment-requests:platform.example.com/ModelDeployment:model-serving/qwen38-27b
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"platform.example.com/v1alpha1","kind":"ModelDeployment","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"model-platform-deployment-requests:platform.example.com/ModelDeployment:model-serving/qwen38-27b","platform.example.com/effective-npu-per-replica":"0","platform.example.com/effective-replicas":"0","platform.example.com/effective-runtime-profile":"qwen38-w8a8-ray-ascend-910b3-tp2-v1","platform.example.com/effective-tensor-parallel-size":"0","platform.example.com/lifecycle-controller":"enabled","platform.example.com/request-mode":"declarative-stopped","platform.example.com/requested-pipeline-parallel-size":"1","platform.example.com/requested-priority":"normal","platform.example.com/requested-replicas":"1","platform.example.com/requested-tensor-parallel-size":"2"},"labels":{"app.kubernetes.io/managed-by":"argocd","app.kubernetes.io/part-of":"model-platform","platform.example.com/requested-by":"gitadmin"},"name":"qwen38-27b","namespace":"model-serving"},"spec":{"access":{"visibility":"internal"},"artifact":{"manifestDigest":"sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f","modelId":"Qwen/Qwen3.8-27B","path":"qwen3.8-27b/w8a8/e823e888ae179eb3be02c1a48899c4f828371376/msmodelslim-w8a8-a3-f2afa9e2","repository":"model-artifacts","revision":"e823e888ae179eb3be02c1a48899c4f828371376"},"cache":{"baseURL":"http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080","image":"110.120.0.3:30670/container-images/model-cache@sha256:3c2ee21efa53da44ec816fe2581ca35088caba91b3648db64949a2aea428db37","readerSecret":"artifact-keeper-model-runtime","revision":"f2afa9e2-r1","size":"40Gi","storageClassName":"model-cache-gpu-local"},"compositionRef":{"name":"modeldeployment-stopped-v2"},"crossplane":{"compositionRef":{"name":"modeldeployment-stopped-v2"},"compositionUpdatePolicy":"Automatic"},"desiredState":"Stopped","modelVersionRef":"qwen3.8-27b-w8a8","placement":{"acceleratorPool":"ascend-a3","nodeSelector":{"accelerator-type":"module-a3-16","kubernetes.io/arch":"arm64","kubernetes.io/hostname":"a3-server-00","node.kubernetes.io/npu.chip.name":"Ascend910"}},"projectRef":"model-serving","runtime":{"headCPU":"2","headMemory":"16Gi","image":"110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942","modelName":"qwen3.8-27b-w8a8","modelPath":"/models/Qwen3.8-27B-w8a8","npuPerWorker":2,"rayVersion":"2.48.0","serveConfigV2":"applications:\n- name: default\n  route_prefix: /\n  import_path: ray.serve.llm:build_openai_app\n  args:\n    llm_configs:\n    - model_loading_config:\n        model_id: qwen3.8-27b-w8a8\n        model_source: /models/Qwen3.8-27B-w8a8\n      deployment_config:\n        num_replicas: 1\n        max_ongoing_requests: 64\n      resources_per_bundle:\n        NPU: 1\n        GPU: 1\n      engine_kwargs:\n        tensor_parallel_size: 2\n        data_parallel_size: 1\n        pipeline_parallel_size: 1\n        distributed_executor_backend: ray\n        quantization: ascend\n        max_model_len: 32768\n        max_num_seqs: 64\n        max_num_batched_tokens: 8192\n        gpu_memory_utilization: 0.9\n        enable_prefix_caching: true\n        trust_remote_code: true\n        safetensors_load_strategy: eager\n        speculative_config:\n          method: qwen3_5_mtp\n          num_speculative_tokens: 3\n          enforce_eager: true\n        compilation_config:\n          cudagraph_mode: FULL_DECODE_ONLY\n","serving":{"dataParallelSize":1,"gpuMemoryUtilization":0.9,"maxModelLen":32768,"maxNumBatchedTokens":8192,"maxNumSeqs":64,"maxOngoingRequests":64,"mtpTokens":3,"pipelineParallelSize":1,"prefixCaching":true,"requestedReplicas":1,"tensorParallelSize":2},"workerCPU":"48","workerMemory":"256Gi","workerReplicas":0},"runtimeProfileRef":"qwen38-w8a8-ray-ascend-910b3-tp2-v1"}}
+    platform.example.com/effective-npu: "0"
+    platform.example.com/effective-npu-per-replica: "0"
+    platform.example.com/effective-replicas: "0"
+    platform.example.com/effective-runtime-profile: qwen38-w8a8-ray-ascend-910b3-tp2-v1
+    platform.example.com/effective-tensor-parallel-size: "0"
+    platform.example.com/effective-worker-replicas: "0"
+    platform.example.com/lifecycle-controller: enabled
+    platform.example.com/request-mode: declarative-stopped
+    platform.example.com/requested-pipeline-parallel-size: "1"
+    platform.example.com/requested-priority: normal
+    platform.example.com/requested-replicas: "1"
+    platform.example.com/requested-tensor-parallel-size: "2"
+  creationTimestamp: "2026-08-19T03:45:26Z"
+  finalizers:
+  - composite.apiextensions.crossplane.io
+  generation: 79
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/part-of: model-platform
+    crossplane.io/composite: qwen38-27b
+    platform.example.com/requested-by: gitadmin
+  name: qwen38-27b
+  namespace: model-serving
+  resourceVersion: "30849688"
+  uid: 660cfc0e-4f41-4763-bd44-34db485fd9c0
+spec:
+  access:
+    visibility: internal
+  artifact:
+    manifestDigest: sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f
+    modelId: Qwen/Qwen3.8-27B
+    path: qwen3.8-27b/w8a8/e823e888ae179eb3be02c1a48899c4f828371376/msmodelslim-w8a8-a3-f2afa9e2
+    repository: model-artifacts
+    revision: e823e888ae179eb3be02c1a48899c4f828371376
+  cache:
+    baseURL: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
+    image: 110.120.0.3:30670/container-images/model-cache@sha256:3c2ee21efa53da44ec816fe2581ca35088caba91b3648db64949a2aea428db37
+    readerSecret: artifact-keeper-model-runtime
+    revision: f2afa9e2-r1
+    size: 40Gi
+    storageClassName: model-cache-gpu-local
+  compositionRef:
+    name: modeldeployment-stopped-v2
+  crossplane:
+    compositionRef:
+      name: modeldeployment-stopped-v2
+    compositionRevisionRef:
+      name: modeldeployment-stopped-v2-0c36c22
+    compositionUpdatePolicy: Automatic
+    resourceRefs:
+    - apiVersion: v1
+      kind: ConfigMap
+      name: qwen38-27b-status
+  desiredState: Stopped
+  modelVersionRef: qwen3.8-27b-w8a8
+  placement:
+    acceleratorPool: ascend-a3
+    nodeSelector:
+      accelerator-type: module-a3-16
+      kubernetes.io/arch: arm64
+      kubernetes.io/hostname: a3-server-00
+      node.kubernetes.io/npu.chip.name: Ascend910
+  projectRef: model-serving
+  runtime:
+    headCPU: "2"
+    headMemory: 16Gi
+    image: 110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942
+    modelName: qwen3.8-27b-w8a8
+    modelPath: /models/Qwen3.8-27B-w8a8
+    npuPerWorker: 2
+    rayVersion: 2.48.0
+    serveConfigV2: |
+      applications:
+      - name: default
+        route_prefix: /
+        import_path: ray.serve.llm:build_openai_app
+        args:
+          llm_configs:
+          - model_loading_config:
+              model_id: qwen3.8-27b-w8a8
+              model_source: /models/Qwen3.8-27B-w8a8
+            deployment_config:
+              num_replicas: 1
+              max_ongoing_requests: 64
+            resources_per_bundle:
+              NPU: 1
+              GPU: 1
+            engine_kwargs:
+              tensor_parallel_size: 2
+              data_parallel_size: 1
+              pipeline_parallel_size: 1
+              distributed_executor_backend: ray
+              quantization: ascend
+              max_model_len: 32768
+              max_num_seqs: 64
+              max_num_batched_tokens: 8192
+              gpu_memory_utilization: 0.9
+              enable_prefix_caching: true
+              trust_remote_code: true
+              safetensors_load_strategy: eager
+              speculative_config:
+                method: qwen3_5_mtp
+                num_speculative_tokens: 3
+                enforce_eager: true
+              compilation_config:
+                cudagraph_mode: FULL_DECODE_ONLY
+    serving:
+      dataParallelSize: 1
+      gpuMemoryUtilization: 0.9
+      maxModelLen: 32768
+      maxNumBatchedTokens: 8192
+      maxNumSeqs: 64
+      maxOngoingRequests: 64
+      mtpTokens: 3
+      pipelineParallelSize: 1
+      prefixCaching: true
+      requestedReplicas: 1
+      tensorParallelSize: 2
+    workerCPU: "48"
+    workerMemory: 256Gi
+    workerReplicas: 0
+  runtimeProfileRef: qwen38-w8a8-ray-ascend-910b3-tp2-v1
+status:
+  conditions:
+  - lastTransitionTime: "2026-09-04T02:09:33Z"
+    observedGeneration: 79
+    reason: ReconcileSuccess
+    status: "True"
+    type: Synced
+  - lastTransitionTime: "2026-09-04T02:09:33Z"
+    observedGeneration: 79
+    reason: Available
+    status: "True"
+    type: Ready
+  - lastTransitionTime: "2026-09-04T02:09:33Z"
+    observedGeneration: 79
+    reason: WatchCircuitClosed
+    status: "True"
+    type: Responsive

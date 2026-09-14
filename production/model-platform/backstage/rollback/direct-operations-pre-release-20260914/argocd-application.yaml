@@ -1,0 +1,260 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"argoproj.io/v1alpha1","kind":"Application","metadata":{"annotations":{},"labels":{"app.kubernetes.io/managed-by":"kubectl","app.kubernetes.io/part-of":"model-platform"},"name":"model-platform-deployment-requests","namespace":"argocd"},"spec":{"destination":{"namespace":"model-serving","server":"https://kubernetes.default.svc"},"project":"model-platform-control-plane","source":{"directory":{"include":"*.yaml","recurse":false},"path":"environments/production/modeldeployments","repoURL":"http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git","targetRevision":"main"},"syncPolicy":{"automated":{"allowEmpty":false,"prune":false,"selfHeal":false},"retry":{"backoff":{"duration":"10s","factor":2,"maxDuration":"2m"},"limit":3},"syncOptions":["CreateNamespace=false","ApplyOutOfSyncOnly=true"]}}}
+  creationTimestamp: "2026-08-19T03:36:49Z"
+  generation: 12131
+  labels:
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/part-of: model-platform
+  name: model-platform-deployment-requests
+  namespace: argocd
+  resourceVersion: "37255735"
+  uid: ef97fe58-c658-472d-a4d2-fd0fa55ea16c
+spec:
+  destination:
+    namespace: model-serving
+    server: https://kubernetes.default.svc
+  project: model-platform-control-plane
+  source:
+    directory:
+      include: '*.yaml'
+    path: environments/production/modeldeployments
+    repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+    targetRevision: main
+  syncPolicy:
+    automated:
+      allowEmpty: false
+      prune: false
+      selfHeal: false
+    retry:
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+      limit: 3
+    syncOptions:
+    - CreateNamespace=false
+    - ApplyOutOfSyncOnly=true
+status:
+  conditions:
+  - lastTransitionTime: "2026-09-14T03:11:45Z"
+    message: Application has 19 orphaned resources
+    type: OrphanedResourceWarning
+  controllerNamespace: argocd
+  health:
+    lastTransitionTime: "2026-08-19T03:45:26Z"
+    status: Healthy
+  history:
+  - deployStartedAt: "2026-09-01T08:44:23Z"
+    deployedAt: "2026-09-01T08:44:25Z"
+    id: 25
+    initiatedBy:
+      automated: true
+    revision: abc759aa9ecbc6989ba1f361a528c236b5e34c67
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-01T08:54:01Z"
+    deployedAt: "2026-09-01T08:54:02Z"
+    id: 26
+    initiatedBy:
+      automated: true
+    revision: 4be09cdb27686c5c75dc407f67ba5aefb7828d60
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-01T09:14:44Z"
+    deployedAt: "2026-09-01T09:14:45Z"
+    id: 27
+    initiatedBy:
+      automated: true
+    revision: 4a20a30e333dc7f25589eec3bd0ac2ac79f77d9c
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-01T09:28:19Z"
+    deployedAt: "2026-09-01T09:28:20Z"
+    id: 28
+    initiatedBy:
+      automated: true
+    revision: 6cba9b1267a8737bb424974fe22f59b313809a42
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-02T07:33:54Z"
+    deployedAt: "2026-09-02T07:33:56Z"
+    id: 29
+    initiatedBy:
+      automated: true
+    revision: 64ad7680acde91bdd0ac69e9e3e2d845d8ea7a4e
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-02T07:50:11Z"
+    deployedAt: "2026-09-02T07:50:13Z"
+    id: 30
+    initiatedBy:
+      automated: true
+    revision: 11205a0ed08c39a12dc99d423f04855b972c0af4
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-03T03:15:55Z"
+    deployedAt: "2026-09-03T03:15:57Z"
+    id: 31
+    initiatedBy:
+      automated: true
+    revision: da51bcfc2a1a85530e8eef6930ea04646ad1c1c9
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-04T01:18:43Z"
+    deployedAt: "2026-09-04T01:18:44Z"
+    id: 32
+    initiatedBy:
+      automated: true
+    revision: a41247dbf409b8b0c7df230f007b26204dafd0fc
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-04T01:48:04Z"
+    deployedAt: "2026-09-04T01:48:05Z"
+    id: 33
+    initiatedBy:
+      automated: true
+    revision: 05f762c973a9c19fe5e924098d590f5de59ee97f
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  - deployStartedAt: "2026-09-04T02:09:31Z"
+    deployedAt: "2026-09-04T02:09:32Z"
+    id: 34
+    initiatedBy:
+      automated: true
+    revision: f4d5f28a54c920fd22f89032508190f96a11bdd2
+    source:
+      directory:
+        include: '*.yaml'
+      path: environments/production/modeldeployments
+      repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+      targetRevision: main
+  operationState:
+    finishedAt: "2026-09-04T02:09:32Z"
+    message: successfully synced (all tasks run)
+    operation:
+      initiatedBy:
+        automated: true
+      retry:
+        backoff:
+          duration: 10s
+          factor: 2
+          maxDuration: 2m
+        limit: 3
+      sync:
+        revision: f4d5f28a54c920fd22f89032508190f96a11bdd2
+        source:
+          directory:
+            include: '*.yaml'
+          path: environments/production/modeldeployments
+          repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+          targetRevision: main
+        syncOptions:
+        - CreateNamespace=false
+        - ApplyOutOfSyncOnly=true
+    phase: Succeeded
+    startedAt: "2026-09-04T02:09:31Z"
+    syncResult:
+      resources:
+      - group: platform.example.com
+        hookPhase: Running
+        kind: ModelDeployment
+        message: modeldeployment.platform.example.com/qwen38-27b configured
+        name: qwen38-27b
+        namespace: model-serving
+        status: Synced
+        syncPhase: Sync
+        version: v1alpha1
+      revision: f4d5f28a54c920fd22f89032508190f96a11bdd2
+      source:
+        directory:
+          include: '*.yaml'
+        path: environments/production/modeldeployments
+        repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+        targetRevision: main
+  reconciledAt: "2026-09-14T03:25:56Z"
+  resourceHealthSource: appTree
+  resources:
+  - group: apiextensions.crossplane.io
+    kind: CompositeResourceDefinition
+    name: modeldeployments.platform.example.com
+    status: Synced
+    version: v2
+  - group: apiextensions.crossplane.io
+    kind: Composition
+    name: modeldeployment-stopped-v1alpha1
+    status: Synced
+    version: v1
+  - group: apiextensions.crossplane.io
+    kind: Composition
+    name: modeldeployment-stopped-v2
+    status: Synced
+    version: v1
+  - group: platform.example.com
+    kind: ModelDeployment
+    name: qwen38-27b
+    namespace: model-serving
+    requiresPruning: true
+    status: OutOfSync
+    version: v1alpha1
+  - group: platform.example.com
+    kind: ModelDeployment
+    name: qwen38-stopped-auto-smoke
+    namespace: model-serving
+    status: Synced
+    version: v1alpha1
+  sourceHydrator: {}
+  sourceType: Directory
+  summary: {}
+  sync:
+    comparedTo:
+      destination:
+        namespace: model-serving
+        server: https://kubernetes.default.svc
+      source:
+        directory:
+          include: '*.yaml'
+        path: environments/production/modeldeployments
+        repoURL: http://gitea-http.gitea.svc.cluster.local:3000/gitadmin/model-platform-config.git
+        targetRevision: main
+    revision: 0227e30cb9317949eaf14ee2580e87515188c37e
+    status: OutOfSync

@@ -1,0 +1,348 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  annotations:
+    argocd.argoproj.io/tracking-id: model-platform-deployment-requests:apiextensions.crossplane.io/CompositeResourceDefinition:model-serving/modeldeployments.platform.example.com
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apiextensions.crossplane.io/v2","kind":"CompositeResourceDefinition","metadata":{"annotations":{"argocd.argoproj.io/tracking-id":"model-platform-deployment-requests:apiextensions.crossplane.io/CompositeResourceDefinition:model-serving/modeldeployments.platform.example.com"},"labels":{"app.kubernetes.io/component":"deployment-api","app.kubernetes.io/part-of":"model-platform"},"name":"modeldeployments.platform.example.com"},"spec":{"defaultCompositionRef":{"name":"modeldeployment-runtime-zero-v1alpha1"},"defaultCompositionUpdatePolicy":"Manual","group":"platform.example.com","names":{"kind":"ModelDeployment","plural":"modeldeployments","shortNames":["mdp"],"singular":"modeldeployment"},"scope":"Namespaced","versions":[{"name":"v1alpha1","referenceable":true,"schema":{"openAPIV3Schema":{"properties":{"spec":{"properties":{"access":{"properties":{"visibility":{"enum":["internal","private"],"type":"string"}},"required":["visibility"],"type":"object"},"artifact":{"properties":{"manifestDigest":{"pattern":"^sha256:[0-9a-f]{64}$","type":"string"},"modelId":{"pattern":"^[^/\\s]+/[^/\\s]+$","type":"string"},"path":{"pattern":"^[A-Za-z0-9][A-Za-z0-9._/-]*$","type":"string"},"repository":{"const":"model-artifacts","type":"string"},"revision":{"pattern":"^[0-9a-f]{8,64}$","type":"string"}},"required":["modelId","revision","repository","path","manifestDigest"],"type":"object"},"cache":{"properties":{"baseURL":{"pattern":"^https?://[A-Za-z0-9.-]+(:[0-9]+)?$","type":"string"},"image":{"pattern":"^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$","type":"string"},"readerSecret":{"const":"artifact-keeper-model-runtime","type":"string"},"revision":{"pattern":"^[a-z0-9][a-z0-9-]{0,15}$","type":"string"},"size":{"pattern":"^[1-9][0-9]*(Gi|Ti)$","type":"string"},"storageClassName":{"pattern":"^model-cache-[a-z0-9-]+$","type":"string"}},"required":["image","baseURL","readerSecret","revision","storageClassName","size"],"type":"object"},"compositionRef":{"properties":{"name":{"enum":["modeldeployment-control-plane-v1alpha1","modeldeployment-runtime-zero-v1alpha1","modeldeployment-qwen38-ray-v1alpha1","modeldeployment-stopped-v1alpha1","modeldeployment-qwen38-ray-v2","modeldeployment-stopped-v2"],"type":"string"}},"required":["name"],"type":"object"},"desiredState":{"enum":["Stopped","Running"],"type":"string"},"modelVersionRef":{"enum":["qwen3.6-27b-w8a8-20260806","qwen3.8-27b-w8a8"],"type":"string"},"placement":{"properties":{"acceleratorPool":{"enum":["control-plane-only","ascend-a3","ascend-910b3"],"type":"string"},"nodeSelector":{"properties":{"accelerator-type":{"enum":["module-a3-16"],"type":"string"},"kubernetes.io/arch":{"const":"arm64","type":"string"},"kubernetes.io/hostname":{"enum":["gpu-server-00","a3-server-00"],"type":"string"},"node.kubernetes.io/npu.chip.name":{"enum":["910B3","Ascend910"],"type":"string"}},"required":["kubernetes.io/arch","kubernetes.io/hostname","node.kubernetes.io/npu.chip.name"],"type":"object"},"staticDeviceAllocation":{"description":"Optional Ascend device-plugin allocation list, for example Ascend910-8,Ascend910-9. Use only when physical workloads outside Kubernetes make automatic allocation unsafe.","pattern":"^Ascend910-([0-9]|1[0-5])(,Ascend910-([0-9]|1[0-5]))*$","type":"string"}},"required":["acceleratorPool"],"type":"object"},"projectRef":{"enum":["model-serving"],"type":"string"},"runtime":{"properties":{"headCPU":{"pattern":"^[0-9]+m?$","type":"string"},"headMemory":{"pattern":"^[0-9]+(Mi|Gi)$","type":"string"},"image":{"pattern":"^110\\.120\\.0\\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$","type":"string"},"modelName":{"pattern":"^[a-z0-9][a-z0-9.-]*$","type":"string"},"modelPath":{"pattern":"^/models/[A-Za-z0-9._/-]+$","type":"string"},"npuPerWorker":{"enum":[2,8],"type":"integer"},"rayVersion":{"pattern":"^[0-9]+\\.[0-9]+\\.[0-9]+$","type":"string"},"serveConfigV2":{"maxLength":20000,"minLength":1,"type":"string"},"serving":{"properties":{"dataParallelSize":{"enum":[1,2,4],"type":"integer"},"gpuMemoryUtilization":{"enum":[0.8,0.85,0.9],"type":"number"},"maxModelLen":{"enum":[8192,16384,32768],"type":"integer"},"maxNumBatchedTokens":{"enum":[2048,4096,8192],"type":"integer"},"maxNumSeqs":{"enum":[16,32,64],"type":"integer"},"maxOngoingRequests":{"enum":[16,32,64],"type":"integer"},"mtpTokens":{"enum":[0,1,3],"type":"integer"},"pipelineParallelSize":{"enum":[1,2],"type":"integer"},"prefixCaching":{"type":"boolean"},"requestedReplicas":{"enum":[1,2,4],"type":"integer"},"tensorParallelSize":{"enum":[1,2,4,8],"type":"integer"}},"required":["maxModelLen","maxNumSeqs","maxNumBatchedTokens","gpuMemoryUtilization","prefixCaching","mtpTokens","maxOngoingRequests"],"type":"object"},"workerCPU":{"pattern":"^[0-9]+m?$","type":"string"},"workerMemory":{"pattern":"^[0-9]+(Mi|Gi)$","type":"string"},"workerReplicas":{"enum":[0,1,2,4],"type":"integer"}},"required":["image","rayVersion","modelPath","modelName","serveConfigV2","serving","headCPU","headMemory","workerCPU","workerMemory","npuPerWorker","workerReplicas"],"type":"object"},"runtimeProfileRef":{"enum":["qwen36-w8a8-ascend-a3-v1","qwen38-w8a8-ray-ascend-910b3-v1","qwen38-w8a8-ray-ascend-910b3-tp2-v1"],"type":"string"}},"required":["projectRef","modelVersionRef","runtimeProfileRef","desiredState","placement","access"],"type":"object"},"status":{"properties":{"message":{"type":"string"},"observedModelVersionRef":{"type":"string"},"observedRuntimeProfileRef":{"type":"string"},"phase":{"enum":["Pending","AwaitingApproval","PreparingCache","Deploying","Running","Stopped","Failed"],"type":"string"}},"type":"object"}},"type":"object"}},"served":true}]}}
+    platform.example.com/reconcile: "1787111003"
+  creationTimestamp: "2026-08-11T09:05:03Z"
+  finalizers:
+  - defined.apiextensions.crossplane.io
+  generation: 13
+  labels:
+    app.kubernetes.io/component: deployment-api
+    app.kubernetes.io/part-of: model-platform
+  name: modeldeployments.platform.example.com
+  resourceVersion: "30235543"
+  uid: 347943ad-1b57-46fa-a30b-a9b59b9cee0f
+spec:
+  defaultCompositeDeletePolicy: Background
+  defaultCompositionRef:
+    name: modeldeployment-runtime-zero-v1alpha1
+  defaultCompositionUpdatePolicy: Manual
+  group: platform.example.com
+  names:
+    kind: ModelDeployment
+    plural: modeldeployments
+    shortNames:
+    - mdp
+    singular: modeldeployment
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              access:
+                properties:
+                  visibility:
+                    enum:
+                    - internal
+                    - private
+                    type: string
+                required:
+                - visibility
+                type: object
+              artifact:
+                properties:
+                  manifestDigest:
+                    pattern: ^sha256:[0-9a-f]{64}$
+                    type: string
+                  modelId:
+                    pattern: ^[^/\s]+/[^/\s]+$
+                    type: string
+                  path:
+                    pattern: ^[A-Za-z0-9][A-Za-z0-9._/-]*$
+                    type: string
+                  repository:
+                    const: model-artifacts
+                    type: string
+                  revision:
+                    pattern: ^[0-9a-f]{8,64}$
+                    type: string
+                required:
+                - modelId
+                - revision
+                - repository
+                - path
+                - manifestDigest
+                type: object
+              cache:
+                properties:
+                  baseURL:
+                    pattern: ^https?://[A-Za-z0-9.-]+(:[0-9]+)?$
+                    type: string
+                  image:
+                    pattern: ^110\.120\.0\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$
+                    type: string
+                  readerSecret:
+                    const: artifact-keeper-model-runtime
+                    type: string
+                  revision:
+                    pattern: ^[a-z0-9][a-z0-9-]{0,15}$
+                    type: string
+                  size:
+                    pattern: ^[1-9][0-9]*(Gi|Ti)$
+                    type: string
+                  storageClassName:
+                    pattern: ^model-cache-[a-z0-9-]+$
+                    type: string
+                required:
+                - image
+                - baseURL
+                - readerSecret
+                - revision
+                - storageClassName
+                - size
+                type: object
+              compositionRef:
+                properties:
+                  name:
+                    enum:
+                    - modeldeployment-control-plane-v1alpha1
+                    - modeldeployment-runtime-zero-v1alpha1
+                    - modeldeployment-qwen38-ray-v1alpha1
+                    - modeldeployment-stopped-v1alpha1
+                    - modeldeployment-qwen38-ray-v2
+                    - modeldeployment-stopped-v2
+                    type: string
+                required:
+                - name
+                type: object
+              desiredState:
+                enum:
+                - Stopped
+                - Running
+                type: string
+              modelVersionRef:
+                enum:
+                - qwen3.6-27b-w8a8-20260806
+                - qwen3.8-27b-w8a8
+                type: string
+              placement:
+                properties:
+                  acceleratorPool:
+                    enum:
+                    - control-plane-only
+                    - ascend-a3
+                    - ascend-910b3
+                    type: string
+                  nodeSelector:
+                    properties:
+                      accelerator-type:
+                        enum:
+                        - module-a3-16
+                        type: string
+                      kubernetes.io/arch:
+                        const: arm64
+                        type: string
+                      kubernetes.io/hostname:
+                        enum:
+                        - gpu-server-00
+                        - a3-server-00
+                        type: string
+                      node.kubernetes.io/npu.chip.name:
+                        enum:
+                        - 910B3
+                        - Ascend910
+                        type: string
+                    required:
+                    - kubernetes.io/arch
+                    - kubernetes.io/hostname
+                    - node.kubernetes.io/npu.chip.name
+                    type: object
+                  staticDeviceAllocation:
+                    description: Optional Ascend device-plugin allocation list, for
+                      example Ascend910-8,Ascend910-9. Use only when physical workloads
+                      outside Kubernetes make automatic allocation unsafe.
+                    pattern: ^Ascend910-([0-9]|1[0-5])(,Ascend910-([0-9]|1[0-5]))*$
+                    type: string
+                required:
+                - acceleratorPool
+                type: object
+              projectRef:
+                enum:
+                - model-serving
+                type: string
+              runtime:
+                properties:
+                  headCPU:
+                    pattern: ^[0-9]+m?$
+                    type: string
+                  headMemory:
+                    pattern: ^[0-9]+(Mi|Gi)$
+                    type: string
+                  image:
+                    pattern: ^110\.120\.0\.3:30670/container-images/.+@sha256:[0-9a-f]{64}$
+                    type: string
+                  modelName:
+                    pattern: ^[a-z0-9][a-z0-9.-]*$
+                    type: string
+                  modelPath:
+                    pattern: ^/models/[A-Za-z0-9._/-]+$
+                    type: string
+                  npuPerWorker:
+                    enum:
+                    - 2
+                    - 8
+                    type: integer
+                  rayVersion:
+                    pattern: ^[0-9]+\.[0-9]+\.[0-9]+$
+                    type: string
+                  serveConfigV2:
+                    maxLength: 20000
+                    minLength: 1
+                    type: string
+                  serving:
+                    properties:
+                      dataParallelSize:
+                        enum:
+                        - 1
+                        - 2
+                        - 4
+                        type: integer
+                      gpuMemoryUtilization:
+                        enum:
+                        - 0.8
+                        - 0.85
+                        - 0.9
+                        type: number
+                      maxModelLen:
+                        enum:
+                        - 8192
+                        - 16384
+                        - 32768
+                        type: integer
+                      maxNumBatchedTokens:
+                        enum:
+                        - 2048
+                        - 4096
+                        - 8192
+                        type: integer
+                      maxNumSeqs:
+                        enum:
+                        - 16
+                        - 32
+                        - 64
+                        type: integer
+                      maxOngoingRequests:
+                        enum:
+                        - 16
+                        - 32
+                        - 64
+                        type: integer
+                      mtpTokens:
+                        enum:
+                        - 0
+                        - 1
+                        - 3
+                        type: integer
+                      pipelineParallelSize:
+                        enum:
+                        - 1
+                        - 2
+                        type: integer
+                      prefixCaching:
+                        type: boolean
+                      requestedReplicas:
+                        enum:
+                        - 1
+                        - 2
+                        - 4
+                        type: integer
+                      tensorParallelSize:
+                        enum:
+                        - 1
+                        - 2
+                        - 4
+                        - 8
+                        type: integer
+                    required:
+                    - maxModelLen
+                    - maxNumSeqs
+                    - maxNumBatchedTokens
+                    - gpuMemoryUtilization
+                    - prefixCaching
+                    - mtpTokens
+                    - maxOngoingRequests
+                    type: object
+                  workerCPU:
+                    pattern: ^[0-9]+m?$
+                    type: string
+                  workerMemory:
+                    pattern: ^[0-9]+(Mi|Gi)$
+                    type: string
+                  workerReplicas:
+                    enum:
+                    - 0
+                    - 1
+                    - 2
+                    - 4
+                    type: integer
+                required:
+                - image
+                - rayVersion
+                - modelPath
+                - modelName
+                - serveConfigV2
+                - serving
+                - headCPU
+                - headMemory
+                - workerCPU
+                - workerMemory
+                - npuPerWorker
+                - workerReplicas
+                type: object
+              runtimeProfileRef:
+                enum:
+                - qwen36-w8a8-ascend-a3-v1
+                - qwen38-w8a8-ray-ascend-910b3-v1
+                - qwen38-w8a8-ray-ascend-910b3-tp2-v1
+                type: string
+            required:
+            - projectRef
+            - modelVersionRef
+            - runtimeProfileRef
+            - desiredState
+            - placement
+            - access
+            type: object
+          status:
+            properties:
+              message:
+                type: string
+              observedModelVersionRef:
+                type: string
+              observedRuntimeProfileRef:
+                type: string
+              phase:
+                enum:
+                - Pending
+                - AwaitingApproval
+                - PreparingCache
+                - Deploying
+                - Running
+                - Stopped
+                - Failed
+                type: string
+            type: object
+        type: object
+    served: true
+status:
+  conditions:
+  - lastTransitionTime: "2026-09-03T03:15:57Z"
+    observedGeneration: 13
+    reason: WatchingCompositeResource
+    status: "True"
+    type: Established
+  controllers:
+    compositeResourceClaimType:
+      apiVersion: ""
+      kind: ""
+    compositeResourceType:
+      apiVersion: platform.example.com/v1alpha1
+      kind: ModelDeployment

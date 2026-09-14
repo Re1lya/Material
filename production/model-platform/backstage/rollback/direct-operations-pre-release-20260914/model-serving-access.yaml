@@ -1,0 +1,565 @@
+apiVersion: v1
+items:
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"model-deployment-operations","app.kubernetes.io/part-of":"model-platform"},"name":"backstage-model-deployment-operations","namespace":"model-serving"},"rules":[{"apiGroups":["platform.example.com"],"resourceNames":["qwen38-27b"],"resources":["modeldeployments"],"verbs":["get","patch"]}]}
+    creationTimestamp: "2026-09-14T03:11:44Z"
+    labels:
+      app.kubernetes.io/component: model-deployment-operations
+      app.kubernetes.io/part-of: model-platform
+    name: backstage-model-deployment-operations
+    namespace: model-serving
+    resourceVersion: "37249223"
+    uid: a9dd5a6c-04eb-449a-8fda-f9cfd09984fe
+  rules:
+  - apiGroups:
+    - platform.example.com
+    resourceNames:
+    - qwen38-27b
+    resources:
+    - modeldeployments
+    verbs:
+    - get
+    - patch
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"backstage-model-health","app.kubernetes.io/part-of":"model-platform"},"name":"backstage-model-health-read-only","namespace":"model-serving"},"rules":[{"apiGroups":["discovery.k8s.io"],"resources":["endpointslices"],"verbs":["get","list","watch"]}]}
+    creationTimestamp: "2026-09-03T10:52:34Z"
+    labels:
+      app.kubernetes.io/component: backstage-model-health
+      app.kubernetes.io/part-of: model-platform
+    name: backstage-model-health-read-only
+    namespace: model-serving
+    resourceVersion: "30442296"
+    uid: 964ab863-3aba-4d91-ae44-4d7de70a9cfb
+  rules:
+  - apiGroups:
+    - discovery.k8s.io
+    resources:
+    - endpointslices
+    verbs:
+    - get
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"annotations":{},"name":"backstage-read-only","namespace":"model-serving"},"rules":[{"apiGroups":[""],"resources":["pods","pods/log","configmaps","services"],"verbs":["get","list","watch"]},{"apiGroups":["apps"],"resources":["deployments","replicasets","statefulsets"],"verbs":["get","list","watch"]},{"apiGroups":["batch"],"resources":["jobs"],"verbs":["get","list","watch"]},{"apiGroups":["platform.example.com"],"resources":["modeldeployments"],"verbs":["get","list","watch"]},{"apiGroups":["ray.io"],"resources":["rayservices","rayclusters"],"verbs":["get","list","watch"]},{"apiGroups":[""],"resources":["events"],"verbs":["get","list","watch"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list","watch"]}]}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    name: backstage-read-only
+    namespace: model-serving
+    resourceVersion: "30824380"
+    uid: ce028fab-128f-47d3-99a1-78971a869979
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - pods
+    - pods/log
+    - configmaps
+    - services
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - apps
+    resources:
+    - deployments
+    - replicasets
+    - statefulsets
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - batch
+    resources:
+    - jobs
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - platform.example.com
+    resources:
+    - modeldeployments
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - ray.io
+    resources:
+    - rayservices
+    - rayclusters
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - events
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - ""
+    resources:
+    - persistentvolumeclaims
+    verbs:
+    - get
+    - list
+    - watch
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"annotations":{},"labels":{"app.kubernetes.io/name":"inference-lifecycle-controller","app.kubernetes.io/part-of":"model-platform"},"name":"inference-lifecycle-controller","namespace":"model-serving"},"rules":[{"apiGroups":["platform.example.com"],"resourceNames":["qwen38-27b"],"resources":["modeldeployments"],"verbs":["get"]},{"apiGroups":["ray.io"],"resourceNames":["qwen38-27b"],"resources":["rayservices"],"verbs":["get","patch"]},{"apiGroups":["ray.io"],"resources":["rayclusters"],"verbs":["get","list","delete"]}]}
+    creationTimestamp: "2026-08-31T03:10:12Z"
+    labels:
+      app.kubernetes.io/name: inference-lifecycle-controller
+      app.kubernetes.io/part-of: model-platform
+    name: inference-lifecycle-controller
+    namespace: model-serving
+    resourceVersion: "28290362"
+    uid: 549074ef-707a-4f79-94e1-3706c82d2af6
+  rules:
+  - apiGroups:
+    - platform.example.com
+    resourceNames:
+    - qwen38-27b
+    resources:
+    - modeldeployments
+    verbs:
+    - get
+  - apiGroups:
+    - ray.io
+    resourceNames:
+    - qwen38-27b
+    resources:
+    - rayservices
+    verbs:
+    - get
+    - patch
+  - apiGroups:
+    - ray.io
+    resources:
+    - rayclusters
+    verbs:
+    - get
+    - list
+    - delete
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"annotations":{},"name":"model-capacity-reader-serving","namespace":"model-serving"},"rules":[{"apiGroups":["batch"],"resources":["jobs"],"verbs":["get","list"]},{"apiGroups":["ray.io"],"resources":["rayservices","rayclusters"],"verbs":["get","list"]},{"apiGroups":["platform.example.com"],"resources":["modeldeployments"],"verbs":["get","list"]}]}
+    creationTimestamp: "2026-08-28T09:57:58Z"
+    name: model-capacity-reader-serving
+    namespace: model-serving
+    resourceVersion: "26532573"
+    uid: 68a08db0-3bd0-4817-b9a9-5a0f435a58f1
+  rules:
+  - apiGroups:
+    - batch
+    resources:
+    - jobs
+    verbs:
+    - get
+    - list
+  - apiGroups:
+    - ray.io
+    resources:
+    - rayservices
+    - rayclusters
+    verbs:
+    - get
+    - list
+  - apiGroups:
+    - platform.example.com
+    resources:
+    - modeldeployments
+    verbs:
+    - get
+    - list
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"annotations":{},"name":"model-deployment-cache-reaper","namespace":"model-serving"},"rules":[{"apiGroups":[""],"resources":["pods"],"verbs":["get","list","delete"]},{"apiGroups":["batch"],"resources":["jobs"],"verbs":["get","list"]},{"apiGroups":[""],"resources":["persistentvolumeclaims"],"verbs":["get","list"]},{"apiGroups":["ray.io"],"resources":["rayservices","rayclusters"],"verbs":["get","list"]},{"apiGroups":["platform.example.com"],"resourceNames":["qwen38-27b"],"resources":["modeldeployments"],"verbs":["get"]}]}
+    creationTimestamp: "2026-09-14T03:11:44Z"
+    name: model-deployment-cache-reaper
+    namespace: model-serving
+    resourceVersion: "37249224"
+    uid: 7ba1bb90-d88c-48e4-a4ff-5933ea5da819
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - pods
+    verbs:
+    - get
+    - list
+    - delete
+  - apiGroups:
+    - batch
+    resources:
+    - jobs
+    verbs:
+    - get
+    - list
+  - apiGroups:
+    - ""
+    resources:
+    - persistentvolumeclaims
+    verbs:
+    - get
+    - list
+  - apiGroups:
+    - ray.io
+    resources:
+    - rayservices
+    - rayclusters
+    verbs:
+    - get
+    - list
+  - apiGroups:
+    - platform.example.com
+    resourceNames:
+    - qwen38-27b
+    resources:
+    - modeldeployments
+    verbs:
+    - get
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"Role","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"provider-kubernetes","app.kubernetes.io/part-of":"model-platform"},"name":"model-serving-provider-kubernetes","namespace":"model-serving"},"rules":[{"apiGroups":[""],"resources":["configmaps","persistentvolumeclaims","services"],"verbs":["get","list","watch","create","update","patch","delete"]},{"apiGroups":["batch"],"resources":["jobs"],"verbs":["get","list","watch","create","update","patch","delete"]},{"apiGroups":["networking.k8s.io"],"resources":["networkpolicies"],"verbs":["get","list","watch","create","update","patch","delete"]},{"apiGroups":["ray.io"],"resources":["rayservices","rayservices/status"],"verbs":["get","list","watch","create","update","patch","delete"]}]}
+    creationTimestamp: "2026-08-18T06:28:42Z"
+    labels:
+      app.kubernetes.io/component: provider-kubernetes
+      app.kubernetes.io/part-of: model-platform
+    name: model-serving-provider-kubernetes
+    namespace: model-serving
+    resourceVersion: "20108012"
+    uid: 4ab705dd-224e-4f47-a405-248adefcecb0
+  rules:
+  - apiGroups:
+    - ""
+    resources:
+    - configmaps
+    - persistentvolumeclaims
+    - services
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+  - apiGroups:
+    - batch
+    resources:
+    - jobs
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+  - apiGroups:
+    - networking.k8s.io
+    resources:
+    - networkpolicies
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+  - apiGroups:
+    - ray.io
+    resources:
+    - rayservices
+    - rayservices/status
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"model-deployment-operations","app.kubernetes.io/part-of":"model-platform"},"name":"backstage-model-deployment-operations","namespace":"model-serving"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"backstage-model-deployment-operations"},"subjects":[{"kind":"ServiceAccount","name":"backstage","namespace":"backstage"}]}
+    creationTimestamp: "2026-09-14T03:11:44Z"
+    labels:
+      app.kubernetes.io/component: model-deployment-operations
+      app.kubernetes.io/part-of: model-platform
+    name: backstage-model-deployment-operations
+    namespace: model-serving
+    resourceVersion: "37249228"
+    uid: 8f4dc702-8645-47b7-ac47-e9e0d60aad5a
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: backstage-model-deployment-operations
+  subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"backstage-model-health","app.kubernetes.io/part-of":"model-platform"},"name":"backstage-model-health-read-only","namespace":"model-serving"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"backstage-model-health-read-only"},"subjects":[{"kind":"ServiceAccount","name":"backstage","namespace":"backstage"}]}
+    creationTimestamp: "2026-09-03T10:52:34Z"
+    labels:
+      app.kubernetes.io/component: backstage-model-health
+      app.kubernetes.io/part-of: model-platform
+    name: backstage-model-health-read-only
+    namespace: model-serving
+    resourceVersion: "30442297"
+    uid: 83eec152-b8e1-44e3-9e3c-2702d56c4334
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: backstage-model-health-read-only
+  subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"annotations":{},"name":"backstage-read-only","namespace":"model-serving"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"backstage-read-only"},"subjects":[{"kind":"ServiceAccount","name":"backstage","namespace":"backstage"}]}
+    creationTimestamp: "2026-08-13T08:25:31Z"
+    name: backstage-read-only
+    namespace: model-serving
+    resourceVersion: "17015636"
+    uid: 2d54f2f2-b2bd-48c9-bf33-701ce890cf13
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: backstage-read-only
+  subjects:
+  - kind: ServiceAccount
+    name: backstage
+    namespace: backstage
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"annotations":{},"labels":{"app.kubernetes.io/name":"inference-lifecycle-controller","app.kubernetes.io/part-of":"model-platform"},"name":"inference-lifecycle-controller","namespace":"model-serving"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"inference-lifecycle-controller"},"subjects":[{"kind":"ServiceAccount","name":"inference-lifecycle-controller","namespace":"model-platform-system"}]}
+    creationTimestamp: "2026-08-31T03:10:12Z"
+    labels:
+      app.kubernetes.io/name: inference-lifecycle-controller
+      app.kubernetes.io/part-of: model-platform
+    name: inference-lifecycle-controller
+    namespace: model-serving
+    resourceVersion: "28290363"
+    uid: 510be070-208a-4236-9ab8-c3456d239a30
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: inference-lifecycle-controller
+  subjects:
+  - kind: ServiceAccount
+    name: inference-lifecycle-controller
+    namespace: model-platform-system
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"annotations":{},"name":"model-capacity-reader-serving","namespace":"model-serving"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"model-capacity-reader-serving"},"subjects":[{"kind":"ServiceAccount","name":"model-capacity-reader","namespace":"model-platform-ci"}]}
+    creationTimestamp: "2026-08-28T09:57:58Z"
+    name: model-capacity-reader-serving
+    namespace: model-serving
+    resourceVersion: "26532574"
+    uid: 32d6f204-fd4e-46ac-8ba2-88eea72c8fae
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: model-capacity-reader-serving
+  subjects:
+  - kind: ServiceAccount
+    name: model-capacity-reader
+    namespace: model-platform-ci
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"annotations":{},"name":"model-deployment-cache-reaper","namespace":"model-serving"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"model-deployment-cache-reaper"},"subjects":[{"kind":"ServiceAccount","name":"model-deployment-cache-reaper","namespace":"model-serving"}]}
+    creationTimestamp: "2026-09-14T03:11:44Z"
+    name: model-deployment-cache-reaper
+    namespace: model-serving
+    resourceVersion: "37249229"
+    uid: 7ad0984d-dd53-4dea-9765-4492f4ede167
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: model-deployment-cache-reaper
+  subjects:
+  - kind: ServiceAccount
+    name: model-deployment-cache-reaper
+    namespace: model-serving
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"rbac.authorization.k8s.io/v1","kind":"RoleBinding","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"provider-kubernetes","app.kubernetes.io/part-of":"model-platform"},"name":"model-serving-provider-kubernetes","namespace":"model-serving"},"roleRef":{"apiGroup":"rbac.authorization.k8s.io","kind":"Role","name":"model-serving-provider-kubernetes"},"subjects":[{"kind":"ServiceAccount","name":"provider-kubernetes","namespace":"crossplane-system"}]}
+    creationTimestamp: "2026-08-18T06:28:42Z"
+    labels:
+      app.kubernetes.io/component: provider-kubernetes
+      app.kubernetes.io/part-of: model-platform
+    name: model-serving-provider-kubernetes
+    namespace: model-serving
+    resourceVersion: "20108013"
+    uid: 001873a3-c0f7-45f0-a98f-37a4f33cc30a
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: Role
+    name: model-serving-provider-kubernetes
+  subjects:
+  - kind: ServiceAccount
+    name: provider-kubernetes
+    namespace: crossplane-system
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"model-deployment-capacity-checker-egress","namespace":"model-serving"},"spec":{"egress":[{"ports":[{"port":53,"protocol":"UDP"},{"port":53,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}]},{"ports":[{"port":443,"protocol":"TCP"}],"to":[{"ipBlock":{"cidr":"10.43.0.1/32"}}]},{"ports":[{"port":6443,"protocol":"TCP"}],"to":[{"ipBlock":{"cidr":"110.120.0.3/32"}}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/component":"model-deployment-capacity-checker"}},"policyTypes":["Egress"]}}
+    creationTimestamp: "2026-09-14T03:11:45Z"
+    generation: 1
+    name: model-deployment-capacity-checker-egress
+    namespace: model-serving
+    resourceVersion: "37249244"
+    uid: 15d4ab51-86fd-4789-a5a4-757494ff9e28
+  spec:
+    egress:
+    - ports:
+      - port: 53
+        protocol: UDP
+      - port: 53
+        protocol: TCP
+      to:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: kube-system
+        podSelector:
+          matchLabels:
+            k8s-app: kube-dns
+    - ports:
+      - port: 443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 10.43.0.1/32
+    - ports:
+      - port: 6443
+        protocol: TCP
+      to:
+      - ipBlock:
+          cidr: 110.120.0.3/32
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/component: model-deployment-capacity-checker
+    policyTypes:
+    - Egress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"labels":{"app.kubernetes.io/component":"model-deployment-operations","app.kubernetes.io/part-of":"model-platform"},"name":"model-deployment-capacity-checker-from-backstage","namespace":"model-serving"},"spec":{"ingress":[{"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"backstage"}},"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}}}],"ports":[{"port":8080,"protocol":"TCP"}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/component":"model-deployment-capacity-checker"}},"policyTypes":["Ingress"]}}
+    creationTimestamp: "2026-09-14T03:11:45Z"
+    generation: 1
+    labels:
+      app.kubernetes.io/component: model-deployment-operations
+      app.kubernetes.io/part-of: model-platform
+    name: model-deployment-capacity-checker-from-backstage
+    namespace: model-serving
+    resourceVersion: "37249245"
+    uid: 9546c52c-02b7-4491-9e04-6f6a716c79a5
+  spec:
+    ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: backstage
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: backstage
+      ports:
+      - port: 8080
+        protocol: TCP
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/component: model-deployment-capacity-checker
+    policyTypes:
+    - Ingress
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    annotations:
+      kubectl.kubernetes.io/last-applied-configuration: |
+        {"apiVersion":"networking.k8s.io/v1","kind":"NetworkPolicy","metadata":{"annotations":{},"name":"model-serving-allow-backstage-probe","namespace":"model-serving"},"spec":{"ingress":[{"from":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"backstage"}},"podSelector":{"matchLabels":{"app.kubernetes.io/name":"backstage"}}}],"ports":[{"port":8000,"protocol":"TCP"}]}],"podSelector":{"matchLabels":{"app.kubernetes.io/part-of":"model-platform"}},"policyTypes":["Ingress"]}}
+    creationTimestamp: "2026-09-03T10:52:45Z"
+    generation: 1
+    name: model-serving-allow-backstage-probe
+    namespace: model-serving
+    resourceVersion: "30442393"
+    uid: 9b91b641-4206-4b97-9961-f871822f3ce9
+  spec:
+    ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: backstage
+        podSelector:
+          matchLabels:
+            app.kubernetes.io/name: backstage
+      ports:
+      - port: 8000
+        protocol: TCP
+    podSelector:
+      matchLabels:
+        app.kubernetes.io/part-of: model-platform
+    policyTypes:
+    - Ingress
+kind: List
+metadata:
+  resourceVersion: ""
