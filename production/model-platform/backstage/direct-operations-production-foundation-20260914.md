@@ -132,3 +132,53 @@ When A3 is genuinely idle:
 6. issue Direct Stop, confirm all serving resources are removed and retained
    cache policy is respected;
 7. close the Running Window and keep the legacy GitOps path as rollback.
+
+## Acceptance continuation — later on 2026-09-14
+
+The A3 pool was initially confirmed idle by both the capacity checker and
+direct `npu-smi`. The following additional preparation was completed without
+starting the model:
+
+- `k3s-agent` was restarted while A3 had no business Pod or NPU process; the
+  node returned Ready. The kubelet `pods/log` tunnel can still time out, so
+  direct A3 inspection remains the bounded log fallback for this acceptance.
+- live `qwen38-27b` Argo tracking and client-side last-applied annotations were
+  removed; `app.kubernetes.io/managed-by` became `backstage`. The XR generation
+  remained 79 and the spec remained `Stopped / modeldeployment-stopped-v2`.
+- PR `gitadmin/model-platform-config#54` corrected the migration target to
+  Backstage's plugin-isolated database
+  `backstage_plugin_model-deployment-operations`.
+- PR `gitadmin/platform-backstage#10` added the bounded JSON body parser.
+- PR `gitadmin/platform-backstage#11` aligned ModelVersion loading with the
+  production catalog, where `modelId` and `revision` are top-level spec fields.
+- PR `gitadmin/platform-backstage#12` moved dependency installation ahead of
+  source/config copies so future source-only image builds can reuse the
+  dependency layer.
+- PR `gitadmin/model-platform-config#55` granted Backstage only `get` on the
+  named `model-platform-running-gate-policy` ConfigMap.
+
+Current source baselines:
+
+- Backstage main: `60ecc660e0a9d7abb852889942ec1740dce0bd2e`;
+- configuration main: `900c4b5da507a999f199f438794120c5dae976ec`.
+
+Current production Backstage image:
+
+`110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.18-direct-operations-contract-60ecc66@sha256:97a13db59301cec4c87fdf97c0537d8b09158a1ca1ee2bd44c88f02ed43f0026`
+
+Authenticated Direct Operations evidence:
+
+- GET configurations: HTTP 200;
+- save production TP=2 configuration: HTTP 201, configuration version 1;
+- first Start attempt: safely failed before XR patch because the running-gate
+  ConfigMap permission was absent; the operation was recorded as Failed and
+  PR #55 corrected the missing permission.
+
+Before the final retry, a new Docker container named
+`kt-r6-deferred-ascend` was detected on A3. Its `sglang::scheduler` process was
+defunct but still retained about 30 GiB on chip 0 according to the driver.
+The capacity checker correctly changed to `allowed=false`. The Running Window
+was already closed, the XR remained generation 79 and Stopped, and no Direct
+Start was retried. Do not stop or remove that container without its owner's
+approval; resume only after both the driver process table and the capacity
+checker report idle again.
