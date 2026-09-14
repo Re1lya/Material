@@ -3,10 +3,10 @@
 ## Outcome
 
 The training UI and training API changes that existed only in the running
-Backstage image have been recovered into reviewable Gitea branches. The
-recovery was merged onto the current repository `main` baseline, so it does
-not discard newer Model Deployment, Direct Operations, Artifact Management,
-or K12 Data Pipeline work.
+Backstage image have been recovered and merged into both Gitea source-of-truth
+repositories. The recovery was merged onto the current repository `main`
+baseline, so it does not discard newer Model Deployment, Direct Operations,
+Artifact Management, or K12 Data Pipeline work.
 
 No Kubernetes object, Backstage Deployment, Running Window, NPU workload, or
 database was changed during this recovery.
@@ -31,7 +31,8 @@ Repository: `gitadmin/platform-backstage`
 - Branch: `recovery/production-c937370`
 - Commit: `230dd6246f2df96657d1d4d737ec8f7842284141`
 - Base: current Gitea `main` commit `b73365e68518d69f98e2b607378994f9bfb0e1a6`
-- Pull request: `http://110.120.0.3:30081/gitadmin/platform-backstage/pulls/6`
+- Merged pull request: `http://110.120.0.3:30081/gitadmin/platform-backstage/pulls/6`
+- Resulting `main`: `91693476a99357e96723ecddc4089dcf5eec4c8c`
 
 Recovered behavior:
 
@@ -63,7 +64,8 @@ Repository: `gitadmin/model-platform-config`
 - Branch: `recovery/production-training-c937370`
 - Commit: `659f19ed53b8f8a7ed5d1a666e26e0a760fcf999`
 - Base: current Gitea `main` commit `6085fb9e891a065bfd2e74290680e4177ad4237a`
-- Pull request: `http://110.120.0.3:30081/gitadmin/model-platform-config/pulls/50`
+- Merged pull request: `http://110.120.0.3:30081/gitadmin/model-platform-config/pulls/50`
+- Resulting `main`: `1fb5d3ad672186c93fa3210ce1697cef42595502`
 
 Recovered live drift:
 
@@ -94,10 +96,10 @@ XRD, and Composition all passed Kubernetes server-side dry-run.
 The candidate is built from the current production image digest and overlays
 the recovered source plus the current repository `main` code:
 
-`110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.13-training-source-recovery-230dd62@sha256:1a2c34af28d36c896e47542974afa4a78276278078a8b137c4bf79e382067d2c`
+`110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.13-training-source-recovery-9169347@sha256:3f6c7a798af35d9cc9fdc303880e5aef852773675fadcea213611de36cada7d5`
 
 - architecture: `amd64`;
-- OCI revision: `230dd6246f2df96657d1d4d737ec8f7842284141`;
+- OCI revision: `91693476a99357e96723ecddc4089dcf5eec4c8c`;
 - candidate training API compiled SHA-256 equals the production evidence hash;
 - image contract check confirmed training UI text, training API registration,
   K12 Data Pipeline backend, and Direct Operations module presence.
@@ -110,11 +112,10 @@ gates. It must not be treated as a training-only hotfix image.
 
 ## Recommended continuation
 
-1. Review and merge both recovery branches without squashing away provenance.
-2. Keep the current production image digest as the rollback point.
-3. Rebase future inference/data-pipeline work on the recovered Backstage main,
+1. Keep the current production image digest as the rollback point.
+2. Rebase future inference/data-pipeline work on the recovered Backstage main,
    rather than on the opaque production image.
-4. Before any rollout, rerun the complete Backstage tests/build, configuration
+3. Before any rollout, rerun the complete Backstage tests/build, configuration
    validation, server-side dry-run, and the Direct Operations release gates.
-5. Run training creation/W&B smoke only in a separately approved window; do
+4. Run training creation/W&B smoke only in a separately approved window; do
    not use an NPU training run merely to validate source recovery.
