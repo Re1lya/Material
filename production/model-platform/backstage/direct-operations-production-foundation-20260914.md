@@ -104,6 +104,20 @@ is complete.
 
 ## Remaining production acceptance
 
+The enablement-only candidate is prepared but intentionally not merged or
+deployed while A3 is occupied:
+
+- PR: `gitadmin/platform-backstage#9`;
+- source: `023902eb231e86449347694f872d0a64ddbf5508`;
+- image:
+  `110.120.0.3:30670/container-images/platform/kcc-backstage:0.6.16-direct-operations-enabled-023902e@sha256:5c24de92f3bac55be60926b7995a4c0893d5b7641e91c272c56b5aa6914da911`;
+- allowed initiator: only `user:default/gitadmin`.
+
+The image build verified that Direct Operations is enabled in the candidate,
+the runtime registration exists, and the packaged module and its local
+dependency load successfully. Production continues to run the feature-off
+`0.6.15` image.
+
 When A3 is genuinely idle:
 
 1. verify the capacity checker returns `allowed=true` for the approved TP=2
@@ -118,4 +132,3 @@ When A3 is genuinely idle:
 6. issue Direct Stop, confirm all serving resources are removed and retained
    cache policy is respected;
 7. close the Running Window and keep the legacy GitOps path as rollback.
-
