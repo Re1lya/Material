@@ -74,3 +74,33 @@ non-NPU API/route acceptance, and only then open a controlled Running Window.
 Rollback restores the previous Backstage digest and the prior running-gate and
 capacity-checker manifests. Neither path modifies or stops legacy Docker
 training processes.
+
+## Production release result
+
+The user approved the non-NPU production release on 2026-09-15. The following
+state was observed after the release:
+
+- the capacity-checker ConfigMap was applied and its Deployment was explicitly
+  restarted so the fixed-name ConfigMap volume loaded the new script;
+- the running-gate ConfigMap now reports `configmap-soft-pool`, device IDs
+  `8-15`, and `window-open=false`;
+- a real shadow request reached the new checker and returned the configured
+  pool and selection evidence without creating any workload;
+- at that exact observation time the exporter reported host processes on all
+  device IDs `0-15`, so the checker correctly returned `allowed=false` and no
+  selected devices; this occupancy belongs outside this release and was not
+  modified;
+- Backstage rolled out the candidate digest above; the new Pod was Ready with
+  zero restarts and its runtime image ID matched the pinned digest;
+- `/healthcheck`, `/kcc-pretraining`, `/model-recipes`, `/data-pipeline` and
+  `/api/model-platform/deployments` all returned HTTP 200;
+- the training controller remained 2/2 Ready and the K12 CPU Dagster
+  Deployment remained 1/1 Ready;
+- `qwen38-27b` remained `Stopped`, generation 79, with no static allocation and
+  Synced/Ready/Responsive true;
+- the only Pod in `model-serving` was the CPU-only capacity checker. No
+  RayService, cache workload or NPU Pod was started.
+
+The control-plane release is therefore complete. A later NPU smoke requires a
+fresh occupancy check, coordination that leaves a topology-valid pair inside
+IDs `8-15` free, and a separate decision to open the Running Window.
