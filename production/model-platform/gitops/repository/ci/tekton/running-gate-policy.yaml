@@ -20,8 +20,8 @@ data:
   expected-runtime-image: "110.120.0.3:30670/container-images/qwen38-ray-runtime@sha256:cdb5b3b44a1192b2d1268941033b004d5e9cf371621a0920f6d0afe62484e942"
   expected-manifest-digest: "sha256:f2afa9e2f328d9efb78bc88d526413783304c4706a508f0da1db456aeac5c20f"
   expected-cache-revision: "f2afa9e2-r1"
-  # v2 is the candidate pair. The prior v1 pair remains installed and is the
-  # rollback baseline together with the previous Tekton generation.
+  # v2 is an unpromoted smoke candidate. The prior v1 pair and current Tekton
+  # generation remain the rollback baseline until smoke acceptance completes.
   expected-composition-ref: "modeldeployment-qwen38-ray-v2"
   expected-stopped-composition-ref: "modeldeployment-stopped-v2"
   cache-pv-name: "model-cache-a3-qwen38-27b-w8a8"
@@ -32,10 +32,12 @@ data:
   expected-tensor-parallel-size: "2"
   expected-data-parallel-size: "1"
   expected-pipeline-parallel-size: "1"
-  # Target placement for the TP2 release unit. Volcano/MindX chooses a
-  # topology-valid pair dynamically. The gate checks the complete node-local
-  # pool so host processes invisible to Kubernetes still fail closed.
+  # Soft partition used while legacy Docker workloads can still consume A3
+  # devices outside Kubernetes. Direct Operations selects a topology-aligned
+  # free block from this ConfigMap pool and writes an explicit
+  # staticDeviceAllocation into the ModelDeployment. Expanding this list to
+  # 0-15, or returning to a fully dynamic mode, removes the partition later.
   target-node: "a3-server-00"
   target-node-labels: "kubernetes.io/arch=arm64,kubernetes.io/hostname=a3-server-00,node.kubernetes.io/npu.chip.name=Ascend910,accelerator-type=module-a3-16"
-  target-devices: "dynamic-safe-pool"
-  target-device-ids: "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
+  target-devices: "configmap-soft-pool"
+  target-device-ids: "8,9,10,11,12,13,14,15"

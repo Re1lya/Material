@@ -5,7 +5,15 @@ import unittest
 import urllib.request
 
 import capacity_checker
-from capacity_checker import CapacityEvidenceError, Handler, ThreadingHTTPServer, parse_process_metrics
+from capacity_checker import (
+    CapacityEvidenceError,
+    Handler,
+    ThreadingHTTPServer,
+    capacity_result,
+    parse_device_pool,
+    parse_process_metrics,
+    select_devices,
+)
 
 
 NOW_MS = 1_788_511_200_000
@@ -23,6 +31,16 @@ def complete_sample():
 
 
 class ProcessMetricsTest(unittest.TestCase):
+    def test_exporter_metrics_url_accepts_only_ipv4_pod_ip(self):
+        self.assertEqual(
+            capacity_checker.exporter_metrics_url({"status": {"podIP": "10.42.17.5"}}),
+            "http://10.42.17.5:8082/metrics",
+        )
+        with self.assertRaisesRegex(RuntimeError, "Pod IP is invalid"):
+            capacity_checker.exporter_metrics_url({"status": {"podIP": "not-an-ip"}})
+        with self.assertRaisesRegex(RuntimeError, "must be IPv4"):
+            capacity_checker.exporter_metrics_url({"status": {"podIP": "fd00::1"}})
+
     def test_complete_fresh_sample_reports_active_devices(self):
         self.assertEqual(parse_process_metrics(complete_sample(), now_ms=NOW_MS), ['3'])
 
@@ -42,7 +60,30 @@ class ProcessMetricsTest(unittest.TestCase):
         with self.assertRaises(CapacityEvidenceError):
             parse_process_metrics(stale, now_ms=NOW_MS)
 
-    def test_http_check_rejects_any_active_device_without_static_allocation(self):
+    def test_soft_pool_ignores_active_device_outside_the_pool(self):
+        self.assertEqual(parse_device_pool('8,9,10,11'), ['8', '9', '10', '11'])
+        self.assertEqual(select_devices(2, ['8', '9', '10', '11'], ['0']), ['8', '9'])
+        result = capacity_result(2, ['8', '9', '10', '11'], ['0'])
+        self.assertTrue(result['allowed'])
+        self.assertEqual(result['selectedDevices'], ['Ascend910-8', 'Ascend910-9'])
+
+    def test_soft_pool_skips_an_occupied_topology_block(self):
+        result = capacity_result(2, ['8', '9', '10', '11'], ['8'])
+        self.assertTrue(result['allowed'])
+        self.assertEqual(result['selectedDevices'], ['Ascend910-10', 'Ascend910-11'])
+
+    def test_soft_pool_rejects_when_no_complete_topology_block_is_free(self):
+        result = capacity_result(2, ['8', '9', '10', '11'], ['8', '10'])
+        self.assertFalse(result['allowed'])
+        self.assertEqual(result['selectedDevices'], [])
+
+    def test_device_pool_rejects_duplicates_and_invalid_ids(self):
+        with self.assertRaisesRegex(ValueError, 'duplicate'):
+            parse_device_pool('8,8')
+        with self.assertRaisesRegex(ValueError, 'invalid'):
+            parse_device_pool('8,16')
+
+    def test_http_check_returns_selected_static_devices(self):
         original = capacity_checker.host_processes
         server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -52,7 +93,8 @@ class ProcessMetricsTest(unittest.TestCase):
             payload = json.dumps({
                 'deploymentName': 'qwen38-27b',
                 'targetNode': 'a3-server-00',
-                'targetDevices': 'dynamic-safe-pool',
+                'targetDevices': 'configmap-soft-pool',
+                'targetDeviceIds': '8,9,10,11',
                 'requestedReplicas': 1,
                 'npuPerWorker': 2,
             }).encode()
@@ -62,10 +104,12 @@ class ProcessMetricsTest(unittest.TestCase):
                 method='POST',
                 headers={'Content-Type': 'application/json'},
             )
-            with urllib.request.urlopen(request, timeout=2) as response:
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+            with opener.open(request, timeout=2) as response:
                 result = json.loads(response.read())
-            self.assertFalse(result['allowed'])
+            self.assertTrue(result['allowed'])
             self.assertEqual(result['hostProcessesOnDevices'], ['0'])
+            self.assertEqual(result['selectedDevices'], ['Ascend910-8', 'Ascend910-9'])
         finally:
             capacity_checker.host_processes = original
             server.shutdown()
