@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom';
 import { fireEvent, screen } from '@testing-library/react';
 import { renderInTestApp } from '@backstage/frontend-test-utils';
 import { ModelDeploymentsPage } from './ModelDeploymentsPage';
@@ -8,7 +9,7 @@ const response = {
   observedAt: '2026-09-01T00:00:00Z',
   deployments: [
     {
-      name: 'qwen-running',
+      name: 'qwen38-27b',
       status: 'Running',
       phase: 'Healthy',
       phaseIndex: 7,
@@ -61,13 +62,30 @@ const response = {
   ],
 };
 
-function mockResponse(payload = response) {
-  globalThis.fetch = jest.fn().mockResolvedValue(
-    new Response(JSON.stringify(payload), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    }),
-  ) as typeof fetch;
+function jsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function mockResponse(
+  payload = response,
+  direct: { configurations?: Array<{ configVersion: number }>; operations?: unknown[] } = {
+    configurations: [{ configVersion: 4 }],
+    operations: [],
+  },
+) {
+  globalThis.fetch = jest.fn().mockImplementation((input, init) => {
+    const url = String(input);
+    if (url.includes('/model-deployment-operations/deployments/')) {
+      return Promise.resolve(jsonResponse({ requestId: 'operation-1', phase: 'Reconciling' }, 202));
+    }
+    if (url.includes('/model-deployment-operations/configurations/')) {
+      return Promise.resolve(jsonResponse(direct));
+    }
+    return Promise.resolve(jsonResponse(payload));
+  }) as typeof fetch;
 }
 
 describe('ModelDeploymentsPage', () => {
@@ -81,7 +99,7 @@ describe('ModelDeploymentsPage', () => {
   it('renders deployment cards and switches the details selection', async () => {
     renderInTestApp(<ModelDeploymentsPage />);
     expect(
-      await screen.findByText('Deployment details · qwen-running'),
+      await screen.findByText('Deployment details · qwen38-27b'),
     ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole('button', { name: 'Deployment qwen-stopped' }),
@@ -89,35 +107,58 @@ describe('ModelDeploymentsPage', () => {
     expect(
       screen.getByText('Deployment details · qwen-stopped'),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'Start inference' }),
-    ).toHaveAttribute('href', expect.stringContaining('start-model-inference'));
+    expect(screen.getByRole('button', { name: 'Managed externally' })).toBeDisabled();
   });
 
-  it('shows Stop for Running and links New deployment to model recipes', async () => {
+  it('uses Direct Operations for Stop and links New deployment to model recipes', async () => {
     renderInTestApp(<ModelDeploymentsPage />);
-    await screen.findByText('Deployment details · qwen-running');
-    expect(
-      screen.getByRole('link', { name: 'Stop inference' }),
-    ).toHaveAttribute('href', expect.stringContaining('stop-model-inference'));
+    await screen.findByText('Deployment details · qwen38-27b');
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(await screen.findByText(/Stop request operation-1 is Reconciling/)).toBeInTheDocument();
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/model-deployment-operations/deployments/qwen38-27b/stop',
+      expect.objectContaining({ method: 'POST' }),
+    );
     expect(
       screen.getByRole('link', { name: 'New deployment' }),
     ).toHaveAttribute('href', '/model-recipes');
   });
 
+  it('uses the latest saved configuration for Direct Operations Start', async () => {
+    mockResponse({
+      observedAt: '2026-09-01T00:00:00Z',
+      deployments: [{
+        name: 'qwen38-27b', status: 'Stopped', phase: 'Stopped', phaseIndex: -1,
+        desiredState: 'Stopped', modelVersionRef: 'qwen3.8-27b-w8a8',
+        runtimeProfileRef: 'qwen38-tp2', npu: { requested: 0, actualDevices: [] },
+      }],
+    });
+    renderInTestApp(<ModelDeploymentsPage />);
+    const start = await screen.findByRole('button', { name: 'Start saved v4' });
+    fireEvent.click(start);
+    expect(await screen.findByText(/Start request operation-1 is Reconciling/)).toBeInTheDocument();
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/model-deployment-operations/deployments/qwen38-27b/start',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ configVersion: 4 }),
+      }),
+    );
+  });
+
   it('filters deployments by search and status', async () => {
     renderInTestApp(<ModelDeploymentsPage />);
-    await screen.findByText('Deployment details · qwen-running');
+    await screen.findByText('Deployment details · qwen38-27b');
     fireEvent.change(screen.getByLabelText('Search deployment or model'), {
       target: { value: 'stopped' },
     });
     expect(screen.getByText('qwen-stopped')).toBeInTheDocument();
-    expect(screen.queryByText('qwen-running')).not.toBeInTheDocument();
+    expect(screen.queryByText('qwen38-27b')).not.toBeInTheDocument();
   });
 
   it('does not promote Unknown to success and displays unavailable modules', async () => {
     renderInTestApp(<ModelDeploymentsPage />);
-    await screen.findByText('Deployment details · qwen-running');
+    await screen.findByText('Deployment details · qwen38-27b');
     fireEvent.click(
       screen.getByRole('button', { name: 'Deployment unknown-deployment' }),
     );

@@ -185,12 +185,6 @@ const useStyles = makeStyles(theme => ({
   },
 }));
 
-function templateHref(template: string, deployment: Deployment) {
-  return `/create/templates/default/${template}?formData=${encodeURIComponent(
-    JSON.stringify({ deploymentName: deployment.name }),
-  )}`;
-}
-
 function statusLabel(status: DeploymentStatus) {
   return status === 'Unknown' ? 'Unknown status' : status;
 }
@@ -208,6 +202,42 @@ function pipelineMark(state: string, index: number) {
   return index + 1;
 }
 
+type DirectOperation = {
+  request_id: string;
+  deployment_name: string;
+  phase: string;
+  target_state: string;
+};
+
+type DirectConfiguration = { configVersion: number };
+
+type DirectOperationsResponse = {
+  configurations?: DirectConfiguration[];
+  operations?: DirectOperation[];
+};
+
+function applyOperationState(response: DeploymentsResponse, operations?: DirectOperation[]) {
+  const active = operations?.find(operation =>
+    ['Requested', 'Validating', 'Applying', 'Reconciling', 'ModelLoading', 'ServingPending'].includes(operation.phase),
+  );
+  if (!active) return response;
+  const phaseStatus: Record<string, DeploymentStatus> = {
+    Requested: 'Pending', Validating: 'Validating', Applying: 'Deploying', Reconciling: 'Deploying',
+    ModelLoading: 'Deploying', ServingPending: 'Deploying',
+  };
+  const phaseIndex: Record<string, number> = {
+    Requested: 0, Validating: 2, Applying: 4, Reconciling: 4, ModelLoading: 6, ServingPending: 7,
+  };
+  return {
+    ...response,
+    deployments: response.deployments?.map(deployment => deployment.name === active.deployment_name ? {
+      ...deployment, status: phaseStatus[active.phase] ?? deployment.status, phase: active.phase,
+      phaseIndex: phaseIndex[active.phase] ?? deployment.phaseIndex, requestId: active.request_id,
+      desiredState: active.target_state,
+    } : deployment),
+  };
+}
+
 export const ModelDeploymentsPage = () => {
   const classes = useStyles();
   const [data, setData] = useState<DeploymentsResponse>({});
@@ -217,6 +247,9 @@ export const ModelDeploymentsPage = () => {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [stale, setStale] = useState(false);
+  const [latestConfigVersion, setLatestConfigVersion] = useState<number>();
+  const [operationBusy, setOperationBusy] = useState(false);
+  const [operationMessage, setOperationMessage] = useState<string>();
   const inFlight = useRef(false);
   const controller = useRef<AbortController>();
 
@@ -228,14 +261,19 @@ export const ModelDeploymentsPage = () => {
     controller.current = requestController;
     try {
       const next = await fetchDeployments(requestController.signal);
-      setData(next);
+      const operations = await fetch('/api/model-deployment-operations/configurations/qwen38-27b', {
+        credentials: 'same-origin', signal: requestController.signal,
+      }).then(response => response.ok ? response.json() as Promise<DirectOperationsResponse> : undefined).catch(() => undefined);
+      const withOperation = applyOperationState(next, operations?.operations);
+      setData(withOperation);
+      setLatestConfigVersion(operations?.configurations?.[0]?.configVersion);
       setError(undefined);
       setStale(false);
       setSelected(current => {
-        if (current && next.deployments?.some(item => item.name === current)) {
+        if (current && withOperation.deployments?.some(item => item.name === current)) {
           return current;
         }
-        return next.deployments?.[0]?.name;
+        return withOperation.deployments?.[0]?.name;
       });
     } catch (cause) {
       if ((cause as Error).name !== 'AbortError') {
@@ -281,6 +319,45 @@ export const ModelDeploymentsPage = () => {
   const actions = detail ? actionState(detail) : undefined;
   const failure = detail ? failureReason(detail) : undefined;
   const modules = detail?.unavailable ?? data.unavailable ?? {};
+  const directManaged = detail?.name === 'qwen38-27b';
+  const requestDirectOperation = async (action: 'start' | 'stop') => {
+    if (!detail || !directManaged) return;
+    setOperationBusy(true);
+    setOperationMessage(undefined);
+    try {
+      if (action === 'start' && !latestConfigVersion) {
+        throw new Error('No saved configuration exists. Open New deployment and save the approved parameters first.');
+      }
+      const response = await fetch(
+        `/api/model-deployment-operations/deployments/${detail.name}/${action}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            action === 'start' ? { configVersion: latestConfigVersion } : {},
+          ),
+        },
+      );
+      const payload = await response.json() as {
+        requestId?: string;
+        phase?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.requestId) {
+        throw new Error(payload.error ?? `${action} failed`);
+      }
+      setOperationMessage(
+        `${action === 'start' ? 'Start' : 'Stop'} request ${payload.requestId} is ${payload.phase}.`,
+      );
+      await refresh();
+    } catch (cause) {
+      setOperationMessage(
+        cause instanceof Error ? cause.message : `${action} failed`,
+      );
+    } finally {
+      setOperationBusy(false);
+    }
+  };
 
   return (
     <Page themeId="tool">
@@ -315,10 +392,10 @@ export const ModelDeploymentsPage = () => {
         <Paper className={classes.flow} elevation={0}>
           <Box>
             <b>
-              ModelDeployment → Gitea → Tekton → Argo → Crossplane → KubeRay
+              Backstage → Direct Operations → ModelDeployment → Crossplane → KubeRay
             </b>
             <Typography color="textSecondary" variant="body2">
-              未知状态不会显示为成功；Start和Stop继续通过受限GitOps执行。
+              实例参数保存在数据库；Start/Stop 直接操作固定的 ModelDeployment。GitOps 仅管理平台定义和回滚基线。
             </Typography>
           </Box>
           <Chip
@@ -484,6 +561,11 @@ export const ModelDeploymentsPage = () => {
                         Status is stale because the latest refresh failed.
                       </Paper>
                     )}
+                    {operationMessage && (
+                      <Paper className={classes.unavailable} elevation={0}>
+                        {operationMessage}
+                      </Paper>
+                    )}
                     <Box className={classes.summaryGrid}>
                       {[
                         ['Status', statusLabel(detail.status)],
@@ -520,23 +602,34 @@ export const ModelDeploymentsPage = () => {
                     <Box className={classes.actions}>
                       <Button
                         color="primary"
-                        component="a"
-                        disabled={!actions?.canStart}
-                        href={templateHref('start-model-inference', detail)}
+                        disabled={
+                          !directManaged ||
+                          !actions?.canStart ||
+                          !latestConfigVersion ||
+                          operationBusy
+                        }
+                        onClick={() => void requestDirectOperation('start')}
                         startIcon={<PlayArrowIcon />}
                         variant="contained"
                       >
-                        Start inference
+                        {!directManaged
+                          ? 'Managed externally'
+                          : latestConfigVersion
+                            ? `Start saved v${latestConfigVersion}`
+                            : 'Configure before Start'}
                       </Button>
                       <Button
                         color="secondary"
-                        component="a"
-                        disabled={!actions?.canStop}
-                        href={templateHref('stop-model-inference', detail)}
+                        disabled={
+                          !directManaged ||
+                          !actions?.canStop ||
+                          operationBusy
+                        }
+                        onClick={() => void requestDirectOperation('stop')}
                         startIcon={<StopIcon />}
                         variant="outlined"
                       >
-                        Stop inference
+                        Stop
                       </Button>
                       <Button disabled>Update · Coming soon</Button>
                       <Button disabled>Rollback · Coming soon</Button>

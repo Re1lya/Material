@@ -62,9 +62,9 @@ catalog:
     - type: file
       target: ./catalog/templates/model-deployment.yaml
     - type: file
-      target: ./catalog/templates/model-deployment-start.yaml
+      target: ./catalog/templates/training-request.yaml
     - type: file
-      target: ./catalog/templates/model-deployment-stop.yaml
+      target: ./catalog/templates/training-operation.yaml
 
 kubernetes:
   frontend:
@@ -91,6 +91,12 @@ kubernetes:
             - group: platform.example.com
               apiVersion: v1alpha1
               plural: modeldeployments
+            - group: platform.example.com
+              apiVersion: v1alpha1
+              plural: trainingrequests
+            - group: training.kcc.io
+              apiVersion: v1beta1
+              plural: trainingruns
 
 permission:
   # The MVP keeps the Scaffolder UI usable even when the browser cannot send
@@ -118,10 +124,46 @@ modelPlatform:
       - qwen38-w8a8-ray-ascend-910b3-v1
       - qwen38-w8a8-ray-ascend-910b3-tp2-v1
     artifactKeeperBaseUrl: http://artifact-keeper-backend.artifact-keeper.svc.cluster.local:8080
-    # Candidate v2 pair. The installed production v1 pair remains the rollback
-    # baseline until the isolated smoke deployment is accepted.
+    # v2 is an unpromoted smoke candidate. v1 remains installed and is the
+    # rollback baseline until the v2 lifecycle acceptance is complete.
     stoppedCompositionRef: modeldeployment-stopped-v2
     runningCompositionRef: modeldeployment-qwen38-ray-v2
+  # Production enablement candidate. Roll out only after the database,
+  # scoped RBAC/NetworkPolicy and capacity-checker gates are verified.
+  directOperations:
+    enabled: true
+    allowedInitiators:
+      - user:default/gitadmin
+    capacityCheckUrl: http://model-deployment-capacity-checker.model-serving.svc.cluster.local:8080/check
+  training:
+    namespace: kcc-training
+    allowedInitiators:
+      - user:default/gitadmin
+    allowedProjects:
+      - kcc-canary
+    allowedRuntimeProfiles:
+      - ascend-910b3-six-node-eight-card-two-spare-mindspeed-v4
+      - ascend-910b3-six-node-mindspeed-v4-lighteval-v1
+      - ascend-910b3-six-node-eight-card-two-spare-mindspeed-v3
+      - ascend-910b3-six-node-eight-card-two-spare-workspace-v4
+      - ascend-910b3-six-node-eight-card-two-spare-workspace-v3
+      - ascend-910b3-six-node-eight-card-two-spare-workspace-v2
+      - ascend-910b3-six-node-eight-card-two-spare-workspace-v1
+      - ascend-910b3-three-node-eight-card-workspace-v1
+      - ascend-910b3-two-node-eight-card-one-spare-workspace-v1
+    allowedRecipes:
+      - mindspeed-pretrain-150m-workspace-v2
+      - mindspeed-pretrain-150m-workspace-v3
+      - mindspeed-pretrain-150m-workspace-v1
+      - kcc-910b3-three-node-full-card-smoke-workspace-v5
+      - kcc-910b3-two-node-spare-smoke-workspace-v1
+      - kcc-hccl-preflight-workspace-v1
+    maxWorkers: 8
+    # Pods mount gpu-server-00:/mnt at /workspace. The output subpath selects
+    # a directory below /mnt, including mounted disks such as sas-server-0.
+    workspacePathMapping:
+      internalPrefix: /workspace
+      externalPrefix: gpu-server-00:/mnt
   dataPipeline:
     enabled: true
     namespace: k12
