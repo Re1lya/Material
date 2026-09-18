@@ -12,7 +12,11 @@ spec:
   destinations:
     - namespace: k12
       server: https://kubernetes.default.svc
-  clusterResourceWhitelist: []
+  clusterResourceWhitelist:
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
   namespaceResourceWhitelist:
     - group: ""
       kind: ServiceAccount
@@ -26,5 +30,9 @@ spec:
       kind: NetworkPolicy
     - group: ray.io
       kind: RayCluster
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
   orphanedResources:
     warn: true

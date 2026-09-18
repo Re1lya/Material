@@ -5,7 +5,7 @@
 > 本文保留分级自动化、审批、Merge Bot 和 scoped Argo sync 的设计细节，
 > 必须与 `../TARGET-ARCHITECTURE.md` 和 `../ROADMAP.md` 一起使用。
 > 当前生产仍为停止态请求、人工合并和手工 Argo CD Sync；实时事实见
-> `../CURRENT-STATE-20260828.md`。
+> `../CURRENT-STATE-20260905.md`。
 
 ## 目标
 

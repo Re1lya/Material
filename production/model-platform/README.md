@@ -1,7 +1,8 @@
 # Model platform production documentation
 
 > 当前生产事实请先阅读
-> [`CURRENT-STATE-20260828.md`](CURRENT-STATE-20260828.md)。本目录同时保存目标方案、
+> [`CURRENT-STATE-20260917.md`](CURRENT-STATE-20260917.md)，再按需回溯
+> [`CURRENT-STATE-20260905.md`](CURRENT-STATE-20260905.md)。本目录同时保存目标方案、
 > 当前状态和历史实施证据，三者不可混用。
 
 ## Document map
@@ -12,11 +13,17 @@
 - `ROADMAP.md`: 当前状态到目标架构的实施顺序、状态和责任人边界。
 - `backstage/model-deployment-automation-plan-20260825.md`: 推理部署从停止态到 NPU 受控自动化的目标。
 - `data-pipeline/k12-platform-integration-plan-20260827.md`: K12 数据管线平台化目标和验收合同。
+- `data-pipeline/k12-pr2-full-pipeline-execution-plan-20260917.md`: 以 KCC PR #2 为基线的
+  数据湖、MinerU、Stage 1/2、训练 JSONL 和 Backstage 分阶段执行计划。
 - `../../artifact-keeper-production-architecture.md`: Artifact Keeper 的生产加固目标。
 
 ### Current state
 
-- `CURRENT-STATE-20260828.md`: 当前生产快照，包括已上线、未上线、半完成和已知异常。
+- `CURRENT-STATE-20260917.md`: 最新生产快照，覆盖 K12 CPU 数据管线、Backstage 集成和
+  2026-09-17 手动 GitOps 同步后的实测状态。
+- `CURRENT-STATE-20260905.md`: 2026-09-05 快照，保留推理 v2 的已上线、未上线、半完成和
+  已知异常记录。
+- `CURRENT-STATE-20260828.md`: 2026-08-28 历史快照；仅用于回溯当时的证据和决策。
 - `HANDOFF-20260827.md`: 交接导航、继续顺序和操作边界。
 - `identity-operations-20260825.md`: 当前自动化身份与受控凭据引用。
 
@@ -33,7 +40,7 @@
 
 The inventory below was written during the initial production bootstrap. It is
 retained as repository orientation and may contain historical version or phase
-wording. Do not use it instead of `CURRENT-STATE-20260828.md`.
+wording. Do not use it instead of `CURRENT-STATE-20260917.md`.
 
 This directory contains the first production-safe, NPU-free slice of the model
 platform:

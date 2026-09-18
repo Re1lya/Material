@@ -1,8 +1,9 @@
 # Model platform agent handoff
 
 This file is the mandatory starting point for any Agent continuing work in
-this repository. The current production snapshot is dated 2026-08-31. Read
-`production/model-platform/CURRENT-STATE-20260828.md`,
+this repository. The latest verified production snapshot is dated 2026-09-17.
+Read `production/model-platform/CURRENT-STATE-20260917.md`, then
+`production/model-platform/CURRENT-STATE-20260905.md`,
 `production/model-platform/TRAINING-BACKSTAGE-PROVENANCE-20260831.md` and then
 `production/model-platform/HANDOFF-20260827.md`; use this file for the rules
 for safely continuing the deployment.
@@ -97,9 +98,13 @@ rollback point, reviews the server-side diff and verifies the result.
 
 ## Backstage source-preservation gate (2026-08-31)
 
-Production Backstage currently runs Artifact Keeper image
-`platform/kcc-backstage:0.5.9-kcc-merge-ca2b700` at immutable digest
-`sha256:057988d8725b3b47ac5f4e6744e452884ef0b2c03725a69cf6baa76648d3fb59`.
+The historical `platform/kcc-backstage:0.5.9-kcc-merge-ca2b700` image at
+immutable digest
+`sha256:057988d8725b3b47ac5f4e6744e452884ef0b2c03725a69cf6baa76648d3fb59`
+is not the current release baseline. The current verified Backstage release
+and its rollback image are recorded in
+`production/model-platform/CURRENT-STATE-20260905.md` and its linked release
+record.
 It includes K12 data-pipeline, KCC training console, model recipe/lifecycle,
 Artifact Keeper and Gitea integrations. Its tag short SHA is not currently
 resolvable to a commit in `gitadmin/kcc`; do not replace this image with a
